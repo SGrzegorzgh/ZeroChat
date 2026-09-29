@@ -44,6 +44,10 @@ function readBody(req, limit = 6 * 1024 * 1024) {
 
 function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+function clamp(n, lo, hi) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
 function truncTitle(s, n = 40) {
   s = String(s).replace(/\s+/g, ' ').trim();
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
@@ -96,6 +100,18 @@ function resolveAiConfig(settings) {
     reasoning: pick('reasoning', 'default'),
     systemPrompt: pick('systemPrompt', ''),
     presetName: preset ? preset.name : null,
+  };
+}
+
+function poseCfg(settings) {
+  return {
+    enabled: !!settings.poseAgent,
+    provider: settings.poseProvider || 'custom',
+    baseUrl: (settings.poseBaseUrl || settings.baseUrl || '').replace(/\/+$/, ''),
+    apiKey: settings.poseApiKey || settings.apiKey || '',
+    model: settings.poseModel || 'gpt-5.6-luna-load-balanced',
+    likelihood: clamp(typeof settings.poseLikelihood === 'number' ? settings.poseLikelihood : 0.6, 0, 1),
+    recheck: settings.poseRecheck !== false,
   };
 }
 
@@ -357,6 +373,194 @@ async function retryOnce(call, onDelta, signal) {
   }
 }
 
+const POSE_SYSTEM_PROMPT = [
+  'You direct the camera for a visual novel. You are given the available shots and the most recent character reply. Pick the single shot that best matches what the character is doing right now.',
+  'Rules:',
+  '- Call set_pose ONLY when the reply clearly shows the character changed position, posture, framing, or the location matters more than the face.',
+  '- If the reply continues the same situation with no visual change, DO NOT call any tool. Staying on the current shot is always a valid and common answer.',
+  '- Never invent a pose id. Only use ids from the shot list.',
+  '- confidence is your honest probability that this is the right shot (0-1). A small change is rarely worth more than 0.5.',
+].join('\n');
+
+function poseToolProps(candidates) {
+  return {
+    poseId: { type: 'string', enum: candidates.map((p) => p.id) },
+    confidence: { type: 'number', description: '0 to 1 — how strongly the reply calls for this pose' },
+    reason: { type: 'string', description: 'Max 12 words.' },
+  };
+}
+
+function buildPoseBrief({ char, persona, chat, candidates, currentPoseId, replyText }) {
+  const userName = persona ? persona.name : 'the user';
+  const current = currentPoseId ? candidates.find((p) => p.id === currentPoseId) : null;
+  const lines = [`Character: ${char.name}`];
+  lines.push('Shots:');
+  for (const p of candidates) lines.push(`${p.id} | ${p.name} — ${p.description || 'no description'}`);
+  lines.push(`Current shot: ${current ? current.name : 'none'}`);
+  if (chat && chat.tree) {
+    const tip = db.treeTip(chat.tree);
+    if (tip) {
+      const { turns } = buildTurns(db.pathNodes(chat.tree, tip));
+      const recent = turns.slice(-3);
+      if (recent.length) {
+        lines.push('Recent turns:');
+        for (const t of recent) lines.push(`${t.role === 'assistant' ? char.name : userName}: ${truncTitle(t.content, 400)}`);
+      }
+    }
+  }
+  lines.push(`Reply to direct: ${truncTitle(replyText || '', 1200)}`);
+  return lines.join('\n');
+}
+
+// fetchJson buries the HTTP status inside the error message, which is useless
+// when we need to branch on 400/422 to retry with a compatible body. POST
+// directly and keep the status + raw text addressable.
+async function postAgentJson(url, headers, body, signal) {
+  if (signal && signal.aborted) return { status: 0, json: null, text: '', aborted: true };
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 30000);
+  const onAbort = () => ctrl.abort();
+  if (signal) signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    let r;
+    try {
+      r = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      if (signal && signal.aborted) return { status: 0, json: null, text: '', aborted: true };
+      throw new Error(e.name === 'AbortError' ? 'Provider timed out' : `Provider unreachable (${e.message})`);
+    }
+    const text = await r.text();
+    if (!r.ok) return { status: r.status, json: null, text: text.slice(0, 400) };
+    let json = null;
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      try { json = JSON.parse(text.slice(start, end + 1)); } catch { json = null; }
+    }
+    if (!json) json = { raw: text.slice(0, 400) };
+    return { status: r.status, json, text };
+  } finally {
+    clearTimeout(t);
+    if (signal) signal.removeEventListener('abort', onAbort);
+  }
+}
+
+// A cheap tool-calling model reads the reply and picks the pose image to show.
+// It must never break the chat, so every failure degrades to "no pose".
+async function runPoseAgent({ char, persona, chat, poses, currentPoseId, replyText, settings, signal }) {
+  try {
+    const cfg = poseCfg(settings || {});
+    if (!cfg.enabled) return null;
+    const candidates = (poses || []).filter((p) => p.hasImage || p.image);
+    if (candidates.length === 0) return null;
+    if (!cfg.recheck && currentPoseId) return null;
+    if (!cfg.model || !cfg.baseUrl) return null;
+    if (!cfg.apiKey && cfg.provider !== 'ollama') return null;
+    if (signal && signal.aborted) return null;
+
+    const userText = buildPoseBrief({ char, persona, chat, candidates, currentPoseId, replyText });
+    const tool = {
+      name: 'set_pose',
+      description: 'Show a different shot of the character. Call only when the scene visibly changed.',
+    };
+    const props = poseToolProps(candidates);
+
+    // Providers disagree on sampling params: OpenAI-style reasoning models
+    // (gpt-5 / o-series) reject `temperature` entirely and want
+    // `max_completion_tokens` instead. Try the preferred body first, then retry
+    // exactly once with a minimal one if the provider 400/422s.
+    const request = async (url, headers, bodyFor) => {
+      let res = await postAgentJson(url, headers, bodyFor(false), signal);
+      if (res.status === 400 || res.status === 422) {
+        console.log('[pose] retrying with compatibility body (status ' + res.status + ')');
+        res = await postAgentJson(url, headers, bodyFor(true), signal);
+      }
+      if (res.aborted) return null;
+      if (!res.json) {
+        const detail = String(res.text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        console.error(`[pose] director request failed (status ${res.status}): ${detail || 'empty response'}`);
+        return null;
+      }
+      return res.json;
+    };
+
+    let j;
+    if (cfg.provider === 'anthropic') {
+      const bodyFor = (compat) => ({
+        model: cfg.model,
+        system: POSE_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userText }],
+        tools: [{ ...tool, input_schema: { type: 'object', properties: props, required: ['poseId', 'confidence'] } }],
+        max_tokens: 1024,
+        ...(compat ? {} : { temperature: 0.2 }),
+        stream: false,
+      });
+      j = await request(
+        cfg.baseUrl + '/messages',
+        { 'content-type': 'application/json', 'x-api-key': cfg.apiKey, 'anthropic-version': '2023-06-01' },
+        bodyFor,
+      );
+      if (!j) return null;
+      const arg = j.content?.find((b) => b.type === 'tool_use' && b.name === 'set_pose')?.input;
+      if (!arg) return null;
+      return decidePose(arg, candidates, currentPoseId, cfg);
+    }
+
+    const bodyFor = (compat) => ({
+      model: cfg.model,
+      stream: false,
+      ...(compat ? { max_completion_tokens: 1024 } : { max_tokens: 1024, temperature: 0.2 }),
+      tools: [{ type: 'function', function: { ...tool, parameters: { type: 'object', properties: props, required: ['poseId', 'confidence'] } } }],
+      tool_choice: 'auto',
+      messages: [{ role: 'system', content: POSE_SYSTEM_PROMPT }, { role: 'user', content: userText }],
+    });
+    j = await request(
+      cfg.baseUrl + '/chat/completions',
+      { 'content-type': 'application/json', ...(cfg.apiKey ? { authorization: `Bearer ${cfg.apiKey}` } : {}) },
+      bodyFor,
+    );
+    if (!j) return null;
+    const call = j.choices?.[0]?.message?.tool_calls?.[0];
+    let arg = null;
+    if (call && call.function?.name === 'set_pose') {
+      try { arg = JSON.parse(call.function?.arguments || '{}'); } catch { arg = null; }
+    } else {
+      const content = j.choices?.[0]?.message?.content;
+      if (typeof content === 'string' && content.includes('poseId')) {
+        try { arg = JSON.parse(content); } catch { arg = null; }
+      }
+    }
+    if (!arg) return null;
+    return decidePose(arg, candidates, currentPoseId, cfg);
+  } catch (e) {
+    console.error('[pose] director failed:', e.message);
+    return null;
+  }
+}
+
+function decidePose(arg, candidates, currentPoseId, cfg) {
+  const pose = candidates.find((p) => p.id === arg.poseId);
+  if (!pose) return null;
+  const confidence = Number(arg.confidence);
+  const conf = Number.isFinite(confidence) ? clamp(confidence, 0, 1) : 0;
+  const reason = String(arg.reason || '').slice(0, 120);
+  if (pose.id === currentPoseId) {
+    console.log(`[pose] held ${pose.name} (unchanged)`);
+    return { poseId: pose.id, poseName: pose.name, confidence: conf, reason, changed: false };
+  }
+  if (conf < cfg.likelihood) {
+    console.log(`[pose] skipped ${pose.name} (conf ${conf} below threshold)`);
+    return { poseId: pose.id, poseName: pose.name, confidence: conf, reason: 'below threshold', changed: false };
+  }
+  console.log(`[pose] pose: ${currentPoseId || 'none'} → ${pose.name} (conf ${conf})`);
+  return { poseId: pose.id, poseName: pose.name, confidence: conf, reason, changed: true };
+}
+
 function startEventStream(res, fn) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -399,6 +603,44 @@ async function route(req, res, u) {
     return send(res, 200, db.createCharacter(body));
   }
 
+  if ((m = p.match(/^\/api\/characters\/([\w-]+)\/poses$/))) {
+    const charId = m[1];
+    if (req.method === 'GET') {
+      if (!db.getCharacter(charId)) return send(res, 404, { error: 'Character not found' });
+      return send(res, 200, { poses: db.getPoses(charId, { withImages: true }) });
+    }
+    if (req.method === 'POST') {
+      if (!String(body.name || '').trim()) return send(res, 400, { error: 'Name is required' });
+      if (!db.getCharacter(charId)) return send(res, 404, { error: 'Character not found' });
+      return send(res, 201, { pose: db.createPose(charId, body) });
+    }
+  }
+
+  if ((m = p.match(/^\/api\/poses\/([\w-]+)$/))) {
+    const id = m[1];
+    if (req.method === 'PUT') {
+      if ('name' in body && !String(body.name || '').trim()) return send(res, 400, { error: 'Pose name is required' });
+      const pose = db.updatePose(id, body);
+      if (!pose) return send(res, 404, { error: 'Pose not found' });
+      return send(res, 200, { pose });
+    }
+    if (req.method === 'DELETE') {
+      if (!db.deletePose(id)) return send(res, 404, { error: 'Pose not found' });
+      return send(res, 200, { ok: true });
+    }
+  }
+
+  if ((m = p.match(/^\/api\/chats\/([\w-]+)\/pose$/)) && req.method === 'POST') {
+    const chat = db.getChat(m[1]);
+    if (!chat) return send(res, 404, { error: 'Chat not found' });
+    if (body.poseId) {
+      const pose = typeof body.poseId === 'string' ? db.getPose(body.poseId) : null;
+      if (!pose) return send(res, 404, { error: 'Pose not found' });
+      if (pose.characterId !== chat.characterId) return send(res, 400, { error: 'Pose belongs to a different character' });
+    }
+    return send(res, 200, { chat: db.setChatPose(chat.id, body.poseId || null) });
+  }
+
   if (req.method === 'POST' && p === '/api/chats') {
     if (!body.characterId) return send(res, 400, { error: 'characterId is required' });
     try { return send(res, 200, db.createChat(body.characterId)); }
@@ -430,15 +672,41 @@ async function route(req, res, u) {
     const persona = settings.activePersonalityId
       ? db.getPersona(settings.activePersonalityId)
       : null;
+    const poses = db.getPoses(chat.characterId, { withImages: false });
+    const aiCfg = resolveAiConfig(settings);
+    const simulated = !aiCfg.apiKey && aiCfg.provider !== 'ollama';
     const fresh = db.getChat(chat.id);
     startEventStream(res, async (emit, ctrl) => {
+      let posePromise = null;
+      let streamed = '';
       try {
-        const text = await generateReplyStream(char, db.pathNodes(fresh.tree, node.id), persona, settings, (d) => emit({ type: 'delta', text: d }), ctrl.signal);
-        const reply = db.addReply(chat.id, node.id, text);
+        const text = await generateReplyStream(char, db.pathNodes(fresh.tree, node.id), persona, settings, (d) => {
+          streamed += d;
+          emit({ type: 'delta', text: d });
+          if (!simulated && !posePromise && streamed.length >= 120) {
+            try {
+              posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: streamed, settings, signal: ctrl.signal });
+            } catch (e) { console.error('[pose] director failed:', e.message); }
+          }
+        }, ctrl.signal);
+        let pose = null;
+        if (posePromise) pose = await Promise.race([posePromise, new Promise((r) => setTimeout(() => r(null), 6000))]);
+        const chosen = pose && pose.changed ? pose : null;
+        if (chosen) { try { db.setChatPose(chat.id, chosen.poseId); } catch {} }
+        const reply = db.addReply(chat.id, node.id, text, chosen ? { poseId: chosen.poseId } : null);
+        if (chosen) emit({ type: 'pose', poseId: chosen.poseId, poseName: chosen.poseName, confidence: chosen.confidence });
         emit({ type: 'done', chat: db.getChat(chat.id), node: reply, title });
       } catch (e) {
         console.error('[ai] generation failed:', e.message);
-        if (e.partial) db.addReply(chat.id, node.id, e.partial);
+        if (e.partial) {
+          let p = null;
+          try { p = await Promise.race([posePromise || Promise.resolve(null), new Promise((r) => setTimeout(() => r(null), 1500))]); } catch {}
+          if (p && p.changed) {
+            try { db.setChatPose(chat.id, p.poseId); } catch {}
+            try { emit({ type: 'pose', poseId: p.poseId, poseName: p.poseName, confidence: p.confidence }); } catch {}
+          }
+          db.addReply(chat.id, node.id, e.partial, p && p.changed ? { poseId: p.poseId } : null);
+        }
         emit({ type: 'error', error: e.message, chat: db.getChat(chat.id) });
       }
     });
@@ -457,14 +725,40 @@ async function route(req, res, u) {
       ? db.getPersona(settings.activePersonalityId)
       : null;
     const path = db.pathNodes(chat.tree, parentId);
+    const poses = db.getPoses(chat.characterId, { withImages: false });
+    const aiCfg = resolveAiConfig(settings);
+    const simulated = !aiCfg.apiKey && aiCfg.provider !== 'ollama';
     startEventStream(res, async (emit, ctrl) => {
+      let posePromise = null;
+      let streamed = '';
       try {
-        const text = await generateReplyStream(char, path, persona, settings, (d) => emit({ type: 'delta', text: d }), ctrl.signal);
-        const node = db.addReply(chat.id, parentId, text);
-        emit({ type: 'done', chat: db.getChat(chat.id), node });
+        const text = await generateReplyStream(char, path, persona, settings, (d) => {
+          streamed += d;
+          emit({ type: 'delta', text: d });
+          if (!simulated && !posePromise && streamed.length >= 120) {
+            try {
+              posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: streamed, settings, signal: ctrl.signal });
+            } catch (e) { console.error('[pose] director failed:', e.message); }
+          }
+        }, ctrl.signal);
+        let pose = null;
+        if (posePromise) pose = await Promise.race([posePromise, new Promise((r) => setTimeout(() => r(null), 6000))]);
+        const chosen = pose && pose.changed ? pose : null;
+        if (chosen) { try { db.setChatPose(chat.id, chosen.poseId); } catch {} }
+        const reply = db.addReply(chat.id, parentId, text, chosen ? { poseId: chosen.poseId } : null);
+        if (chosen) emit({ type: 'pose', poseId: chosen.poseId, poseName: chosen.poseName, confidence: chosen.confidence });
+        emit({ type: 'done', chat: db.getChat(chat.id), node: reply });
       } catch (e) {
         console.error('[ai] generation failed:', e.message);
-        if (e.partial) db.addReply(chat.id, parentId, e.partial);
+        if (e.partial) {
+          let p = null;
+          try { p = await Promise.race([posePromise || Promise.resolve(null), new Promise((r) => setTimeout(() => r(null), 1500))]); } catch {}
+          if (p && p.changed) {
+            try { db.setChatPose(chat.id, p.poseId); } catch {}
+            try { emit({ type: 'pose', poseId: p.poseId, poseName: p.poseName, confidence: p.confidence }); } catch {}
+          }
+          db.addReply(chat.id, parentId, e.partial, p && p.changed ? { poseId: p.poseId } : null);
+        }
         emit({ type: 'error', error: e.message, chat: db.getChat(chat.id) });
       }
     });

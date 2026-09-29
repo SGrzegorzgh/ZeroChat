@@ -37,7 +37,7 @@ const trunc = (s, n = 34) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 const now = () => Date.now();
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-let state = { characters: [], personalities: [], presets: [], settings: {} };
+let state = { characters: [], personalities: [], presets: [], settings: {}, poses: {}, posesLoaded: {} };
 const UI_KEY = 'aichat.ui.v1';
 let ui = { activeCharacterId: null, activeChatIds: {} };
 try { const s = JSON.parse(localStorage.getItem(UI_KEY)); if (s) ui = { ...ui, ...s }; } catch {}
@@ -75,6 +75,11 @@ async function streamGenerate(path, body, onDelta) {
       if (!line) continue;
       let ev;
       try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+      if (ev.type === 'pose') {
+        applyPoseLive(ev.poseId, ev.poseName);
+        toast('Pose: ' + ev.poseName);
+        continue;
+      }
       if (ev.type === 'delta') {
         full += ev.text;
         onDelta(full);
@@ -175,9 +180,10 @@ function activeChat(c) {
     || null;
 }
 
-function avatarHtml(c, cls = '', zoomable = false) {
-  if (c.avatar || c.image) {
-    return `<span class="avatar ${cls}${zoomable ? ' zoomable' : ''}" style="background-image:url('${c.avatar || c.image}')" title="View image"></span>`;
+function avatarHtml(c, cls = '', zoomable = false, src = null) {
+  const img = src || c.avatar || c.image;
+  if (img) {
+    return `<span class="avatar ${cls}${zoomable ? ' zoomable' : ''}" style="background-image:url('${img}')" title="View image"></span>`;
   }
   return `<span class="avatar ${cls} emoji">${esc(c.emoji)}</span>`;
 }
@@ -192,6 +198,43 @@ function personaAvatarHtml(p, cls = '', zoomable = false) {
 
 function fullImageSrc(c) {
   return (c && (c.image || c.avatar)) || null;
+}
+
+/* ---- poses ---------------------------------------------------------------
+   state.poses[charId] holds the full list (images included) once loaded;
+   the bootstrap copy on the character (c.poses) is the lightweight fallback. */
+
+function poseList(charId) {
+  if (!charId) return [];
+  const c = state.characters.find((x) => x.id === charId);
+  return state.poses[charId] || (c && c.poses) || [];
+}
+
+function poseById(charId, poseId) {
+  if (!poseId) return null;
+  return poseList(charId).find((p) => p.id === poseId) || null;
+}
+
+function poseImg(p) {
+  return (p && (p.image || p.thumb)) || null;
+}
+
+// The square crop is a UI-sized thumbnail (256px) — fine for avatars, terrible
+// stretched across the full-screen backdrop. The backdrop only uses the
+// free-form full image and falls back to the character's own picture.
+function poseBackdrop(p) {
+  return (p && p.image) || null;
+}
+
+function currentPose(chat) {
+  const c = activeChar();
+  const ch = chat === undefined ? (c && activeChat(c)) : chat;
+  return ch ? poseById(ch.characterId, ch.poseId) : null;
+}
+
+function poseTagHtml(p) {
+  if (!p || !p.thumb) return '';
+  return `<span class="pose-tag" title="Pose on screen: ${esc(p.name)}">${I.image}${esc(p.name)}</span>`;
 }
 
 function toast(msg) {
@@ -242,7 +285,8 @@ function renderWelcomeGrid() {
 function renderHeader() {
   const c = activeChar();
   if (!c) return;
-  $('#char-info').innerHTML = `${avatarHtml(c, '', true)}
+  const pose = currentPose();
+  $('#char-info').innerHTML = `${avatarHtml(c, '', true, pose && pose.thumb)}
     <div class="ch-text">
       <div class="ch-name">${esc(c.name)}</div>
       <div class="ch-tag">${esc(c.description)}</div>
@@ -262,7 +306,7 @@ function applyChatBg() {
   document.documentElement.style.setProperty('--bgop', String(op));
   document.documentElement.style.setProperty('--bgblur', bl + 'px');
   document.documentElement.style.setProperty('--act-dim', String(dim));
-  const src = fullImageSrc(c);
+  const src = poseBackdrop(currentPose()) || fullImageSrc(c);
   if (src && op > 0) {
     bg.style.backgroundImage = `url('${src}')`;
     bg.classList.remove('none');
@@ -282,7 +326,7 @@ function setHint() {
     : `<span class="sim">No API key — replies are simulated · set one in Settings</span><span>·</span><span>Enter to send · Shift+Enter for a new line · <span class="zap-hint">${I.zap}</span> steers the next reply</span>`;
 }
 
-function msgMetaHtml(n, chat, opts) {
+function msgMetaHtml(n, chat, opts, tag = '') {
   const parent = chat.tree.nodes[n.parent];
   const kids = parent ? parent.children : [];
   const total = kids.length;
@@ -295,7 +339,7 @@ function msgMetaHtml(n, chat, opts) {
     ${opts.regen ? `<button data-act="regen" title="Regenerate this reply">${I.rotr}</button>` : ''}
     <button data-act="del" class="danger" title="Delete this message and everything after it">${I.trash}</button>
   </span>`;
-  return `<div class="msg-meta">${nav}<span class="m-acts-wrap">${acts}</span></div>`;
+  return `<div class="msg-meta">${tag}${nav}<span class="m-acts-wrap">${acts}</span></div>`;
 }
 
 function editBoxHtml(n) {
@@ -309,7 +353,8 @@ function editBoxHtml(n) {
 }
 
 function msgHtml(c, p, n, chat) {
-  const meta = msgMetaHtml(n, chat, { regen: n.role === 'char' });
+  const msgPose = n.role === 'char' ? poseById(chat.characterId, n.poseId) : null;
+  const meta = msgMetaHtml(n, chat, { regen: n.role === 'char' }, poseTagHtml(msgPose));
   let body;
   if (editingId === n.id) {
     body = editBoxHtml(n);
@@ -333,7 +378,7 @@ function msgHtml(c, p, n, chat) {
   if (n.role === 'user') {
     return `<div class="msg user${n.pending ? ' pending' : ''}" data-id="${n.id}">${main}${personaAvatarHtml(p, 'sm', true)}</div>`;
   }
-  return `<div class="msg char" data-id="${n.id}">${avatarHtml(c, 'sm', true)}${main}</div>`;
+  return `<div class="msg char" data-id="${n.id}">${avatarHtml(c, 'sm', true, msgPose && msgPose.thumb)}${main}</div>`;
 }
 
 function updateComposerButtons() {
@@ -375,9 +420,10 @@ function renderChat(opts = {}) {
   const nodes = chat ? pathOf(chat.tree, typing && typingAt ? typingAt : null) : [];
   let html = nodes.map((n) => msgHtml(c, p, n, chat)).join('');
   if (typing) {
+    const cp = currentPose(chat);
     const live = streaming && chat && streaming.chatId === chat.id && streaming.text;
     html += live
-      ? `<div class="msg char streaming">${avatarHtml(c, 'sm', true)}<div class="msg-main"><div class="bubble">${md(streaming.text)}</div></div></div>`
+      ? `<div class="msg char streaming">${avatarHtml(c, 'sm', true, cp && cp.thumb)}<div class="msg-main"><div class="bubble">${md(streaming.text)}</div></div></div>`
       : `<div class="msg char"><span class="avatar sm emoji">${esc(c.emoji)}</span><div class="bubble dots"><span></span><span></span><span></span></div></div>`;
   }
   feed.innerHTML = html;
@@ -405,6 +451,7 @@ async function openCharacter(id, chatId) {
   closeSidebar();
   renderSidebar();
   renderChat();
+  loadPoses(id);
 }
 
 async function createChatFor(c) {
@@ -447,6 +494,7 @@ function mergeChat(chat, fresh) {
   chat.tree = fresh.tree;
   chat.title = fresh.title;
   chat.updatedAt = fresh.updatedAt;
+  if ('poseId' in fresh) chat.poseId = fresh.poseId || null;
 }
 
 function pushOptimistic(chat, role, content) {
@@ -799,6 +847,8 @@ function openCharModal(char) {
   disarmDelete();
   openModal('modal-char');
   setTimeout(() => $('#ce-name').focus(), 60);
+  if (ceId) loadPoses(ceId);
+  updateCePosesNote();
 }
 
 function renderCeEmojiGrid() {
@@ -861,6 +911,259 @@ async function charFormSave() {
   renderSidebar();
   renderChat();
   closeModal('modal-char');
+  loadPoses(ceMode === 'new' ? ui.activeCharacterId : ceId);
+}
+
+/* ---- poses: loading, live swap and the poses modal ---------------------- */
+
+const poseSeq = {};
+
+async function loadPoses(charId) {
+  if (!charId) return;
+  const seq = (poseSeq[charId] = (poseSeq[charId] || 0) + 1);
+  try {
+    const d = await api(`/characters/${charId}/poses`);
+    if (poseSeq[charId] !== seq) return;
+    state.poses[charId] = d.poses || [];
+    state.posesLoaded[charId] = true;
+  } catch (e) {
+    console.error('[poses] load failed', e);
+    if (poseSeq[charId] === seq) toast(e.message);
+    return;
+  }
+  if (ui.activeCharacterId === charId) {
+    applyChatBg();
+    renderHeader();
+    renderChat({ keepScroll: true });
+  }
+  updateCePosesNote();
+}
+
+function updateCePosesNote() {
+  const note = $('#ce-poses-note');
+  if (!note) return;
+  const charId = $('#modal-char').classList.contains('open') ? ceId : ui.activeCharacterId;
+  const list = charId ? poseList(charId) : [];
+  if (!list.length) { note.textContent = 'Default poses · no images yet'; return; }
+  const withImg = list.filter((p) => p.hasImage || p.image).length;
+  note.textContent = `${list.length} poses · ${withImg} with images`;
+}
+
+/* Swap the on-screen pose without re-rendering the feed: a full re-render here
+   would yank the scroll position mid-stream. */
+function applyPoseLive(poseId, poseName) {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat) return;
+  chat.poseId = poseId || null;
+  if (poseName && !poseById(chat.characterId, chat.poseId)) {
+    // Local list is stale — pull it so the swap can actually paint.
+    console.warn('[poses] unknown pose', poseId);
+    loadPoses(chat.characterId);
+  }
+  applyChatBg();
+  renderHeader();
+  patchLastCharMsg();
+}
+
+function patchLastCharMsg() {
+  const msgs = $$('#chat-feed .msg.char');
+  const el = msgs[msgs.length - 1];
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!el || !chat) return;
+  const p = poseById(chat.characterId, chat.poseId);
+  const av = $('.avatar', el);
+  if (av) {
+    if (p && p.thumb) {
+      av.classList.remove('emoji');
+      av.style.backgroundImage = `url('${p.thumb}')`;
+    } else {
+      av.style.backgroundImage = (c.avatar || c.image) ? `url('${c.avatar || c.image}')` : '';
+      av.classList.toggle('emoji', !(c.avatar || c.image));
+      if (c.avatar || c.image) av.textContent = '';
+      else av.textContent = c.emoji;
+    }
+  }
+  const meta = $('.msg-meta', el);
+  if (!meta) return;
+  const existing = $('.pose-tag', meta);
+  const tag = poseTagHtml(p);
+  if (!tag) { if (existing) existing.remove(); return; }
+  if (existing) existing.outerHTML = tag;
+  else meta.insertAdjacentHTML('afterbegin', tag);
+}
+
+let poseCharId = null;
+let poseEditId = null;
+let poseCreating = false;
+let poseUploadId = null;
+let poseDelArm = null;
+
+async function openPosesModal() {
+  const charModalOpen = $('#modal-char').classList.contains('open');
+  if (charModalOpen && ceMode !== 'edit') { toast('Save the character first'); return; }
+  const charId = (charModalOpen && ceId) ? ceId : ui.activeCharacterId;
+  const c = charId && state.characters.find((x) => x.id === charId);
+  if (!c) { toast('Save the character first'); return; }
+  poseCharId = charId;
+  closePoseForm();
+  clearPoseDelArm();
+  await loadPoses(charId);
+  $('#pose-char-name').textContent = c.name;
+  renderPosesGrid();
+  openModal('modal-poses');
+}
+
+function renderPosesGrid() {
+  const grid = $('#poses-grid');
+  if (!grid) return;
+  const c = state.characters.find((x) => x.id === poseCharId);
+  const chat = c && c.id === ui.activeCharacterId ? activeChat(c) : null;
+  const list = poseList(poseCharId);
+  grid.innerHTML = list.map((p) => {
+    const active = !!chat && chat.poseId === p.id;
+    const src = p.thumb || p.image;
+    const has = !!(p.hasThumb || p.hasImage || src);
+    // A square-only pose can never fill the backdrop and the director skips it,
+    // so the card must not look identical to one with a full image.
+    const full = !!(p.hasImage || p.image);
+    const thumbOnly = has && !full;
+    return `
+    <div class="pose-card ${active ? 'active' : ''}" data-id="${p.id}">
+      <div class="pose-thumb ${has ? '' : 'none'}">${has ? `<img src="${esc(src)}" alt="${esc(p.name)}">` : esc((p.name || '?').trim().charAt(0))}</div>
+      <div class="pose-body">
+        <div class="pose-name">${esc(p.name)}</div>
+        <div class="pose-desc">${esc(p.description || '')}</div>
+        <div class="pose-badges">
+          <span class="pose-badge">${p.isDefault ? 'Default' : 'Custom'}</span>
+          ${active ? '<span class="pose-badge act">On screen</span>' : ''}
+          ${thumbOnly ? '<span class="pose-badge" title="Only the square crop was saved — the full image is missing">Thumb only</span>' : ''}
+        </div>
+        <div class="pose-acts">
+          <button type="button" class="pose-act ${has ? 'on' : ''}" data-pose-act="img" title="${has ? 'Replace image' : 'Choose image'}">${I.image}</button>
+          <button type="button" class="pose-act" data-pose-act="edit" title="Rename / describe">${I.pencil}</button>
+          <button type="button" class="pose-act" data-pose-act="use" title="Show this pose now">${I.check}</button>
+          <button type="button" class="pose-act danger" data-pose-act="del" title="Delete">${I.trash}</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  updateCePosesNote();
+}
+
+function openPoseForm(p) {
+  const form = $('#pose-form');
+  if (!form) return;
+  poseEditId = p ? p.id : null;
+  poseCreating = !p;
+  $('#pose-name').value = p ? p.name : '';
+  $('#pose-desc').value = p ? p.description || '' : '';
+  form.classList.remove('hidden');
+  setTimeout(() => $('#pose-name').focus(), 30);
+}
+
+function closePoseForm() {
+  const form = $('#pose-form');
+  if (form) form.classList.add('hidden');
+  poseEditId = null;
+  poseCreating = false;
+}
+
+async function poseFormSave() {
+  const name = $('#pose-name').value.trim();
+  if (!name) { toast('Name is required'); return; }
+  const creating = poseCreating || !poseEditId;
+  const charId = poseCharId;
+  try {
+    if (creating) {
+      await api(`/characters/${charId}/poses`, { method: 'POST', body: JSON.stringify({ name, description: $('#pose-desc').value.trim() }) });
+    } else {
+      await api('/poses/' + poseEditId, { method: 'PUT', body: JSON.stringify({ name, description: $('#pose-desc').value.trim() }) });
+    }
+  } catch (e) { toast(e.message); return; }
+  closePoseForm();
+  await loadPoses(charId);
+  renderPosesGrid();
+  toast(creating ? 'Pose added' : 'Pose updated');
+}
+
+async function poseAdd() {
+  const charId = poseCharId;
+  if (!charId) return;
+  try {
+    const r = await api(`/characters/${charId}/poses`, { method: 'POST', body: JSON.stringify({ name: 'New pose', description: '' }) });
+    await loadPoses(charId);
+    renderPosesGrid();
+    openPoseForm(r.pose || null);
+  } catch (e) {
+    // Offline — keep the click useful by drafting the pose locally instead.
+    toast(e.message);
+    openPoseForm(null);
+  }
+}
+
+async function savePoseImage(id, r) {
+  if (!r) return;
+  const charId = poseCharId;
+  const body = { thumb: r.square };
+  if (r.full) body.image = r.full;
+  try {
+    await api('/poses/' + id, { method: 'PUT', body: JSON.stringify(body) });
+  } catch (e) { toast(e.message); return; }
+  await loadPoses(charId);
+  renderPosesGrid();
+  toast('Pose image updated');
+}
+
+async function usePose(p) {
+  const c = activeChar();
+  if (!c || c.id !== poseCharId) { toast('Only the character you are chatting with can swap live'); return; }
+  const chat = activeChat(c);
+  if (!chat) { toast('No chat to update'); return; }
+  let r;
+  try {
+    r = await api(`/chats/${chat.id}/pose`, { method: 'POST', body: JSON.stringify({ poseId: p.id }) });
+  } catch (e) { toast(e.message); return; }
+  if (r.chat) mergeChat(chat, r.chat);
+  applyPoseLive(chat.poseId, p.name);
+  renderPosesGrid();
+  toast('Showing: ' + p.name);
+}
+
+function clearPoseDelArm() {
+  if (!poseDelArm) return;
+  clearTimeout(poseDelArm.timer);
+  poseDelArm.btn.classList.remove('on');
+  poseDelArm.btn.title = 'Delete';
+  poseDelArm = null;
+}
+
+function poseDelete(p, btn) {
+  if (poseDelArm && poseDelArm.id === p.id) {
+    clearPoseDelArm();
+    deletePose(p);
+    return;
+  }
+  clearPoseDelArm();
+  btn.classList.add('on');
+  btn.title = 'Click again to confirm';
+  poseDelArm = { id: p.id, btn, timer: setTimeout(clearPoseDelArm, 2600) };
+  toast('Click delete again to confirm');
+}
+
+async function deletePose(p) {
+  const charId = poseCharId;
+  try {
+    await api('/poses/' + p.id, { method: 'DELETE' });
+  } catch (e) { toast(e.message); return; }
+  const c = state.characters.find((x) => x.id === charId);
+  if (c) c.poses = (c.poses || []).filter((x) => x.id !== p.id);
+  const chat = c && c.id === ui.activeCharacterId ? activeChat(c) : null;
+  if (chat && chat.poseId === p.id) chat.poseId = null;
+  await loadPoses(charId);
+  renderPosesGrid();
+  toast('Deleted "' + p.name + '"');
 }
 
 function provGridHtml(sel) {
@@ -889,6 +1192,15 @@ function openSettings() {
   const dimPct = Math.round((Number.isFinite(+s.actionDim) ? +s.actionDim : 0.72) * 100);
   $('#set-actdim').value = dimPct;
   $('#actdim-val').textContent = dimPct + '%';
+  $('#pose-agent').checked = !!s.poseAgent;
+  $('#pose-recheck').checked = s.poseRecheck !== false;
+  $('#pose-provider').value = s.poseProvider || 'custom';
+  $('#pose-url').value = s.poseBaseUrl || '';
+  $('#pose-key').value = s.poseApiKey || '';
+  $('#pose-model').value = s.poseModel || '';
+  const posePct = Math.round((Number.isFinite(+s.poseLikelihood) ? +s.poseLikelihood : 0.6) * 100);
+  $('#set-poselike').value = posePct;
+  $('#poselike-val').textContent = posePct + '%';
   renderPresetList();
   openModal('modal-settings');
 }
@@ -956,6 +1268,13 @@ async function settingsSave() {
     bgOpacity: +$('#set-bgop').value / 100,
     bgBlur: +$('#set-bgblur').value,
     actionDim: +$('#set-actdim').value / 100,
+    poseAgent: $('#pose-agent').checked,
+    poseRecheck: $('#pose-recheck').checked,
+    poseProvider: $('#pose-provider').value,
+    poseBaseUrl: $('#pose-url').value.trim(),
+    poseApiKey: $('#pose-key').value.trim(),
+    poseModel: $('#pose-model').value.trim(),
+    poseLikelihood: (+$('#set-poselike').value || 0) / 100,
   };
   try {
     state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(body) });
@@ -963,7 +1282,15 @@ async function settingsSave() {
     setHint();
     applyChatBg();
     toast('Settings saved');
+    if (body.poseAgent) poseAgentHint();
   } catch (e) { toast(e.message); }
+}
+
+function poseAgentHint() {
+  const c = activeChar();
+  if (!c) return;
+  if (poseList(c.id).some((p) => p.hasImage || p.image || p.hasThumb || p.thumb)) return;
+  toast('Add images to your poses to let the director swap them');
 }
 
 async function setPreset(pid) {
@@ -1408,6 +1735,9 @@ function wireEvents() {
     $('#actdim-val').textContent = e.target.value + '%';
     document.documentElement.style.setProperty('--act-dim', String(+e.target.value / 100));
   });
+  $('#set-poselike').addEventListener('input', (e) => {
+    $('#poselike-val').textContent = e.target.value + '%';
+  });
 
   $('#img-viewer').addEventListener('click', closeViewer);
   $('#chat-feed').addEventListener('click', (e) => {
@@ -1443,14 +1773,17 @@ function wireEvents() {
     const av = e.target.closest('.avatar.zoomable');
     if (!av) return;
     const msg = av.closest('.msg');
+    const c = activeChar();
+    const chat = c && activeChat(c);
+    const node = (msg && chat && chat.tree.nodes[msg.dataset.id]) || null;
     const src = msg && msg.classList.contains('user')
       ? fullImageSrc(activePersona())
-      : fullImageSrc(activeChar());
+      : (poseImg(node && poseById(chat.characterId, node.poseId)) || fullImageSrc(c));
     if (src) { e.stopPropagation(); openViewer(src); }
   }, true);
   $('#char-info').addEventListener('click', (e) => {
     if (!e.target.closest('.avatar.zoomable')) return;
-    const src = fullImageSrc(activeChar());
+    const src = poseImg(currentPose()) || fullImageSrc(activeChar());
     if (src) { e.stopPropagation(); openViewer(src); }
   }, true);
 
@@ -1621,6 +1954,48 @@ function wireEvents() {
     renderSidebar();
     showWelcome();
     toast(`Deleted "${c ? c.name : 'character'}"`);
+  });
+
+  $('#ce-poses').addEventListener('click', openPosesModal);
+  $('#pose-add').addEventListener('click', poseAdd);
+  $('#pose-save').addEventListener('click', poseFormSave);
+  $('#pose-cancel').addEventListener('click', closePoseForm);
+  $('#poses-grid').addEventListener('click', (e) => {
+    const card = e.target.closest('.pose-card');
+    if (!card) return;
+    e.stopPropagation();
+    const p = poseList(poseCharId).find((x) => x.id === card.dataset.id);
+    if (!p) return;
+    const act = e.target.closest('[data-pose-act]');
+    const kind = act ? act.dataset.poseAct : 'use';
+    if (kind === 'img') {
+      poseUploadId = p.id;
+      $('#pose-file').click();
+    } else if (kind === 'edit') {
+      clearPoseDelArm();
+      openPoseForm(p);
+    } else if (kind === 'use') {
+      usePose(p);
+    } else if (kind === 'del') {
+      poseDelete(p, act);
+    }
+  });
+  $('#pose-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    const id = poseUploadId;
+    poseUploadId = null;
+    if (!file || !id) return;
+    if (!file.type.startsWith('image/')) { toast('Please choose an image file'); return; }
+    const reader = new FileReader();
+    reader.onload = () => openCropFlow(reader.result, (r) => {
+      if (r) savePoseImage(id, r);
+      // The crop modal never closes the poses one, but re-open defensively.
+      if (!$('#modal-poses').classList.contains('open')) openModal('modal-poses');
+      renderPosesGrid();
+    });
+    reader.onerror = () => toast('Could not read that file');
+    reader.readAsDataURL(file);
   });
 
   const view = $('#crop-view');

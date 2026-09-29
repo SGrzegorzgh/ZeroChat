@@ -176,6 +176,53 @@
           <p class="m-note" style="margin-top:8px">Brightness of the *action* text in messages. Spoken "quotes" always stay at full brightness.</p>
         </div>
 
+        <div class="pf-sep"></div>
+
+        <div class="field">
+          <label>Pose agent</label>
+          <p class="m-note">A small tool-calling model reads every reply and swaps the character&rsquo;s image to the best-matching pose.</p>
+        </div>
+        <div class="field">
+          <div class="set-check">
+            <label for="pose-agent">Enable pose director</label>
+            <input type="checkbox" id="pose-agent">
+          </div>
+        </div>
+        <div class="field">
+          <div class="set-check">
+            <label for="pose-recheck">Re-check every message</label>
+            <input type="checkbox" id="pose-recheck">
+          </div>
+          <p class="m-note" style="margin-top:8px">Off = pick a pose once at the start of the chat and keep it.</p>
+        </div>
+        <div class="field">
+          <label>Provider</label>
+          <select id="pose-provider">
+            <option value="openrouter">OpenRouter</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="ollama">Ollama</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Base URL</label>
+          <input type="text" id="pose-url" placeholder="Leave blank to use the main model&rsquo;s URL">
+        </div>
+        <div class="field">
+          <label>API key</label>
+          <input type="text" id="pose-key" placeholder="Leave blank to use the main model&rsquo;s key">
+        </div>
+        <div class="field">
+          <label>Director model</label>
+          <input type="text" id="pose-model" placeholder="e.g. gpt-5.6-luna-load-balanced or openrouter/qwen/qwen3.7-flash">
+        </div>
+        <div class="field">
+          <label>Change threshold <span class="val" id="poselike-val"></span></label>
+          <input type="range" id="set-poselike" min="0" max="100" step="1">
+          <p class="m-note" style="margin-top:8px">Minimum confidence before the image is allowed to change. Higher = fewer, steadier swaps.</p>
+        </div>
+
         <p class="m-note">Requests are proxied through the local server, which stores this configuration (including the API key) in its SQLite database. Single-user setup — keys are not encrypted.</p>
       </div>
       <div class="m-foot">
@@ -243,6 +290,8 @@
             <div class="avatar-actions">
               <button id="ce-upload" class="btn btn-ghost sm" type="button">Upload image…</button>
               <button id="ce-remove-avatar" class="btn btn-ghost sm hidden" type="button">Remove image</button>
+              <button id="ce-poses" class="btn btn-ghost sm" type="button">Poses…</button>
+              <span id="ce-poses-note" class="avatar-note">Default poses · no images yet</span>
               <span class="avatar-note">PNG or JPEG · first crop: square icon · second: free shape for background &amp; full view</span>
             </div>
           </div>
@@ -269,6 +318,42 @@
         <button id="ce-delete" class="btn btn-danger hidden">Delete character</button>
         <span class="spacer"></span>
         <button id="ce-save" class="btn btn-primary">Save character</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-poses">
+    <div class="modal-card">
+      <div class="m-head">
+        <h3 id="pose-char-name">Poses</h3>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body">
+        <p class="m-note">Default poses ship with every character. Add images to them, or add your own. The director model picks one per reply; click a pose to set it manually.</p>
+        <div id="poses-grid" class="pose-grid"></div>
+        <button id="pose-add" class="pose-add" type="button">+ Add pose</button>
+        <input type="file" id="pose-file" accept="image/*" hidden>
+        <p class="m-note" style="margin-top:12px">Uploading an image crops it twice: a square thumbnail for this grid, and a free-form full image for the chat background.</p>
+        <div id="pose-form" class="pose-form hidden">
+          <div class="field">
+            <label for="pose-name">Short name</label>
+            <input type="text" id="pose-name" placeholder="Short name, e.g. sitting by a table">
+          </div>
+          <div class="field">
+            <label for="pose-desc">When to use it</label>
+            <textarea id="pose-desc" rows="3" placeholder="1-2 sentences describing when to use this pose"></textarea>
+          </div>
+          <div class="pose-form-acts">
+            <button id="pose-cancel" class="btn btn-ghost sm" type="button">Cancel</button>
+            <button id="pose-save" class="btn btn-primary sm" type="button">Save pose</button>
+          </div>
+        </div>
+      </div>
+      <div class="m-foot">
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" data-close>Done</button>
       </div>
     </div>
   </div>
