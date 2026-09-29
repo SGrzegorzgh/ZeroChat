@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1114">
+  <title>aichat — AI Roleplay</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎭</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">
+        <span class="brand-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        <span class="brand-name">aichat</span>
+        <span class="beta">beta</span>
+      </div>
+      <div class="sidebar-label">Characters</div>
+      <div id="char-list"></div>
+      <div class="sidebar-foot">
+        <button id="new-char-btn" class="btn btn-ghost" style="width:100%">
+          <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px"><path d="M12 5v14M5 12h14"/></svg>
+            New character
+          </span>
+        </button>
+      </div>
+    </aside>
+
+    <main id="main">
+      <section id="welcome" class="hidden">
+        <div class="welcome-inner">
+          <div class="w-badge">Sample build · UI preview</div>
+          <h1>Who will you talk to tonight?</h1>
+          <p id="w-sub">Pick a character below to start a conversation, or create your own. Replies are simulated until you add an API key in Settings.</p>
+          <div id="welcome-grid"></div>
+        </div>
+      </section>
+
+      <section id="chat-view" class="hidden">
+        <div id="chat-bg"></div>
+        <header id="chat-header">
+          <button id="menu-btn" class="icon-btn" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div id="char-info"></div>
+
+          <div class="menu-wrap" id="persona-wrap">
+            <button id="persona-btn" class="pill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span class="as">as</span>
+              <span class="label" id="persona-label"></span>
+              <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="menu" id="persona-menu"></div>
+          </div>
+
+          <div class="menu-wrap" id="chats-wrap">
+            <button id="chats-btn" class="icon-btn" aria-label="Chat history">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><path d="M12 7v5l4 2"/></svg>
+            </button>
+            <div class="menu" id="chats-menu"></div>
+          </div>
+
+          <div class="menu-wrap" id="preset-wrap">
+            <button id="preset-btn" class="pill" title="AI preset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+              <span class="label" id="preset-label">AI</span>
+              <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="menu" id="preset-menu"></div>
+          </div>
+
+          <button id="edit-char-btn" class="icon-btn" aria-label="Edit character" title="Edit character">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </button>
+
+          <button id="settings-btn" class="icon-btn" aria-label="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </header>
+
+        <div id="chat-scroll">
+          <div id="chat-feed"></div>
+        </div>
+
+        <div id="composer">
+          <div class="composer-inner">
+            <div class="composer-row">
+              <textarea id="msg-input" rows="1" placeholder="Say something..."></textarea>
+              <button id="inject-btn" class="comp-btn" aria-label="Send as directive" title="Send as an OOC directive — steers the next reply, the AI won't answer yet" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              </button>
+              <button id="generate-btn" class="comp-btn" aria-label="Generate reply now" title="Generate a reply now (responds to queued directives)" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+              </button>
+              <button id="send-btn" aria-label="Send message">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 22-8z"/></svg>
+              </button>
+            </div>
+            <div class="composer-hint" id="composer-hint"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="scrim"></div>
+
+  <div class="modal" id="modal-settings">
+    <div class="modal-card">
+      <div class="m-head">
+        <h3>Settings</h3>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body">
+        <div class="field">
+          <label>AI provider</label>
+          <div id="prov-grid" class="prov-grid"></div>
+        </div>
+        <div class="field">
+          <label>Base URL</label>
+          <input type="url" id="set-url" placeholder="https://...">
+        </div>
+        <div class="field">
+          <label>API key</label>
+          <div class="key-row">
+            <input type="password" id="set-key" placeholder="sk-..." autocomplete="off">
+            <button id="key-toggle" class="mini" type="button">Show</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Model</label>
+          <div class="key-row">
+            <input type="text" id="set-model" list="set-model-list" placeholder="model-id">
+            <button id="set-fetch-models" class="mini" type="button">Fetch list</button>
+          </div>
+          <datalist id="set-model-list"></datalist>
+        </div>
+        <div class="field">
+          <label>Temperature <span class="val" id="temp-val"></span></label>
+          <input type="range" id="set-temp" min="0" max="2" step="0.1">
+        </div>
+
+        <div class="pf-sep"></div>
+
+        <div class="field">
+          <label>AI presets <span class="val" id="preset-count" style="font-weight:600"></span></label>
+          <div id="preset-list"></div>
+          <button id="preset-new" class="btn btn-ghost sm" type="button" style="margin-top:9px">+ New preset</button>
+          <p class="m-note" style="margin-top:9px">A preset overrides the provider settings above for every chat — its own provider, model, key, temperature, reasoning effort and system prompt. Empty fields fall back to the settings here. Selecting a preset switches the AI immediately.</p>
+        </div>
+
+        <div class="pf-sep"></div>
+
+        <div class="field">
+          <label>Chat background opacity <span class="val" id="bgop-val"></span></label>
+          <input type="range" id="set-bgop" min="0" max="100" step="1">
+          <p class="m-note" style="margin-top:8px">Shows the character's full image behind the messages (falls back to the square avatar). 0% hides it.</p>
+        </div>
+        <div class="field">
+          <label>Chat background blur <span class="val" id="bgblur-val"></span></label>
+          <input type="range" id="set-bgblur" min="0" max="24" step="1">
+        </div>
+        <div class="field">
+          <label>Action text opacity <span class="val" id="actdim-val"></span></label>
+          <input type="range" id="set-actdim" min="30" max="100" step="1">
+          <p class="m-note" style="margin-top:8px">Brightness of the *action* text in messages. Spoken "quotes" always stay at full brightness.</p>
+        </div>
+
+        <p class="m-note">Requests are proxied through the local server, which stores this configuration (including the API key) in its SQLite database. Single-user setup — keys are not encrypted.</p>
+      </div>
+      <div class="m-foot">
+        <span class="spacer"></span>
+        <button id="settings-save" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-persona">
+    <div class="modal-card">
+      <div class="m-head">
+        <h3>Your personalities</h3>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body">
+        <div class="field">
+          <label>Avatar</label>
+          <div class="avatar-row">
+            <span id="pf-preview" class="avatar xl"></span>
+            <span id="pf-preview-full" class="preview-full hidden" title="Full image"></span>
+            <div class="avatar-actions">
+              <button id="pf-upload" class="btn btn-ghost sm" type="button">Upload image…</button>
+              <button id="pf-remove-avatar" class="btn btn-ghost sm hidden" type="button">Remove image</button>
+              <span class="avatar-note">Shown next to your messages · second crop appears when the avatar is tapped</span>
+            </div>
+          </div>
+          <input type="file" id="pf-file" accept="image/*" hidden>
+        </div>
+        <div id="persona-list"></div>
+        <div class="pf-sep"></div>
+        <div class="field">
+          <label id="pf-label">Add personality</label>
+          <input type="text" id="pf-name" placeholder="e.g. The Brave Hero">
+        </div>
+        <div class="field">
+          <label>Description</label>
+          <textarea id="pf-desc" rows="3" placeholder="How should the AI see you? e.g. Bold and direct, always charges in first..."></textarea>
+        </div>
+      </div>
+      <div class="m-foot">
+        <button id="pf-cancel" class="btn btn-ghost hidden">Cancel edit</button>
+        <span class="spacer"></span>
+        <button id="pf-save" class="btn btn-primary">Add personality</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-char">
+    <div class="modal-card">
+      <div class="m-head">
+        <h3 id="ce-title">New character</h3>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body">
+        <div class="field">
+          <label>Avatar</label>
+          <div class="avatar-row">
+            <span id="ce-preview" class="avatar xl"></span>
+            <span id="ce-preview-full" class="preview-full hidden" title="Full image"></span>
+            <div class="avatar-actions">
+              <button id="ce-upload" class="btn btn-ghost sm" type="button">Upload image…</button>
+              <button id="ce-remove-avatar" class="btn btn-ghost sm hidden" type="button">Remove image</button>
+              <span class="avatar-note">PNG or JPEG · first crop: square icon · second: free shape for background &amp; full view</span>
+            </div>
+          </div>
+          <input type="file" id="ce-file" accept="image/*" hidden>
+        </div>
+        <div class="field hidden" id="ce-emoji-block">
+          <label>Fallback emoji (shown until an image is uploaded)</label>
+          <div id="ce-emojis" class="eg"></div>
+        </div>
+        <div class="field">
+          <label>Name</label>
+          <input type="text" id="ce-name" placeholder="e.g. Luna Vasquez">
+        </div>
+        <div class="field">
+          <label>Description</label>
+          <textarea id="ce-desc" rows="4" placeholder="Who are they? A few sentences — background, personality, quirks, how they treat you..."></textarea>
+        </div>
+        <div class="field">
+          <label>Scenario (the opening message)</label>
+          <textarea id="ce-scenario" rows="5" placeholder="*The tavern falls silent as they enter...*&#10;&#10;You again. Sit down — we have business to discuss."></textarea>
+        </div>
+      </div>
+      <div class="m-foot">
+        <button id="ce-delete" class="btn btn-danger hidden">Delete character</button>
+        <span class="spacer"></span>
+        <button id="ce-save" class="btn btn-primary">Save character</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-crop">
+    <div class="modal-card">
+      <div class="m-head">
+        <h3 id="crop-title">Crop profile icon</h3>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body">
+        <div id="crop-view">
+          <img id="crop-img" alt="Avatar to crop" draggable="false">
+          <div id="crop-frame" class="hidden">
+            <span id="crop-handle" title="Drag to resize"></span>
+          </div>
+        </div>
+        <div class="crop-controls">
+          <div class="crop-btns">
+            <button id="crop-rotl" class="btn btn-ghost sm" type="button" aria-label="Rotate left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+              Rotate left
+            </button>
+            <button id="crop-rotr" class="btn btn-ghost sm" type="button" aria-label="Rotate right">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg>
+              Rotate right
+            </button>
+          </div>
+          <div class="crop-zoom">
+            <span>Zoom</span>
+            <input type="range" id="crop-zoom" min="1" max="3" step="0.05" value="1">
+            <span id="crop-zoom-val">1.0×</span>
+          </div>
+        </div>
+        <p class="m-note" style="margin-top:14px" id="crop-note">Drag to reposition the image inside the square.</p>
+      </div>
+      <div class="m-foot">
+        <button id="crop-reset" class="btn btn-ghost">Reset</button>
+        <span class="spacer"></span>
+        <button id="crop-skip" class="btn btn-ghost hidden">No full image</button>
+        <button id="crop-cancel" class="btn btn-ghost">Cancel</button>
+        <button id="crop-apply" class="btn btn-primary">Next: full image</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-preset">
+    <div class="modal-card">
+      <div class="m-head">
+        <h3 id="pr-title">New preset</h3>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" id="pr-name" placeholder="e.g. Fast roleplay — Scout">
+        </div>
+        <div class="field">
+          <label>Provider</label>
+          <div id="pr-prov-grid" class="prov-grid"></div>
+        </div>
+        <div class="field">
+          <label>Base URL</label>
+          <input type="url" id="pr-url" placeholder="https://...">
+        </div>
+        <div class="field">
+          <label>API key <span class="val" style="font-weight:500" id="pr-key-hint">empty = use global key</span></label>
+          <div class="key-row">
+            <input type="password" id="pr-key" placeholder="sk-... (optional)" autocomplete="off">
+            <button id="pr-key-toggle" class="mini" type="button">Show</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Model</label>
+          <div class="key-row">
+            <input type="text" id="pr-model" list="pr-model-list" placeholder="model-id">
+            <button id="pr-fetch-models" class="mini" type="button">Fetch list</button>
+          </div>
+          <datalist id="pr-model-list"></datalist>
+        </div>
+        <div class="field">
+          <label>Temperature <span class="val" id="pr-temp-val"></span></label>
+          <input type="range" id="pr-temp" min="0" max="2" step="0.1">
+        </div>
+        <div class="field">
+          <label>Max tokens <span class="val" style="font-weight:500">0 = provider default</span></label>
+          <input type="number" id="pr-maxtok" min="16" max="8192" step="16" placeholder="e.g. 1024">
+        </div>
+        <div class="field">
+          <label>Reasoning effort</label>
+          <select id="pr-reason">
+            <option value="default">Model default</option>
+            <option value="off">No reasoning</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>System prompt override (optional)</label>
+          <textarea id="pr-sys" rows="4" placeholder="Leave empty to use the standard roleplay prompt. If set, this replaces the opening instruction — the scenario, your personality and roleplay rules are still appended."></textarea>
+        </div>
+      </div>
+      <div class="m-foot">
+        <button id="pr-delete" class="btn btn-danger hidden">Delete preset</button>
+        <span class="spacer"></span>
+        <button id="pr-cancel" class="btn btn-ghost">Cancel</button>
+        <button id="pr-save" class="btn btn-primary">Save preset</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="img-viewer" class="hidden">
+    <img id="img-viewer-img" alt="Full size image">
+  </div>
+
+  <div id="toast"></div>
+  <canvas id="crop-canvas" width="256" height="256" class="hidden"></canvas>
+
+  <script src="app.js"></script>
+</body>
+</html>

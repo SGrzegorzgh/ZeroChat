@@ -1,0 +1,1740 @@
+const I = {
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+  send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 22-8z"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+  history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><path d="M12 7v5l4 2"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>',
+  rotl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>',
+  rotr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg>',
+  zap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+  sparkles: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>',
+  chevl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
+  chevr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+};
+
+const EMOJIS = ['🧙','🧝','🧛','🧜','🐉','🦊','🐺','🦉','🤖','👾','🕵️','🚀','🌸','🌙','⭐','✨','👑','⚔️','🛡️','🎭','👻','💀','🌌','🔥'];
+
+const PROVIDERS = {
+  openrouter: { label: 'OpenRouter', desc: '400+ models, one key', baseUrl: 'https://openrouter.ai/api/v1', models: ['anthropic/claude-3.5-sonnet', 'openai/gpt-4o', 'openai/gpt-4o-mini', 'google/gemini-2.0-flash-001', 'meta-llama/llama-3.1-70b-instruct', 'mistralai/mistral-large'] },
+  openai: { label: 'OpenAI', desc: 'GPT-4o & friends', baseUrl: 'https://api.openai.com/v1', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini'] },
+  anthropic: { label: 'Anthropic', desc: 'Claude models', baseUrl: 'https://api.anthropic.com/v1', models: ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest', 'claude-3-opus-latest'] },
+  ollama: { label: 'Ollama', desc: 'Local models, no key', baseUrl: 'http://localhost:11434/v1', models: ['llama3.1', 'mistral', 'qwen2.5', 'gemma2', 'phi3'] },
+  custom: { label: 'Custom', desc: 'Any OpenAI-compatible API', baseUrl: '', models: [] },
+};
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const trunc = (s, n = 34) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+const now = () => Date.now();
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+let state = { characters: [], personalities: [], presets: [], settings: {} };
+const UI_KEY = 'aichat.ui.v1';
+let ui = { activeCharacterId: null, activeChatIds: {} };
+try { const s = JSON.parse(localStorage.getItem(UI_KEY)); if (s) ui = { ...ui, ...s }; } catch {}
+const saveUi = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch {} };
+let typing = false;
+let typingAt = null;
+let streaming = null;
+let editingId = null;
+
+async function streamGenerate(path, body, onDelta) {
+  const r = await fetch('/api' + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const ct = r.headers.get('content-type') || '';
+  if (!r.ok || !ct.includes('text/event-stream')) {
+    const d = await r.json().catch(() => ({}));
+    throw new Error(d.error || r.statusText || 'Request failed');
+  }
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  let full = '';
+  let result = null;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) !== -1) {
+      const chunk = buf.slice(0, i);
+      buf = buf.slice(i + 2);
+      const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+      if (!line) continue;
+      let ev;
+      try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+      if (ev.type === 'delta') {
+        full += ev.text;
+        onDelta(full);
+      } else if (ev.type === 'done') {
+        result = ev;
+      } else if (ev.type === 'error') {
+        return ev;
+      }
+    }
+  }
+  if (!result) throw new Error('Stream ended unexpectedly');
+  return result;
+}
+
+function pathOf(tree, uptoId) {
+  const out = [];
+  if (!tree || !tree.nodes || !tree.nodes.root) return out;
+  let cur = tree.nodes.root;
+  let guard = 0;
+  while (cur && cur.children.length && guard++ < 1000) {
+    const n = tree.nodes[cur.children[Math.min(cur.active, cur.children.length - 1)]];
+    if (!n) break;
+    out.push(n);
+    if (uptoId && n.id === uptoId) break;
+    cur = n;
+  }
+  return out;
+}
+
+function tipNode(chat) {
+  const path = pathOf(chat.tree);
+  return path.length ? path[path.length - 1] : null;
+}
+
+async function api(path, opts = {}) {
+  const r = await fetch('/api' + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || r.statusText || 'Request failed');
+  return d;
+}
+
+async function bootstrap() {
+  const d = await api('/bootstrap');
+  state.characters = d.characters;
+  state.personalities = d.personalities;
+  state.presets = d.presets || [];
+  state.settings = d.settings;
+  api('/default-prompt').then((r) => { defaultPromptCache = r.prompt; }).catch(() => {});
+}
+
+function md(s) {
+  let t = esc(s);
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+  return t.replace(/\n/g, '<br>');
+}
+
+function fmtDate(ts) {
+  const d = new Date(ts);
+  const n = new Date();
+  const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === n.toDateString()) return 'Today ' + hm;
+  const y = new Date(n); y.setDate(y.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return 'Yesterday ' + hm;
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ' + hm;
+}
+
+const activeChar = () => state.characters.find((c) => c.id === ui.activeCharacterId) || null;
+const activePersona = () => state.personalities.find((p) => p.id === state.settings.activePersonalityId) || state.personalities[0] || null;
+const activePreset = () => state.presets.find((p) => p.id === state.settings.activePresetId) || null;
+
+function effectiveAi() {
+  const s = state.settings;
+  const pr = activePreset();
+  const pick = (k, dflt) => {
+    const pv = pr ? pr[k] : undefined;
+    if (pv !== undefined && pv !== null && pv !== '' && pv !== 'default') return pv;
+    const sv = s[k];
+    if (sv !== undefined && sv !== null && sv !== '' && sv !== 'default') return sv;
+    return dflt;
+  };
+  return {
+    provider: pick('provider', 'openrouter'),
+    model: pick('model', ''),
+    apiKey: pick('apiKey', ''),
+    name: pr ? pr.name : null,
+  };
+}
+
+function activeChat(c) {
+  const wanted = ui.activeChatIds[c.id];
+  return c.chats.find((x) => x.id === wanted)
+    || c.chats.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0]
+    || null;
+}
+
+function avatarHtml(c, cls = '', zoomable = false) {
+  if (c.avatar || c.image) {
+    return `<span class="avatar ${cls}${zoomable ? ' zoomable' : ''}" style="background-image:url('${c.avatar || c.image}')" title="View image"></span>`;
+  }
+  return `<span class="avatar ${cls} emoji">${esc(c.emoji)}</span>`;
+}
+
+function personaAvatarHtml(p, cls = '', zoomable = false) {
+  if (p && (p.avatar || p.image)) {
+    return `<span class="avatar ${cls}${zoomable ? ' zoomable' : ''}" style="background-image:url('${p.avatar || p.image}')" title="View image"></span>`;
+  }
+  const letter = p && p.name ? p.name.trim().charAt(0).toUpperCase() : 'Y';
+  return `<span class="avatar ${cls} emoji letter">${esc(letter)}</span>`;
+}
+
+function fullImageSrc(c) {
+  return (c && (c.image || c.avatar)) || null;
+}
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function showWelcome() {
+  $('#chat-view').classList.add('hidden');
+  $('#welcome').classList.remove('hidden');
+  renderWelcomeGrid();
+}
+
+function showChat() {
+  $('#welcome').classList.add('hidden');
+  $('#chat-view').classList.remove('hidden');
+}
+
+function renderSidebar() {
+  $('#char-list').innerHTML = state.characters.map((c) => `
+    <div class="char-item ${ui.activeCharacterId === c.id ? 'active' : ''}" data-id="${c.id}">
+      ${avatarHtml(c)}
+      <span class="ci-text">
+        <span class="ci-name">${esc(c.name)}</span>
+        <span class="ci-tag">${esc(c.description)}</span>
+      </span>
+    </div>`).join('');
+}
+
+function renderWelcomeGrid() {
+  $('#welcome-grid').innerHTML = state.characters.map((c) => `
+    <div class="w-card" data-id="${c.id}">
+      ${avatarHtml(c, 'big')}
+      <div class="w-name">${esc(c.name)}</div>
+      <div class="w-tag">${esc(c.description)}</div>
+      <div class="w-chats">${I.chat} ${c.chats.length} chat${c.chats.length === 1 ? '' : 's'}</div>
+    </div>`).join('') + `
+    <div class="w-card w-new" data-new="1">
+      <span class="w-plus">${I.plus}</span>
+      <div class="w-name">Create character</div>
+      <div class="w-tag">Upload an avatar, write their story</div>
+    </div>`;
+}
+
+function renderHeader() {
+  const c = activeChar();
+  if (!c) return;
+  $('#char-info').innerHTML = `${avatarHtml(c, '', true)}
+    <div class="ch-text">
+      <div class="ch-name">${esc(c.name)}</div>
+      <div class="ch-tag">${esc(c.description)}</div>
+    </div>`;
+  const p = activePersona();
+  $('#persona-label').textContent = p ? p.name : '—';
+  const pr = activePreset();
+  $('#preset-label').textContent = pr ? pr.name : 'AI';
+}
+
+function applyChatBg() {
+  const c = activeChar();
+  const bg = $('#chat-bg');
+  const op = Math.min(1, Math.max(0, Number(state.settings.bgOpacity)));
+  const bl = Math.min(24, Math.max(0, Number(state.settings.bgBlur)));
+  const dim = Math.min(1, Math.max(0.3, Number.isFinite(+state.settings.actionDim) ? +state.settings.actionDim : 0.72));
+  document.documentElement.style.setProperty('--bgop', String(op));
+  document.documentElement.style.setProperty('--bgblur', bl + 'px');
+  document.documentElement.style.setProperty('--act-dim', String(dim));
+  const src = fullImageSrc(c);
+  if (src && op > 0) {
+    bg.style.backgroundImage = `url('${src}')`;
+    bg.classList.remove('none');
+  } else {
+    bg.style.backgroundImage = '';
+    bg.classList.add('none');
+  }
+}
+
+function setHint() {
+  const ai = effectiveAi();
+  const live = ai.apiKey || ai.provider === 'ollama';
+  const providerLabel = PROVIDERS[ai.provider]?.label || 'Custom';
+  const who = ai.name ? `${ai.name} (${providerLabel})` : providerLabel;
+  $('#composer-hint').innerHTML = live
+    ? `<span class="live">Live · ${esc(who)} · ${esc(ai.model || 'no model set')}</span><span>·</span><span>Enter to send · Shift+Enter for a new line · <span class="zap-hint">${I.zap}</span> steers the next reply</span>`
+    : `<span class="sim">No API key — replies are simulated · set one in Settings</span><span>·</span><span>Enter to send · Shift+Enter for a new line · <span class="zap-hint">${I.zap}</span> steers the next reply</span>`;
+}
+
+function msgMetaHtml(n, chat, opts) {
+  const parent = chat.tree.nodes[n.parent];
+  const kids = parent ? parent.children : [];
+  const total = kids.length;
+  const idx = kids.indexOf(n.id);
+  const nav = total > 1
+    ? `<span class="vnav"><button data-nav="prev" title="Previous version" ${idx <= 0 ? 'disabled' : ''}>${I.chevl}</button><span class="v-count">${idx + 1}/${total}</span><button data-nav="next" title="Next version" ${idx >= total - 1 ? 'disabled' : ''}>${I.chevr}</button></span>`
+    : '';
+  const acts = `<span class="m-acts">
+    <button data-act="edit" title="Edit message">${I.pencil}</button>
+    ${opts.regen ? `<button data-act="regen" title="Regenerate this reply">${I.rotr}</button>` : ''}
+    <button data-act="del" class="danger" title="Delete this message and everything after it">${I.trash}</button>
+  </span>`;
+  return `<div class="msg-meta">${nav}<span class="m-acts-wrap">${acts}</span></div>`;
+}
+
+function editBoxHtml(n) {
+  return `<div class="edit-box">
+    <textarea id="edit-ta">${esc(n.content)}</textarea>
+    <div class="edit-actions">
+      <button data-act="esave" class="mini primary">Save</button>
+      <button data-act="ecancel" class="mini">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function msgHtml(c, p, n, chat) {
+  const meta = msgMetaHtml(n, chat, { regen: n.role === 'char' });
+  let body;
+  if (editingId === n.id) {
+    body = editBoxHtml(n);
+  } else if (n.role === 'injection') {
+    const dot = n.state === 'pending' ? '<span class="inj-dot" title="Will be sent with the next reply"></span>' : '';
+    body = `<div class="bubble"><span class="inj-tag">${I.zap}<span>Directive</span>${dot}</span>${md(n.content)}</div>`;
+  } else if (n.role === 'scenario') {
+    body = `<div class="ms-body">${md(n.content)}</div>`;
+  } else {
+    body = `<div class="bubble">${md(n.content)}</div>`;
+  }
+  if (n.role === 'scenario') {
+    return `<div class="msg-scenario" data-id="${n.id}">
+      <div class="ms-head">${I.book}<span>Scenario</span></div>
+      ${body}${meta}</div>`;
+  }
+  const main = `<div class="msg-main">${body}${meta}</div>`;
+  if (n.role === 'injection') {
+    return `<div class="msg user injection ${n.state === 'pending' ? 'inj-pending' : ''}" data-id="${n.id}">${main}${personaAvatarHtml(p, 'sm', true)}</div>`;
+  }
+  if (n.role === 'user') {
+    return `<div class="msg user${n.pending ? ' pending' : ''}" data-id="${n.id}">${main}${personaAvatarHtml(p, 'sm', true)}</div>`;
+  }
+  return `<div class="msg char" data-id="${n.id}">${avatarHtml(c, 'sm', true)}${main}</div>`;
+}
+
+function updateComposerButtons() {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  const text = $('#msg-input').value.trim();
+  const tip = chat ? tipNode(chat) : null;
+  const canReply = !!tip && (tip.role === 'user' || tip.role === 'injection') && !tip.pending;
+  $('#send-btn').disabled = typing || !chat || !text;
+  $('#inject-btn').disabled = typing || !chat || !text;
+  $('#generate-btn').disabled = typing || !chat || !canReply;
+}
+
+function liveStreamUpdate() {
+  if (!streaming) return;
+  const sc = $('#chat-scroll');
+  let bubble = document.querySelector('#chat-feed .msg.streaming .bubble');
+  if (!bubble) {
+    renderChat();
+    bubble = document.querySelector('#chat-feed .msg.streaming .bubble');
+  }
+  if (bubble) {
+    bubble.innerHTML = md(streaming.text);
+    if (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 160) sc.scrollTop = sc.scrollHeight;
+  }
+}
+
+function renderChat(opts = {}) {
+  const c = activeChar();
+  if (!c) { showWelcome(); return; }
+  showChat();
+  applyChatBg();
+  renderHeader();
+  const chat = activeChat(c);
+  const p = activePersona();
+  const feed = $('#chat-feed');
+  const sc = $('#chat-scroll');
+  const prevScroll = sc.scrollTop;
+  const nodes = chat ? pathOf(chat.tree, typing && typingAt ? typingAt : null) : [];
+  let html = nodes.map((n) => msgHtml(c, p, n, chat)).join('');
+  if (typing) {
+    const live = streaming && chat && streaming.chatId === chat.id && streaming.text;
+    html += live
+      ? `<div class="msg char streaming">${avatarHtml(c, 'sm', true)}<div class="msg-main"><div class="bubble">${md(streaming.text)}</div></div></div>`
+      : `<div class="msg char"><span class="avatar sm emoji">${esc(c.emoji)}</span><div class="bubble dots"><span></span><span></span><span></span></div></div>`;
+  }
+  feed.innerHTML = html;
+  sc.scrollTop = opts.keepScroll ? prevScroll : sc.scrollHeight;
+  updateComposerButtons();
+}
+
+async function openCharacter(id, chatId) {
+  const c = state.characters.find((x) => x.id === id);
+  if (!c) return;
+  ui.activeCharacterId = id;
+  let ch = null;
+  if (chatId) {
+    ch = c.chats.find((x) => x.id === chatId);
+    if (ch) ui.activeChatIds[c.id] = chatId;
+  }
+  if (!ch) {
+    ch = activeChat(c);
+    if (ch) ui.activeChatIds[c.id] = ch.id;
+  }
+  if (!ch) {
+    ch = await createChatFor(c);
+  }
+  saveUi();
+  closeSidebar();
+  renderSidebar();
+  renderChat();
+}
+
+async function createChatFor(c) {
+  const ch = await api('/chats', { method: 'POST', body: JSON.stringify({ characterId: c.id }) });
+  c.chats.unshift(ch);
+  ui.activeChatIds[c.id] = ch.id;
+  return ch;
+}
+
+async function newChat() {
+  const c = activeChar();
+  if (!c) return;
+  try {
+    await createChatFor(c);
+  } catch (e) { toast(e.message); return; }
+  saveUi();
+  renderChat();
+}
+
+async function delChat(id) {
+  const c = activeChar();
+  const chat = c.chats.find((x) => x.id === id);
+  if (!chat) return;
+  if (!confirm(`Delete "${chat.title}"? This cannot be undone.`)) return;
+  try { await api('/chats/' + id, { method: 'DELETE' }); }
+  catch (e) { toast(e.message); return; }
+  c.chats = c.chats.filter((x) => x.id !== id);
+  if (ui.activeChatIds[c.id] === id) {
+    const next = c.chats.slice().sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    if (next) ui.activeChatIds[c.id] = next.id;
+    else await createChatFor(c);
+  }
+  saveUi();
+  renderChat();
+  renderChatsMenu();
+  toast('Chat deleted');
+}
+
+function mergeChat(chat, fresh) {
+  chat.tree = fresh.tree;
+  chat.title = fresh.title;
+  chat.updatedAt = fresh.updatedAt;
+}
+
+function pushOptimistic(chat, role, content) {
+  const parent = tipNode(chat) || chat.tree.nodes.root;
+  const node = { id: 'tmp-' + uid(), role, content, parent: parent.id, children: [], active: 0, createdAt: now(), pending: true, state: role === 'injection' ? 'pending' : undefined };
+  chat.tree.nodes[node.id] = node;
+  parent.children.push(node.id);
+  parent.active = parent.children.length - 1;
+  return node;
+}
+
+function popOptimistic(chat, node) {
+  delete chat.tree.nodes[node.id];
+  const parent = chat.tree.nodes[node.parent];
+  if (parent) {
+    parent.children = parent.children.filter((x) => x !== node.id);
+    parent.active = Math.max(0, Math.min(parent.active, parent.children.length - 1));
+  }
+}
+
+async function sendUser() {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || typing) return;
+  const ta = $('#msg-input');
+  const text = ta.value.trim();
+  if (!text) return;
+  ta.value = '';
+  autoGrow();
+  const tmp = pushOptimistic(chat, 'user', text);
+  typing = true;
+  typingAt = tmp.id;
+  streaming = { chatId: chat.id, text: '' };
+  renderChat();
+  try {
+    const r = await streamGenerate(`/chats/${chat.id}/messages`, { role: 'user', content: text }, (full) => {
+      if (streaming) streaming.text = full;
+      liveStreamUpdate();
+    });
+    if (r.chat) mergeChat(chat, r.chat);
+    if (r.error) toast(r.error);
+  } catch (e) {
+    popOptimistic(chat, tmp);
+    ta.value = text;
+    autoGrow();
+    toast(e.message);
+  }
+  typing = false;
+  typingAt = null;
+  streaming = null;
+  saveUi();
+  renderChat();
+  renderChatsMenu();
+}
+
+async function sendInjection() {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || typing) return;
+  const ta = $('#msg-input');
+  const text = ta.value.trim();
+  if (!text) return;
+  ta.value = '';
+  autoGrow();
+  const tmp = pushOptimistic(chat, 'injection', text);
+  renderChat();
+  try {
+    const r = await api(`/chats/${chat.id}/messages`, { method: 'POST', body: JSON.stringify({ role: 'injection', content: text }) });
+    mergeChat(chat, r.chat);
+    toast('Directive queued — it will steer the next reply');
+  } catch (e) {
+    popOptimistic(chat, tmp);
+    ta.value = text;
+    autoGrow();
+    toast(e.message);
+  }
+  saveUi();
+  renderChat();
+  renderChatsMenu();
+}
+
+async function generateReplyAt(parentId) {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || typing || !parentId || parentId === 'root') return;
+  typing = true;
+  typingAt = parentId;
+  streaming = { chatId: chat.id, text: '' };
+  renderChat();
+  try {
+    const r = await streamGenerate(`/chats/${chat.id}/generate`, { parentId }, (full) => {
+      if (streaming) streaming.text = full;
+      liveStreamUpdate();
+    });
+    if (r.chat) mergeChat(chat, r.chat);
+    if (r.error) toast(r.error);
+  } catch (e) {
+    toast(e.message);
+  }
+  typing = false;
+  typingAt = null;
+  streaming = null;
+  saveUi();
+  renderChat();
+  renderChatsMenu();
+}
+
+async function regenMsg(id) {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  const node = chat && chat.tree.nodes[id];
+  if (!node || node.role !== 'char' || typing) return;
+  await generateReplyAt(node.parent);
+}
+
+async function delMsg(id) {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || !chat.tree.nodes[id]) return;
+  if (!confirm('Delete this message and everything after it on this branch?')) return;
+  try {
+    const r = await api(`/chats/${chat.id}/nodes/${id}`, { method: 'DELETE' });
+    mergeChat(chat, r.chat);
+  } catch (e) { toast(e.message); return; }
+  saveUi();
+  renderChat({ keepScroll: true });
+  renderChatsMenu();
+}
+
+async function saveEdit(id) {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || !chat.tree.nodes[id]) return;
+  const ta = $('#edit-ta');
+  const text = ta ? ta.value.trim() : '';
+  if (!text) { toast('Message is empty'); return; }
+  try {
+    const r = await api(`/chats/${chat.id}/nodes/${id}`, { method: 'PUT', body: JSON.stringify({ content: text }) });
+    mergeChat(chat, r.chat);
+  } catch (e) { toast(e.message); return; }
+  editingId = null;
+  saveUi();
+  renderChat({ keepScroll: true });
+  renderChatsMenu();
+}
+
+async function switchVariant(dir, nodeId) {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  const node = chat && chat.tree.nodes[nodeId];
+  if (!node) return;
+  const parent = chat.tree.nodes[node.parent];
+  const idx = parent.children.indexOf(nodeId);
+  const target = parent.children[dir === 'prev' ? idx - 1 : idx + 1];
+  if (!target) return;
+  try {
+    const r = await api(`/chats/${chat.id}/switch`, { method: 'POST', body: JSON.stringify({ nodeId: target }) });
+    mergeChat(chat, r.chat);
+  } catch (e) { toast(e.message); return; }
+  saveUi();
+  renderChat({ keepScroll: true });
+  renderChatsMenu();
+}
+
+function autoGrow() {
+  const ta = $('#msg-input');
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+}
+
+function closeMenus() {
+  $$('.menu.open').forEach((m) => m.classList.remove('open'));
+}
+
+function toggleMenu(wrapId) {
+  const wrap = $('#' + wrapId);
+  const menu = $('.menu', wrap);
+  const wasOpen = menu.classList.contains('open');
+  closeMenus();
+  if (!wasOpen) {
+    if (wrapId === 'persona-wrap') renderPersonaMenu();
+    if (wrapId === 'chats-wrap') renderChatsMenu();
+    if (wrapId === 'preset-wrap') renderPresetMenu();
+    menu.classList.add('open');
+  }
+}
+
+function renderPersonaMenu() {
+  const menu = $('#persona-menu');
+  menu.innerHTML = `
+    <div class="menu-title">Playing as</div>
+    ${state.personalities.map((p) => `
+      <button class="menu-item ${p.id === state.settings.activePersonalityId ? 'active' : ''}" data-pid="${p.id}">
+        ${personaAvatarHtml(p, 'sm')}
+        <span class="mi-main">
+          <span class="mi-name">${esc(p.name)}</span>
+          <span class="mi-desc">${esc(p.description)}</span>
+        </span>
+        ${p.id === state.settings.activePersonalityId ? `<span class="mi-check">${I.check}</span>` : ''}
+      </button>`).join('')}
+    <div class="menu-sep"></div>
+    <button class="menu-item manage" id="pm-manage">${I.pencil}<span>Manage personalities</span></button>`;
+}
+
+function renderChatsMenu() {
+  const c = activeChar();
+  const menu = $('#chats-menu');
+  if (!c) { menu.innerHTML = ''; return; }
+  const chat = activeChat(c);
+  menu.innerHTML = `
+    <button class="menu-item primary" id="cm-new">${I.plus}<span>New chat</span></button>
+    <div class="menu-title">Chats with ${esc(c.name)}</div>
+    ${c.chats.slice().sort((a, b) => b.updatedAt - a.updatedAt).map((ch) => `
+      <button class="menu-item chat-row ${chat && ch.id === chat.id ? 'active' : ''}" data-cid="${ch.id}">
+        <span class="mi-main">
+          <span class="mi-name">${esc(ch.title)}</span>
+          <span class="mi-desc">${pathOf(ch.tree).filter((n) => n.role !== 'scenario').length} messages · ${fmtDate(ch.updatedAt)}</span>
+        </span>
+        <span class="row-del" data-del="${ch.id}" title="Delete chat">${I.trash}</span>
+      </button>`).join('')}`;
+}
+
+async function setPersona(pid) {
+  if (!state.personalities.find((p) => p.id === pid)) return;
+  try {
+    state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ activePersonalityId: pid }) });
+  } catch (e) { toast(e.message); return; }
+  renderHeader();
+  if ($('#modal-persona').classList.contains('open')) renderPersonaList();
+}
+
+function renderPersonaList() {
+  $('#persona-list').innerHTML = state.personalities.map((p) => `
+    <div class="prow ${p.id === state.settings.activePersonalityId ? 'active' : ''}">
+      <button class="radio" data-use="${p.id}" title="Set as active"></button>
+      ${personaAvatarHtml(p)}
+      <span class="prow-text">
+        <span class="prow-name">${esc(p.name)}${p.id === state.settings.activePersonalityId ? ' <span class="prow-you">· playing now</span>' : ''}</span>
+        <span class="prow-desc">${esc(p.description)}</span>
+      </span>
+      <span class="row-actions">
+        <button class="icon-btn tiny" data-edit="${p.id}" title="Edit">${I.pencil}</button>
+        <button class="icon-btn tiny danger" data-del="${p.id}" title="Delete">${I.trash}</button>
+      </span>
+    </div>`).join('');
+}
+
+function openModal(id) { $('#' + id).classList.add('open'); }
+function closeModal(id) { $('#' + id).classList.remove('open'); }
+
+function openViewer(src) {
+  $('#img-viewer-img').src = src;
+  $('#img-viewer').classList.remove('hidden');
+}
+function closeViewer() {
+  $('#img-viewer').classList.add('hidden');
+  $('#img-viewer-img').src = '';
+}
+
+let peMode = 'new';
+let peId = null;
+let peAvatar = null;
+let peImage = null;
+
+function updatePfAvatarUI() {
+  const pv = $('#pf-preview');
+  if (peAvatar) {
+    pv.classList.remove('emoji', 'letter');
+    pv.textContent = '';
+    pv.style.backgroundImage = `url('${peAvatar}')`;
+  } else {
+    const p = peMode === 'edit' ? state.personalities.find((x) => x.id === peId) : null;
+    pv.classList.add('emoji');
+    pv.style.backgroundImage = '';
+    pv.textContent = p && p.name ? p.name.trim().charAt(0).toUpperCase() : '🙂';
+  }
+  const full = $('#pf-preview-full');
+  full.classList.toggle('hidden', !peImage);
+  if (peImage) full.style.backgroundImage = `url('${peImage}')`;
+  $('#pf-remove-avatar').classList.toggle('hidden', !peAvatar && !peImage);
+}
+
+function openPersonaModal() {
+  peMode = 'new';
+  peId = null;
+  peAvatar = null;
+  peImage = null;
+  $('#pf-name').value = '';
+  $('#pf-desc').value = '';
+  updatePersonaForm();
+  updatePfAvatarUI();
+  renderPersonaList();
+  openModal('modal-persona');
+  setTimeout(() => $('#pf-name').focus(), 60);
+}
+
+function updatePersonaForm() {
+  $('#pf-label').textContent = peMode === 'edit' ? 'Edit personality' : 'Add personality';
+  $('#pf-save').textContent = peMode === 'edit' ? 'Save changes' : 'Add personality';
+  $('#pf-cancel').classList.toggle('hidden', peMode !== 'edit');
+}
+
+async function personaFormSave() {
+  const name = $('#pf-name').value.trim();
+  const description = $('#pf-desc').value.trim();
+  if (!name) { toast('Give the personality a name'); return; }
+  const body = { name, description, avatar: peAvatar, image: peImage };
+  try {
+    if (peMode === 'edit') {
+      const r = await api('/personalities/' + peId, { method: 'PUT', body: JSON.stringify(body) });
+      state.personalities = r.personalities;
+      toast('Personality updated');
+    } else {
+      const r = await api('/personalities', { method: 'POST', body: JSON.stringify(body) });
+      state.personalities = r.personalities;
+      await setPersona(r.id);
+      toast('Personality added');
+    }
+  } catch (e) { toast(e.message); return; }
+  renderHeader();
+  renderPersonaList();
+  renderChat();
+  peMode = 'new'; peId = null; peAvatar = null; peImage = null;
+  $('#pf-name').value = ''; $('#pf-desc').value = '';
+  updatePersonaForm();
+  closeModal('modal-persona');
+}
+
+let ceMode = 'new';
+let ceId = null;
+let ceEmoji = EMOJIS[0];
+let ceAvatar = null;
+let ceImage = null;
+let delArmed = null;
+
+function openCharModal(char) {
+  ceMode = char ? 'edit' : 'new';
+  ceId = char ? char.id : null;
+  ceEmoji = char ? char.emoji : EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+  ceAvatar = char ? char.avatar : null;
+  ceImage = char ? char.image : null;
+  $('#ce-title').textContent = char ? 'Edit character' : 'New character';
+  $('#ce-name').value = char ? char.name : '';
+  $('#ce-desc').value = char ? char.description : '';
+  $('#ce-scenario').value = char ? char.scenario : '';
+  renderCeEmojiGrid();
+  updateCeAvatarUI();
+  const del = $('#ce-delete');
+  del.classList.toggle('hidden', ceMode !== 'edit');
+  disarmDelete();
+  openModal('modal-char');
+  setTimeout(() => $('#ce-name').focus(), 60);
+}
+
+function renderCeEmojiGrid() {
+  $('#ce-emojis').innerHTML = EMOJIS.map((e) => `
+    <button type="button" class="eg-btn ${e === ceEmoji ? 'sel' : ''}" data-emoji="${e}">${e}</button>`).join('');
+}
+
+function updateCeAvatarUI() {
+  const pv = $('#ce-preview');
+  if (ceAvatar) {
+    pv.classList.remove('emoji');
+    pv.textContent = '';
+    pv.style.backgroundImage = `url('${ceAvatar}')`;
+  } else {
+    pv.classList.add('emoji');
+    pv.style.backgroundImage = '';
+    pv.textContent = ceEmoji;
+  }
+  $('#ce-emoji-block').classList.toggle('hidden', !!ceAvatar);
+  $('#ce-remove-avatar').classList.toggle('hidden', !ceAvatar && !ceImage);
+  const full = $('#ce-preview-full');
+  full.classList.toggle('hidden', !ceImage);
+  if (ceImage) full.style.backgroundImage = `url('${ceImage}')`;
+}
+
+function disarmDelete() {
+  const btn = $('#ce-delete');
+  btn.classList.remove('armed');
+  btn.textContent = 'Delete character';
+  clearTimeout(delArmed);
+  delArmed = null;
+}
+
+async function charFormSave() {
+  const name = $('#ce-name').value.trim();
+  if (!name) { toast('Give your character a name'); return; }
+  const body = {
+    name,
+    description: $('#ce-desc').value.trim(),
+    scenario: $('#ce-scenario').value.trim() || '*They look at you, waiting for you to speak first.*',
+    emoji: ceEmoji,
+    avatar: ceAvatar,
+    image: ceImage,
+  };
+  try {
+    let saved;
+    if (ceMode === 'new') {
+      saved = await api('/characters', { method: 'POST', body: JSON.stringify(body) });
+      state.characters.push(saved);
+      ui.activeCharacterId = saved.id;
+      saveUi();
+      toast('Character created');
+    } else {
+      saved = await api('/characters/' + ceId, { method: 'PUT', body: JSON.stringify(body) });
+      const i = state.characters.findIndex((x) => x.id === ceId);
+      state.characters[i] = saved;
+      toast('Character saved');
+    }
+  } catch (e) { toast(e.message); return; }
+  renderSidebar();
+  renderChat();
+  closeModal('modal-char');
+}
+
+function provGridHtml(sel) {
+  return Object.entries(PROVIDERS).map(([key, p]) => `
+    <button type="button" class="prov ${sel === key ? 'selected' : ''}" data-pv="${key}">
+      <span class="prov-name">${p.label}</span>
+      <span class="prov-desc">${p.desc}</span>
+    </button>`).join('');
+}
+
+function openSettings() {
+  const s = state.settings;
+  $('#prov-grid').innerHTML = provGridHtml(s.provider);
+  $('#set-url').value = s.baseUrl;
+  $('#set-key').value = s.apiKey;
+  $('#set-key').type = 'password';
+  $('#key-toggle').textContent = 'Show';
+  $('#set-model').value = s.model;
+  $('#set-model-list').innerHTML = (PROVIDERS[s.provider]?.models || []).map((m) => `<option value="${esc(m)}">`).join('');
+  $('#set-temp').value = s.temperature;
+  $('#temp-val').textContent = (+s.temperature).toFixed(1);
+  $('#set-bgop').value = Math.round((+s.bgOpacity || 0) * 100);
+  $('#bgop-val').textContent = Math.round((+s.bgOpacity || 0) * 100) + '%';
+  $('#set-bgblur').value = +s.bgBlur || 0;
+  $('#bgblur-val').textContent = (+s.bgBlur || 0) + 'px';
+  const dimPct = Math.round((Number.isFinite(+s.actionDim) ? +s.actionDim : 0.72) * 100);
+  $('#set-actdim').value = dimPct;
+  $('#actdim-val').textContent = dimPct + '%';
+  renderPresetList();
+  openModal('modal-settings');
+}
+
+function setProviderUI(pv) {
+  $$('#prov-grid .prov').forEach((b) => b.classList.toggle('selected', b.dataset.pv === pv));
+  const meta = PROVIDERS[pv];
+  if (!meta) return;
+  $('#set-url').value = meta.baseUrl;
+  $('#set-model-list').innerHTML = meta.models.map((m) => `<option value="${esc(m)}">`).join('');
+  $('#set-model').value = meta.models[0] || '';
+}
+
+async function fetchModelList(baseUrl, apiKey, datalistSel, btn) {
+  if (!baseUrl) { toast('Set a base URL first'); return; }
+  const old = btn.textContent;
+  btn.textContent = '…';
+  btn.disabled = true;
+  try {
+    const r = await api(`/provider/models?baseUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(apiKey)}`);
+    $(datalistSel).innerHTML = r.models.map((m) => `<option value="${esc(m)}">`).join('');
+    toast(r.models.length ? `Found ${r.models.length} models` : 'No models returned');
+  } catch (e) {
+    toast(e.message);
+  }
+  btn.textContent = old;
+  btn.disabled = false;
+}
+
+function presetSummary(p) {
+  return [
+    PROVIDERS[p.provider]?.label || p.provider,
+    p.model || 'inherit model',
+    p.temperature !== null && p.temperature !== undefined ? `temp ${(+p.temperature).toFixed(1)}` : null,
+    p.reasoning !== 'default' ? `reasoning: ${p.reasoning}` : null,
+    p.maxTokens ? `max ${p.maxTokens}` : null,
+  ].filter(Boolean).join(' · ');
+}
+
+function renderPresetList() {
+  const s = state.settings;
+  $('#preset-count').textContent = state.presets.length ? `${state.presets.length}` : 'none yet';
+  $('#preset-list').innerHTML = state.presets.map((p) => `
+    <div class="prow ${p.id === s.activePresetId ? 'active' : ''}">
+      <button class="radio" data-use="${p.id}" title="Use this preset"></button>
+      <span class="prow-text">
+        <span class="prow-name">${esc(p.name)}${p.id === s.activePresetId ? ' <span class="prow-you">· active</span>' : ''}</span>
+        <span class="prow-desc">${esc(presetSummary(p))}</span>
+      </span>
+      <span class="row-actions">
+        <button class="icon-btn tiny" data-edit="${p.id}" title="Edit">${I.pencil}</button>
+        <button class="icon-btn tiny danger" data-del="${p.id}" title="Delete">${I.trash}</button>
+      </span>
+    </div>`).join('') || '<div class="preset-empty">No presets — chats use the provider settings above.</div>';
+}
+
+async function settingsSave() {
+  const selected = $('#prov-grid .prov.selected');
+  const body = {
+    provider: selected ? selected.dataset.pv : 'custom',
+    baseUrl: $('#set-url').value.trim(),
+    apiKey: $('#set-key').value.trim(),
+    model: $('#set-model').value.trim(),
+    temperature: +$('#set-temp').value,
+    bgOpacity: +$('#set-bgop').value / 100,
+    bgBlur: +$('#set-bgblur').value,
+    actionDim: +$('#set-actdim').value / 100,
+  };
+  try {
+    state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(body) });
+    closeModal('modal-settings');
+    setHint();
+    applyChatBg();
+    toast('Settings saved');
+  } catch (e) { toast(e.message); }
+}
+
+async function setPreset(pid) {
+  try {
+    state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify({ activePresetId: pid || null }) });
+  } catch (e) { toast(e.message); return; }
+  renderHeader();
+  setHint();
+  renderPresetList();
+}
+
+function renderPresetMenu() {
+  const menu = $('#preset-menu');
+  const pr = activePreset();
+  menu.innerHTML = `
+    <div class="menu-title">AI preset</div>
+    <button class="menu-item ${!pr ? 'active' : ''}" data-pset="">
+      <span class="mi-main">
+        <span class="mi-name">Provider settings</span>
+        <span class="mi-desc">Uses the main Settings configuration</span>
+      </span>
+      ${!pr ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>
+    ${state.presets.map((p) => `
+      <button class="menu-item ${pr && p.id === pr.id ? 'active' : ''}" data-pset="${p.id}">
+        <span class="mi-main">
+          <span class="mi-name">${esc(p.name)}</span>
+          <span class="mi-desc">${esc(presetSummary(p))}</span>
+        </span>
+        ${pr && p.id === pr.id ? `<span class="mi-check">${I.check}</span>` : ''}
+      </button>`).join('')}
+    <div class="menu-sep"></div>
+    <button class="menu-item manage" id="ps-manage">${I.gear}<span>Manage presets</span></button>`;
+}
+
+let prMode = 'new';
+let prId = null;
+let defaultPromptCache = null;
+
+function openPresetModal(p) {
+  prMode = p ? 'edit' : 'new';
+  prId = p ? p.id : null;
+  $('#pr-title').textContent = p ? 'Edit preset' : 'New preset';
+  $('#pr-name').value = p ? p.name : '';
+  $('#pr-prov-grid').innerHTML = provGridHtml(p ? p.provider : state.settings.provider);
+  $('#pr-url').value = p ? p.baseUrl : state.settings.baseUrl;
+  $('#pr-key').value = p ? p.apiKey : '';
+  $('#pr-key').type = 'password';
+  $('#pr-key-toggle').textContent = 'Show';
+  $('#pr-model').value = p ? p.model : '';
+  $('#pr-model-list').innerHTML = (PROVIDERS[p ? p.provider : state.settings.provider]?.models || []).map((m) => `<option value="${esc(m)}">`).join('');
+  $('#pr-temp').value = p && p.temperature !== null && p.temperature !== undefined ? p.temperature : state.settings.temperature;
+  $('#pr-temp-val').textContent = (+$('#pr-temp').value).toFixed(1);
+  $('#pr-maxtok').value = p && p.maxTokens !== null && p.maxTokens !== undefined ? p.maxTokens : '';
+  $('#pr-reason').value = p ? p.reasoning : 'default';
+  if (p) {
+    $('#pr-sys').value = p.systemPrompt;
+  } else {
+    // New preset: start from the built-in prompt so it can be edited instead of hidden
+    $('#pr-sys').value = defaultPromptCache || '';
+    if (!defaultPromptCache) {
+      api('/default-prompt').then((r) => {
+        defaultPromptCache = r.prompt;
+        if (prMode === 'new' && !$('#pr-sys').value) $('#pr-sys').value = r.prompt;
+      }).catch(() => {});
+    }
+  }
+  $('#pr-sys').placeholder = 'Leave empty to use the built-in roleplay prompt. {{char}} and {{user}} are replaced with the character and persona names.';
+  $('#pr-delete').classList.toggle('hidden', prMode !== 'edit');
+  openModal('modal-preset');
+  setTimeout(() => $('#pr-name').focus(), 60);
+}
+
+async function presetFormSave() {
+  const name = $('#pr-name').value.trim();
+  if (!name) { toast('Give the preset a name'); return; }
+  const body = {
+    name,
+    provider: $('#pr-prov-grid .prov.selected')?.dataset.pv || 'custom',
+    baseUrl: $('#pr-url').value.trim(),
+    apiKey: $('#pr-key').value.trim(),
+    model: $('#pr-model').value.trim(),
+    temperature: +$('#pr-temp').value,
+    maxTokens: $('#pr-maxtok').value.trim() === '' ? null : +$('#pr-maxtok').value,
+    reasoning: $('#pr-reason').value,
+    systemPrompt: $('#pr-sys').value,
+  };
+  try {
+    if (prMode === 'edit') {
+      const saved = await api('/presets/' + prId, { method: 'PUT', body: JSON.stringify(body) });
+      const i = state.presets.findIndex((x) => x.id === prId);
+      state.presets[i] = saved;
+    } else {
+      const saved = await api('/presets', { method: 'POST', body: JSON.stringify(body) });
+      state.presets.push(saved);
+      await setPreset(saved.id);
+    }
+    toast('Preset saved');
+  } catch (e) { toast(e.message); return; }
+  closeModal('modal-preset');
+  renderPresetList();
+  renderHeader();
+  setHint();
+}
+
+async function presetDelete() {
+  const p = state.presets.find((x) => x.id === prId);
+  if (!p) return;
+  if (!confirm(`Delete preset "${p.name}"?`)) return;
+  try {
+    const r = await api('/presets/' + prId, { method: 'DELETE' });
+    state.presets = r.presets;
+    state.settings = r.settings;
+    toast('Preset deleted');
+  } catch (e) { toast(e.message); return; }
+  closeModal('modal-preset');
+  renderPresetList();
+  renderHeader();
+  setHint();
+}
+
+function closeSidebar() {
+  document.body.classList.remove('sidebar-open');
+}
+
+function renderAll() {
+  renderSidebar();
+  setHint();
+  if (ui.activeCharacterId && state.characters.find((c) => c.id === ui.activeCharacterId)) {
+    openCharacter(ui.activeCharacterId);
+  } else {
+    showWelcome();
+  }
+}
+
+const crop = { img: null, dataUrl: null, onDone: null, pass: 'square', S: 0, Fw: 0, Fh: 0, cover: 1, scale: 1, steps: 0, dx: 0, dy: 0, square: null, f: 1, rect: { x: 0, y: 0, w: 0, h: 0 }, applying: false };
+
+function openCropFlow(dataUrl, onDone) {
+  crop.onDone = onDone;
+  crop.dataUrl = dataUrl;
+  crop.applying = false;
+  startCropPass('square');
+}
+
+function startCropPass(pass) {
+  const img = new Image();
+  img.onload = () => {
+    crop.img = img;
+    crop.pass = pass;
+    crop.applying = false;
+    crop.steps = 0; crop.scale = 1; crop.dx = 0; crop.dy = 0;
+    crop.rect = { x: 0, y: 0, w: 0, h: 0 };
+    $('#crop-img').src = crop.dataUrl;
+    openModal('modal-crop');
+    layoutCrop();
+    renderCropUI();
+  };
+  img.onerror = () => { crop.applying = false; toast('Could not read that image'); };
+  img.src = crop.dataUrl;
+}
+
+function renderCropUI() {
+  const free = crop.pass === 'free';
+  $('#crop-title').textContent = free ? 'Crop full image' : 'Crop profile icon';
+  $('#crop-note').textContent = free
+    ? 'The image stays fixed — drag the frame to position it, drag the corner handle to reshape it. This becomes the chat background and the full-size view when the avatar is tapped.'
+    : 'Drag to reposition the image inside the square. This becomes the profile icon.';
+  $('#crop-apply').textContent = free ? 'Apply' : 'Next: full image';
+  $('#crop-skip').classList.toggle('hidden', !free);
+  $('#crop-frame').classList.toggle('hidden', !free);
+  $('.crop-zoom').classList.toggle('hidden', free);
+  $('#crop-zoom').value = '1';
+  $('#crop-zoom-val').textContent = '1.0×';
+}
+
+function layoutCrop() {
+  const view = $('#crop-view');
+  crop.S = view.clientWidth || 280;
+  if (crop.pass === 'square') {
+    crop.Fw = crop.Fh = crop.S;
+    updateCover();
+    clampPan();
+    applyCropTransform();
+  } else {
+    crop.f = Math.min(crop.S / crop.img.naturalWidth, crop.S / crop.img.naturalHeight);
+    applyFreeTransform();
+    if (crop.rect.w) {
+      clampRect();
+    } else {
+      defaultFreeRect();
+    }
+    positionRect();
+  }
+}
+
+function updateCover() {
+  const nw = crop.img.naturalWidth;
+  const nh = crop.img.naturalHeight;
+  crop.cover = crop.steps % 2
+    ? Math.max(crop.Fw / nh, crop.Fh / nw)
+    : Math.max(crop.Fw / nw, crop.Fh / nh);
+}
+
+function visualBounds() {
+  const nw = crop.img.naturalWidth;
+  const nh = crop.img.naturalHeight;
+  const Vw = Math.round((crop.steps % 2 ? nh : nw) * crop.f);
+  const Vh = Math.round((crop.steps % 2 ? nw : nh) * crop.f);
+  return { left: (crop.S - Vw) / 2, top: (crop.S - Vh) / 2, w: Vw, h: Vh };
+}
+
+function defaultFreeRect() {
+  const b = visualBounds();
+  const portrait = crop.img.naturalHeight > crop.img.naturalWidth;
+  let w;
+  let h;
+  if (portrait) {
+    h = Math.min(b.h * 0.92, b.w * 0.92 * 16 / 9);
+    w = h * 9 / 16;
+    if (w > b.w * 0.92) { w = b.w * 0.92; h = Math.min(b.h * 0.92, w * 16 / 9); }
+  } else {
+    w = Math.min(b.w * 0.92, b.h * 0.92 * 16 / 9);
+    h = w * 9 / 16;
+    if (h > b.h * 0.92) { h = b.h * 0.92; w = Math.min(b.w * 0.92, h * 16 / 9); }
+  }
+  w = Math.max(48, w);
+  h = Math.max(48, h);
+  crop.rect.w = Math.round(w);
+  crop.rect.h = Math.round(h);
+  crop.rect.x = Math.round(b.left + (b.w - w) / 2);
+  crop.rect.y = Math.round(b.top + (b.h - h) / 2);
+}
+
+function applyFreeTransform() {
+  const nw = crop.img.naturalWidth;
+  const nh = crop.img.naturalHeight;
+  const img = $('#crop-img');
+  img.style.width = nw * crop.f + 'px';
+  img.style.height = nh * crop.f + 'px';
+  img.style.transform = `translate(-50%, -50%) rotate(${crop.steps * 90}deg)`;
+}
+
+function clampRect() {
+  const b = visualBounds();
+  crop.rect.w = Math.min(crop.rect.w, b.w);
+  crop.rect.h = Math.min(crop.rect.h, b.h);
+  crop.rect.x = Math.min(Math.max(crop.rect.x, b.left), b.left + b.w - crop.rect.w);
+  crop.rect.y = Math.min(Math.max(crop.rect.y, b.top), b.top + b.h - crop.rect.h);
+}
+
+function positionRect() {
+  const f = $('#crop-frame');
+  f.style.left = crop.rect.x + 'px';
+  f.style.top = crop.rect.y + 'px';
+  f.style.width = crop.rect.w + 'px';
+  f.style.height = crop.rect.h + 'px';
+}
+
+function drawnDims() {
+  return {
+    dw: crop.img.naturalWidth * crop.cover * crop.scale,
+    dh: crop.img.naturalHeight * crop.cover * crop.scale,
+  };
+}
+
+function clampPan() {
+  const { dw, dh } = drawnDims();
+  const effW = crop.steps % 2 ? dh : dw;
+  const effH = crop.steps % 2 ? dw : dh;
+  const mx = Math.max(0, (effW - crop.Fw) / 2);
+  const my = Math.max(0, (effH - crop.Fh) / 2);
+  crop.dx = Math.min(mx, Math.max(-mx, crop.dx));
+  crop.dy = Math.min(my, Math.max(-my, crop.dy));
+}
+
+function applyCropTransform() {
+  const { dw, dh } = drawnDims();
+  const img = $('#crop-img');
+  img.style.width = dw + 'px';
+  img.style.height = dh + 'px';
+  img.style.transform = `translate(calc(-50% + ${crop.dx}px), calc(-50% + ${crop.dy}px)) rotate(${crop.steps * 90}deg)`;
+}
+
+function cropQualityCap() {
+  const { dw, dh } = drawnDims();
+  const kMax = crop.steps % 2 ? crop.img.naturalHeight / dh : crop.img.naturalWidth / dw;
+  return Number.isFinite(kMax) && kMax > 0 ? kMax : 1;
+}
+
+function applyCrop() {
+  if (crop.applying) return;
+  crop.applying = true;
+  const canvas = $('#crop-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  if (crop.pass === 'square') {
+    const { dw, dh } = drawnDims();
+    const k = Math.min(256 / crop.Fw, cropQualityCap());
+    const W = Math.max(1, Math.round(crop.Fw * k));
+    const H = Math.max(1, Math.round(crop.Fh * k));
+    canvas.width = W;
+    canvas.height = H;
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    ctx.translate(W / 2 + crop.dx * k, H / 2 + crop.dy * k);
+    ctx.rotate(crop.steps * Math.PI / 2);
+    ctx.drawImage(crop.img, -dw * k / 2, -dh * k / 2, dw * k, dh * k);
+    ctx.restore();
+    crop.square = canvas.toDataURL('image/jpeg', 0.86);
+    startCropPass('free');
+    return;
+  }
+
+  const nw = crop.img.naturalWidth;
+  const nh = crop.img.naturalHeight;
+  const RW = crop.steps % 2 ? nh : nw;
+  const RH = crop.steps % 2 ? nw : nh;
+  const rot = document.createElement('canvas');
+  rot.width = RW;
+  rot.height = RH;
+  const rc = rot.getContext('2d');
+  rc.imageSmoothingEnabled = true;
+  rc.imageSmoothingQuality = 'high';
+  rc.translate(RW / 2, RH / 2);
+  rc.rotate(crop.steps * Math.PI / 2);
+  rc.drawImage(crop.img, -nw / 2, -nh / 2, nw, nh);
+
+  const b = visualBounds();
+  const rx = Math.min(Math.max((crop.rect.x - b.left) / crop.f, 0), RW);
+  const ry = Math.min(Math.max((crop.rect.y - b.top) / crop.f, 0), RH);
+  const rw = Math.min(crop.rect.w / crop.f, RW - rx);
+  const rh = Math.min(crop.rect.h / crop.f, RH - ry);
+  const k = Math.min(1200 / Math.max(rw, rh), 1);
+  const W = Math.max(1, Math.round(rw * k));
+  const H = Math.max(1, Math.round(rh * k));
+  canvas.width = W;
+  canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(rot, rx, ry, rw, rh, 0, 0, W, H);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  crop.applying = false;
+  closeModal('modal-crop');
+  const done = crop.onDone;
+  crop.onDone = null;
+  done({ square: crop.square, full: dataUrl });
+}
+
+function skipFullCrop() {
+  if (crop.pass !== 'free' || crop.applying) return;
+  crop.applying = false;
+  closeModal('modal-crop');
+  const done = crop.onDone;
+  crop.onDone = null;
+  done({ square: crop.square, full: null });
+}
+
+function wireEvents() {
+  $('#new-char-btn').addEventListener('click', () => openCharModal(null));
+  $('#char-list').addEventListener('click', (e) => {
+    const item = e.target.closest('.char-item');
+    if (item) openCharacter(item.dataset.id);
+  });
+  $('#welcome-grid').addEventListener('click', (e) => {
+    if (e.target.closest('[data-new]')) { openCharModal(null); return; }
+    const card = e.target.closest('.w-card');
+    if (card) openCharacter(card.dataset.id);
+  });
+  $('#menu-btn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
+  $('#scrim').addEventListener('click', closeSidebar);
+
+  $('#persona-btn').addEventListener('click', () => toggleMenu('persona-wrap'));
+  $('#chats-btn').addEventListener('click', () => toggleMenu('chats-wrap'));
+  $('#preset-btn').addEventListener('click', () => toggleMenu('preset-wrap'));
+  $('#settings-btn').addEventListener('click', () => { closeMenus(); openSettings(); });
+  $('#edit-char-btn').addEventListener('click', () => { closeMenus(); const c = activeChar(); if (c) openCharModal(c); });
+
+  $('#preset-menu').addEventListener('click', (e) => {
+    const item = e.target.closest('[data-pset]');
+    if (item) { setPreset(item.dataset.pset); closeMenus(); return; }
+    if (e.target.closest('#ps-manage')) { closeMenus(); openSettings(); }
+  });
+
+  $('#preset-list').addEventListener('click', async (e) => {
+    const use = e.target.closest('[data-use]');
+    if (use) { setPreset(use.dataset.use); return; }
+    const edit = e.target.closest('[data-edit]');
+    if (edit) {
+      openPresetModal(state.presets.find((x) => x.id === edit.dataset.edit));
+      return;
+    }
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      prMode = 'edit';
+      prId = del.dataset.del;
+      await presetDelete();
+      prMode = 'new'; prId = null;
+    }
+  });
+  $('#preset-new').addEventListener('click', () => openPresetModal(null));
+
+  $('#pr-prov-grid').addEventListener('click', (e) => {
+    const card = e.target.closest('.prov');
+    if (!card) return;
+    $$('#pr-prov-grid .prov').forEach((b) => b.classList.toggle('selected', b === card));
+    const meta = PROVIDERS[card.dataset.pv];
+    if (meta) {
+      $('#pr-url').value = meta.baseUrl;
+      $('#pr-model-list').innerHTML = meta.models.map((m) => `<option value="${esc(m)}">`).join('');
+      if (meta.models.length) $('#pr-model').value = meta.models[0];
+    }
+  });
+  $('#pr-key-toggle').addEventListener('click', () => {
+    const input = $('#pr-key');
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    $('#pr-key-toggle').textContent = showing ? 'Show' : 'Hide';
+  });
+  $('#pr-temp').addEventListener('input', (e) => {
+    $('#pr-temp-val').textContent = (+e.target.value).toFixed(1);
+  });
+  $('#pr-fetch-models').addEventListener('click', () => {
+    fetchModelList($('#pr-url').value.trim(), $('#pr-key').value.trim(), '#pr-model-list', $('#pr-fetch-models'));
+  });
+  $('#pr-save').addEventListener('click', presetFormSave);
+  $('#pr-cancel').addEventListener('click', () => closeModal('modal-preset'));
+  $('#pr-delete').addEventListener('click', presetDelete);
+
+  $('#set-fetch-models').addEventListener('click', () => {
+    fetchModelList($('#set-url').value.trim(), $('#set-key').value.trim(), '#set-model-list', $('#set-fetch-models'));
+  });
+  $('#set-bgop').addEventListener('input', (e) => {
+    $('#bgop-val').textContent = e.target.value + '%';
+    document.documentElement.style.setProperty('--bgop', String(+e.target.value / 100));
+  });
+  $('#set-bgblur').addEventListener('input', (e) => {
+    $('#bgblur-val').textContent = e.target.value + 'px';
+    document.documentElement.style.setProperty('--bgblur', e.target.value + 'px');
+  });
+  $('#set-actdim').addEventListener('input', (e) => {
+    $('#actdim-val').textContent = e.target.value + '%';
+    document.documentElement.style.setProperty('--act-dim', String(+e.target.value / 100));
+  });
+
+  $('#img-viewer').addEventListener('click', closeViewer);
+  $('#chat-feed').addEventListener('click', (e) => {
+    const nav = e.target.closest('[data-nav]');
+    if (nav) {
+      const wrap = nav.closest('[data-id]');
+      if (wrap) switchVariant(nav.dataset.nav, wrap.dataset.id);
+      return;
+    }
+    const act = e.target.closest('[data-act]');
+    if (act) {
+      const wrap = act.closest('[data-id]');
+      if (!wrap) return;
+      const id = wrap.dataset.id;
+      if (act.dataset.act === 'edit') {
+        editingId = id;
+        renderChat({ keepScroll: true });
+        const ta = $('#edit-ta');
+        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      } else if (act.dataset.act === 'ecancel') {
+        editingId = null;
+        renderChat({ keepScroll: true });
+      } else if (act.dataset.act === 'esave') {
+        saveEdit(id);
+      } else if (act.dataset.act === 'regen') {
+        regenMsg(id);
+      } else if (act.dataset.act === 'del') {
+        delMsg(id);
+      }
+    }
+  }, false);
+  $('#chat-feed').addEventListener('click', (e) => {
+    const av = e.target.closest('.avatar.zoomable');
+    if (!av) return;
+    const msg = av.closest('.msg');
+    const src = msg && msg.classList.contains('user')
+      ? fullImageSrc(activePersona())
+      : fullImageSrc(activeChar());
+    if (src) { e.stopPropagation(); openViewer(src); }
+  }, true);
+  $('#char-info').addEventListener('click', (e) => {
+    if (!e.target.closest('.avatar.zoomable')) return;
+    const src = fullImageSrc(activeChar());
+    if (src) { e.stopPropagation(); openViewer(src); }
+  }, true);
+
+  $('#persona-menu').addEventListener('click', (e) => {
+    const item = e.target.closest('[data-pid]');
+    if (item) { setPersona(item.dataset.pid); closeMenus(); return; }
+    if (e.target.closest('#pm-manage')) { closeMenus(); openPersonaModal(); }
+  });
+
+  $('#chats-menu').addEventListener('click', (e) => {
+    if (e.target.closest('#cm-new')) { newChat(); closeMenus(); return; }
+    const del = e.target.closest('[data-del]');
+    if (del) { delChat(del.dataset.del); return; }
+    const row = e.target.closest('[data-cid]');
+    if (row) {
+      ui.activeChatIds[activeChar().id] = row.dataset.cid;
+      saveUi();
+      renderChat();
+      closeMenus();
+    }
+  });
+
+  $('#send-btn').addEventListener('click', sendUser);
+  $('#inject-btn').addEventListener('click', sendInjection);
+  $('#generate-btn').addEventListener('click', () => {
+    const c = activeChar();
+    const chat = c && activeChat(c);
+    const tip = chat && tipNode(chat);
+    if (tip) generateReplyAt(tip.id);
+  });
+  $('#msg-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendUser(); }
+  });
+  $('#msg-input').addEventListener('input', () => { autoGrow(); updateComposerButtons(); });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.menu-wrap')) closeMenus();
+  });
+
+  $$('.modal').forEach((m) => {
+    m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('open'); });
+  });
+  $$('[data-close]').forEach((b) => b.addEventListener('click', () => b.closest('.modal').classList.remove('open')));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      $$('.modal.open').forEach((m) => m.classList.remove('open'));
+      closeMenus(); closeSidebar(); closeViewer();
+      if (editingId) { editingId = null; renderChat({ keepScroll: true }); }
+    }
+  });
+
+  $('#prov-grid').addEventListener('click', (e) => {
+    const card = e.target.closest('.prov');
+    if (card) setProviderUI(card.dataset.pv);
+  });
+  $('#key-toggle').addEventListener('click', () => {
+    const input = $('#set-key');
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    $('#key-toggle').textContent = showing ? 'Show' : 'Hide';
+  });
+  $('#set-temp').addEventListener('input', (e) => {
+    $('#temp-val').textContent = (+e.target.value).toFixed(1);
+  });
+  $('#settings-save').addEventListener('click', settingsSave);
+
+  $('#persona-list').addEventListener('click', async (e) => {
+    const use = e.target.closest('[data-use]');
+    if (use) { setPersona(use.dataset.use); return; }
+    const edit = e.target.closest('[data-edit]');
+    if (edit) {
+      const p = state.personalities.find((x) => x.id === edit.dataset.edit);
+      peMode = 'edit'; peId = p.id; peAvatar = p.avatar || null; peImage = p.image || null;
+      $('#pf-name').value = p.name;
+      $('#pf-desc').value = p.description;
+      updatePersonaForm();
+      updatePfAvatarUI();
+      $('#pf-name').focus();
+      return;
+    }
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      const p = state.personalities.find((x) => x.id === del.dataset.del);
+      if (!confirm(`Delete personality "${p.name}"?`)) return;
+      try {
+        const r = await api('/personalities/' + p.id, { method: 'DELETE' });
+        state.personalities = r.personalities;
+        if (state.settings.activePersonalityId === p.id && state.personalities.length) {
+          await setPersona(state.personalities[0].id);
+        }
+        renderPersonaList();
+        renderHeader();
+        toast('Personality deleted');
+      } catch (err) { toast(err.message); }
+    }
+  });
+  $('#pf-save').addEventListener('click', personaFormSave);
+  $('#pf-cancel').addEventListener('click', () => {
+    peMode = 'new'; peId = null; peAvatar = null; peImage = null;
+    $('#pf-name').value = ''; $('#pf-desc').value = '';
+    updatePersonaForm();
+    updatePfAvatarUI();
+  });
+  $('#pf-upload').addEventListener('click', () => $('#pf-file').click());
+  $('#pf-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast('Please choose an image file'); return; }
+    const reader = new FileReader();
+    reader.onload = () => openCropFlow(reader.result, (r) => {
+      if (!r) return;
+      peAvatar = r.square;
+      peImage = r.full;
+      updatePfAvatarUI();
+    });
+    reader.onerror = () => toast('Could not read that file');
+    reader.readAsDataURL(file);
+  });
+  $('#pf-remove-avatar').addEventListener('click', () => {
+    peAvatar = null;
+    peImage = null;
+    updatePfAvatarUI();
+  });
+
+  $('#modal-char').addEventListener('click', (e) => {
+    const eg = e.target.closest('[data-emoji]');
+    if (eg) { ceEmoji = eg.dataset.emoji; renderCeEmojiGrid(); updateCeAvatarUI(); }
+  });
+  $('#ce-upload').addEventListener('click', () => $('#ce-file').click());
+  $('#ce-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast('Please choose an image file'); return; }
+    const reader = new FileReader();
+    reader.onload = () => openCropFlow(reader.result, (r) => {
+      if (!r) return;
+      ceAvatar = r.square;
+      ceImage = r.full;
+      updateCeAvatarUI();
+    });
+    reader.onerror = () => toast('Could not read that file');
+    reader.readAsDataURL(file);
+  });
+  $('#ce-remove-avatar').addEventListener('click', () => {
+    ceAvatar = null;
+    ceImage = null;
+    updateCeAvatarUI();
+  });
+  $('#ce-save').addEventListener('click', charFormSave);
+  $('#ce-delete').addEventListener('click', async () => {
+    const btn = $('#ce-delete');
+    if (!btn.classList.contains('armed')) {
+      btn.classList.add('armed');
+      btn.textContent = 'Click again to confirm';
+      delArmed = setTimeout(disarmDelete, 2600);
+      return;
+    }
+    try { await api('/characters/' + ceId, { method: 'DELETE' }); }
+    catch (e) { toast(e.message); return; }
+    const c = state.characters.find((x) => x.id === ceId);
+    state.characters = state.characters.filter((x) => x.id !== ceId);
+    if (ui.activeCharacterId === ceId) ui.activeCharacterId = null;
+    saveUi();
+    disarmDelete();
+    closeModal('modal-char');
+    renderSidebar();
+    showWelcome();
+    toast(`Deleted "${c ? c.name : 'character'}"`);
+  });
+
+  const view = $('#crop-view');
+  let dragging = false, sx = 0, sy = 0, sdx = 0, sdy = 0;
+  view.addEventListener('pointerdown', (e) => {
+    if (crop.pass !== 'square' || e.target.closest('#crop-frame')) return;
+    dragging = true;
+    view.setPointerCapture(e.pointerId);
+    sx = e.clientX; sy = e.clientY; sdx = crop.dx; sdy = crop.dy;
+    view.classList.add('grabbing');
+  });
+  view.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    crop.dx = sdx + (e.clientX - sx);
+    crop.dy = sdy + (e.clientY - sy);
+    clampPan();
+    applyCropTransform();
+  });
+  const endDrag = () => { dragging = false; view.classList.remove('grabbing'); };
+  view.addEventListener('pointerup', endDrag);
+  view.addEventListener('pointercancel', endDrag);
+
+  const frame = $('#crop-frame');
+  let framing = false, fx = 0, fy = 0, frx = 0, fry = 0;
+  frame.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#crop-handle')) return;
+    framing = true;
+    frame.setPointerCapture(e.pointerId);
+    fx = e.clientX; fy = e.clientY; frx = crop.rect.x; fry = crop.rect.y;
+    frame.classList.add('grabbing');
+  });
+  frame.addEventListener('pointermove', (e) => {
+    if (!framing) return;
+    crop.rect.x = frx + (e.clientX - fx);
+    crop.rect.y = fry + (e.clientY - fy);
+    clampRect();
+    positionRect();
+  });
+  const endFrame = () => { framing = false; frame.classList.remove('grabbing'); };
+  frame.addEventListener('pointerup', endFrame);
+  frame.addEventListener('pointercancel', endFrame);
+
+  const handle = $('#crop-handle');
+  let sizing = false, hx = 0, hy = 0, hw = 0, hh = 0;
+  handle.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    sizing = true;
+    handle.setPointerCapture(e.pointerId);
+    hx = e.clientX; hy = e.clientY; hw = crop.rect.w; hh = crop.rect.h;
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!sizing) return;
+    const b = visualBounds();
+    crop.rect.w = Math.min(Math.max(hw + (e.clientX - hx), 32), b.left + b.w - crop.rect.x);
+    crop.rect.h = Math.min(Math.max(hh + (e.clientY - hy), 32), b.top + b.h - crop.rect.y);
+    positionRect();
+  });
+  const endSize = () => { sizing = false; };
+  handle.addEventListener('pointerup', endSize);
+  handle.addEventListener('pointercancel', endSize);
+
+  $('#crop-rotl').addEventListener('click', () => {
+    if (crop.applying || !crop.img) return;
+    crop.steps = (crop.steps + 3) % 4;
+    if (crop.pass === 'square') { updateCover(); clampPan(); applyCropTransform(); }
+    else { applyFreeTransform(); clampRect(); positionRect(); }
+  });
+  $('#crop-rotr').addEventListener('click', () => {
+    if (crop.applying || !crop.img) return;
+    crop.steps = (crop.steps + 1) % 4;
+    if (crop.pass === 'square') { updateCover(); clampPan(); applyCropTransform(); }
+    else { applyFreeTransform(); clampRect(); positionRect(); }
+  });
+  $('#crop-zoom').addEventListener('input', (e) => {
+    if (crop.pass !== 'square' || crop.applying) return;
+    crop.scale = +e.target.value;
+    clampPan(); applyCropTransform();
+    $('#crop-zoom-val').textContent = crop.scale.toFixed(1) + '×';
+  });
+  $('#crop-reset').addEventListener('click', () => {
+    if (crop.applying || !crop.img) return;
+    crop.steps = 0; crop.scale = 1; crop.dx = 0; crop.dy = 0;
+    if (crop.pass === 'square') {
+      $('#crop-zoom').value = '1';
+      $('#crop-zoom-val').textContent = '1.0×';
+      updateCover(); clampPan(); applyCropTransform();
+    } else {
+      defaultFreeRect();
+      applyFreeTransform();
+      positionRect();
+    }
+  });
+  $('#crop-apply').addEventListener('click', applyCrop);
+  $('#crop-skip').addEventListener('click', skipFullCrop);
+  $('#crop-cancel').addEventListener('click', () => {
+    crop.applying = false;
+    crop.onDone = null;
+    closeModal('modal-crop');
+  });
+  window.addEventListener('resize', () => {
+    if ($('#modal-crop').classList.contains('open') && crop.img) layoutCrop();
+  });
+}
+
+(async function init() {
+  wireEvents();
+  try {
+    await bootstrap();
+  } catch (e) {
+    $('#chat-view').classList.add('hidden');
+    $('#welcome').classList.remove('hidden');
+    $('#welcome-grid').innerHTML = '';
+    $('#w-sub').textContent = 'Could not reach the backend. Start it with: node server.js, then reload this page.';
+    return;
+  }
+  renderAll();
+})();
