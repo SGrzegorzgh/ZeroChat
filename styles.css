@@ -20,6 +20,12 @@
   --r-sm: 10px;
   --shadow: 0 14px 44px rgba(0, 0, 0, 0.45);
   --ring: 0 0 0 3px rgba(255, 255, 255, 0.08);
+  /* Text windows sit on top of the character image: almost transparent, a touch
+     of grey only, so the pose shows through. Raise the alpha if text ever gets
+     hard to read against a busy image. */
+  --bubble: rgba(26, 28, 33, 0.34);
+  --bubble-user: rgba(44, 47, 54, 0.36);
+  --bubble-border: rgba(255, 255, 255, 0.09);
 }
 
 html {
@@ -280,7 +286,7 @@ body.sidebar-open #scrim {
   background-position: center;
   background-repeat: no-repeat;
   opacity: var(--bgop, 0.35);
-  filter: blur(var(--bgblur, 8px)) saturate(0.88);
+  filter: blur(var(--bgblur, 0px)) saturate(0.88);
   pointer-events: none;
 }
 #chat-bg.none {
@@ -593,8 +599,8 @@ body.sidebar-open #scrim {
   border-top-left-radius: 5px;
 }
 .msg.user .bubble {
-  background: #2b2e35;
-  border-color: #363a41;
+  background: var(--bubble-user);
+  border-color: var(--bubble-border);
   border-top-right-radius: 5px;
 }
 .msg.pending {
@@ -611,8 +617,9 @@ body.sidebar-open #scrim {
   max-width: min(680px, 80%);
   padding: 11px 15px;
   border-radius: 15px;
-  background: var(--panel2);
-  border: 1px solid var(--border);
+  background: var(--bubble);
+  border: 1px solid var(--bubble-border);
+  backdrop-filter: blur(1.5px);
   font-size: 14.5px;
   line-height: 1.58;
   word-wrap: break-word;
@@ -750,7 +757,10 @@ body.sidebar-open #scrim {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #d9a441;
-  margin-bottom: 6px;
+  /* inline-flex: the text follows on the same line, so the gap has to be a
+     horizontal one — margin-bottom would do nothing here. */
+  margin-right: 7px;
+  vertical-align: -1px;
   opacity: 0.85;
 }
 .inj-tag svg {
@@ -838,9 +848,10 @@ body.sidebar-open #scrim {
 .msg-scenario {
   max-width: min(680px, 92%);
   margin: 6px auto 20px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--bubble-border);
   border-left: 3px solid #454a52;
-  background: var(--panel);
+  background: var(--bubble);
+  backdrop-filter: blur(1.5px);
   border-radius: var(--r);
   padding: 13px 16px 12px;
   animation: pop 0.2s ease;
@@ -1304,6 +1315,102 @@ input[type="range"] {
 .key-row .mini:hover {
   color: var(--text);
   border-color: #4a4f57;
+}
+
+/* Model picker: a searchable dropdown that keeps the text field free for a
+   custom id. The popover is in the document flow (not absolutely positioned) so
+   it can't be clipped by a scrolling modal body. */
+.combo {
+  position: relative;
+}
+.combo-pop {
+  margin-top: 7px;
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  background: var(--panel2);
+  overflow: hidden;
+}
+.combo-pop[hidden] {
+  display: none;
+}
+.combo-search {
+  border: 0;
+  border-bottom: 1px solid var(--border2);
+  border-radius: 0;
+  background: var(--panel);
+  font-size: 12.5px;
+  padding: 8px 12px;
+}
+.combo-search:focus {
+  outline: none;
+  border-color: var(--border2);
+}
+.combo-list {
+  max-height: 190px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.combo-opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.combo-opt:hover,
+.combo-opt.sel {
+  background: rgba(255, 255, 255, 0.08);
+}
+.combo-opt.current {
+  color: var(--pose-accent, #d9a441);
+}
+.combo-opt .combo-tick {
+  float: right;
+  margin-left: 8px;
+  color: var(--pose-accent, #d9a441);
+}
+.combo-empty {
+  padding: 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: center;
+}
+.combo-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--border2);
+  font-size: 12px;
+}
+.combo-foot-label {
+  flex: none;
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.combo-custom {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.combo-custom.pending {
+  color: var(--pose-accent, #d9a441);
 }
 
 .prov-grid {

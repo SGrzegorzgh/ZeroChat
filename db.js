@@ -1,9 +1,64 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
+const fs = require('fs');
 
-const db = new DatabaseSync(path.join(__dirname, 'aichat.db'));
+const DB_PATH = path.join(__dirname, 'aichat.db');
+const BACKUP_DIR = path.join(__dirname, 'backups');
+const KEEP_SNAPSHOTS = 10;
+
+/* Snapshot the database before opening it. WAL mode means recent writes can sit
+   in aichat.db-wal, so the copy takes the -wal/-shm files along too — without
+   them the backup would be missing the newest chats and images. */
+function backupDb() {
+  if (!fs.existsSync(DB_PATH)) return;
+  try {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    for (const suffix of ['', '-wal', '-shm']) {
+      const src = DB_PATH + suffix;
+      if (!fs.existsSync(src)) continue;
+      /* The main file is always needed: without it the -wal beside it is a log
+         with no database to replay onto, and the snapshot cannot be opened. */
+      if (suffix && fs.statSync(src).size === 0) continue;
+      fs.copyFileSync(src, path.join(BACKUP_DIR, `aichat-${stamp}.db${suffix}`));
+    }
+    /* Retain the newest KEEP_SNAPSHOTS snapshots, dropping the rest. */
+    const snaps = fs.readdirSync(BACKUP_DIR).filter((n) => /^aichat-.*\.db(-wal|-shm)?$/.test(n));
+    const oldStamps = new Set(snaps.map((n) => n.split('.db')[0]).sort().slice(0, -KEEP_SNAPSHOTS));
+    for (const f of snaps) {
+      if (oldStamps.has(f.split('.db')[0])) fs.unlinkSync(path.join(BACKUP_DIR, f));
+    }
+  } catch (e) {
+    console.error('backup skipped:', e.message);
+  }
+}
+
+backupDb();
+
+/* Deletions are the one operation with no undo, so snapshot immediately before
+   one runs. Rate-limited to one snapshot a minute so a burst of deletes (a
+   character plus its chats and poses cascading away) still only costs one
+   copy, while a delete minutes after the last one is always covered. */
+let lastDestructiveSnapshot = 0;
+function snapshotBeforeDestructive() {
+  const now = Date.now();
+  if (now - lastDestructiveSnapshot < 60e3) return;
+  lastDestructiveSnapshot = now;
+  backupDb();
+}
+
+const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
+/* Flush the WAL into aichat.db itself. Anything left only in aichat.db-wal is
+   one crash, bad kill or WAL reset away from being lost. */
+db.exec('PRAGMA synchronous = FULL');
+db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+
+process.on('exit', () => { try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch {} });
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => { try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch {} process.exit(sig === 'SIGINT' ? 130 : 143); });
+}
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS characters (
@@ -128,6 +183,11 @@ const GENERIC_RESPONSES = [
   '*They nod slowly, the light catching in their eyes.* Very well. Let us see where this road leads us.',
 ];
 
+/* Demo content for a fresh database. Every insert is OR IGNORE with a fixed id,
+   so seeding stays idempotent: a database that has characters left is skipped
+   outright, and one that has personalities but no characters (all the demo
+   characters deleted, or a partial seed) re-seeds without tripping over the
+   primary keys instead of throwing on startup. */
 function seedIfEmpty() {
   const row = db.prepare('SELECT COUNT(*) AS n FROM characters').get();
   if (row.n > 0) return;
@@ -136,10 +196,10 @@ function seedIfEmpty() {
   const H = 3600e3;
   const D = 24 * H;
 
-  const insChar = db.prepare('INSERT INTO characters (id, name, description, scenario, emoji, avatar, responses, created_at) VALUES (?,?,?,?,?,?,?,?)');
-  const insChat = db.prepare('INSERT INTO chats (id, character_id, title, created_at, updated_at) VALUES (?,?,?,?,?)');
+  const insChar = db.prepare('INSERT OR IGNORE INTO characters (id, name, description, scenario, emoji, avatar, responses, created_at) VALUES (?,?,?,?,?,?,?,?)');
+  const insChat = db.prepare('INSERT OR IGNORE INTO chats (id, character_id, title, created_at, updated_at) VALUES (?,?,?,?,?)');
   const insMsg = db.prepare('INSERT INTO messages (chat_id, role, content, created_at) VALUES (?,?,?,?)');
-  const insPersona = db.prepare('INSERT INTO personalities (id, name, description) VALUES (?,?,?)');
+  const insPersona = db.prepare('INSERT OR IGNORE INTO personalities (id, name, description) VALUES (?,?,?)');
 
   const personalities = [
     ['p-hero', 'The Brave Hero', 'Bold, direct, always charges in first. Protects others without hesitation.'],
@@ -320,11 +380,14 @@ function seedIfEmpty() {
     insChar.run(c.id, c.name, c.description, c.scenario, c.emoji, null, JSON.stringify(c.responses), now - chars.indexOf(c) * 60e3);
     for (const ch of c.chats) {
       insChat.run(ch.id, c.id, ch.title, ch.updated, ch.updated);
-      insMsg.run(ch.id, 'scenario', c.scenario, ch.updated);
-      let t = ch.updated;
-      for (const [role, content] of ch.msgs) {
-        t += 60e3;
-        insMsg.run(ch.id, role, content, t);
+      const has = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE chat_id = ?').get(ch.id).n;
+      if (!has) {
+        insMsg.run(ch.id, 'scenario', c.scenario, ch.updated);
+        let t = ch.updated;
+        for (const [role, content] of ch.msgs) {
+          t += 60e3;
+          insMsg.run(ch.id, role, content, t);
+        }
       }
       seen.add(c.id);
     }
@@ -340,7 +403,7 @@ const SETTINGS_DEFAULTS = {
   model: 'anthropic/claude-3.5-sonnet',
   temperature: 0.8,
   bgOpacity: 0.35,
-  bgBlur: 8,
+  bgBlur: 0,
   actionDim: 0.72,
   activePresetId: null,
   poseAgent: false,
@@ -378,7 +441,7 @@ function updateSettings(patch) {
     if (!(k in patch)) continue;
     let v = patch[k];
     if (k === 'bgOpacity') v = clamp(v, 0, 1, 0.35);
-    if (k === 'bgBlur') v = clamp(v, 0, 24, 8);
+    if (k === 'bgBlur') v = clamp(v, 0, 24, 0);
     if (k === 'actionDim') v = clamp(v, 0.3, 1, 0.72);
     if (k === 'temperature') v = clamp(v, 0, 2, 0.8);
     if (k === 'poseLikelihood') v = clamp(v, 0, 1, 0.6);
@@ -418,6 +481,7 @@ function updatePersona(id, { name, description, avatar, image }) {
 function deletePersona(id) {
   const n = db.prepare('SELECT COUNT(*) AS n FROM personalities').get().n;
   if (n <= 1) throw new Error('Keep at least one personality');
+  snapshotBeforeDestructive();
   db.prepare('DELETE FROM personalities WHERE id = ?').run(id);
   return { ok: true };
 }
@@ -494,6 +558,7 @@ function updateCharacter(id, fields) {
 }
 
 function deleteCharacter(id) {
+  snapshotBeforeDestructive();
   db.prepare('DELETE FROM characters WHERE id = ?').run(id);
   return { ok: true };
 }
@@ -522,6 +587,7 @@ function getChat(id) {
 }
 
 function deleteChat(id) {
+  snapshotBeforeDestructive();
   db.prepare('DELETE FROM chats WHERE id = ?').run(id);
   return { ok: true };
 }
@@ -588,6 +654,47 @@ function pathNodes(tree, uptoId) {
   return out;
 }
 
+/* The variant a re-generation from `parentId` will replace: whichever child of
+   that parent is currently on the active path. */
+function activeChildId(tree, parentId) {
+  const p = tree.nodes[parentId];
+  return p ? childOnActivePath(p) || null : null;
+}
+
+/* The shot the message history says belongs on screen for the active branch:
+   the last character message on the active path carrying a pose stamp. Stamps
+   are only written when the director actually swaps, so an unstamped message
+   means "unchanged" and the search walks past it.
+
+   `uptoId` stops the walk early so the answer can be the shot that was showing
+   *before* a given message — what a discarded message must fall back to. */
+function poseOnPath(chatId, uptoId = null) {
+  const tree = getTree(chatId);
+  let cur = tree.nodes.root;
+  let poseId = null;
+  let guard = 0;
+  while (cur.children.length && guard++ < 1000) {
+    const n = tree.nodes[childOnActivePath(cur)];
+    if (!n || n.id === uptoId) break;
+    if (n.poseId) poseId = n.poseId;
+    cur = n;
+  }
+  return poseId;
+}
+
+/* The shot on screen before `nodeId` was written — used when a message is being
+   re-generated, i.e. while the old branch is still the active one. */
+function poseBefore(chatId, nodeId) {
+  return poseOnPath(chatId, nodeId);
+}
+
+/* The shot for whatever branch is on screen right now. Recomputed after a
+   delete, edit or version switch so no image is left over from the branch the
+   user just navigated away from. */
+function poseAtTip(chatId) {
+  return poseOnPath(chatId);
+}
+
 function addNode(chatId, role, content, parentId) {
   const tree = getTree(chatId);
   const parent = tree.nodes[parentId || treeTip(tree)];
@@ -639,6 +746,7 @@ function deleteNode(chatId, nodeId) {
   const tree = getTree(chatId);
   const node = tree.nodes[nodeId];
   if (!node || nodeId === 'root') throw new Error('Message not found');
+  snapshotBeforeDestructive();
   const ids = [nodeId];
   for (let i = 0; i < ids.length; i++) {
     for (const c of tree.nodes[ids[i]].children || []) ids.push(c);
@@ -740,6 +848,7 @@ function updatePreset(id, b) {
 }
 
 function deletePreset(id) {
+  snapshotBeforeDestructive();
   db.prepare('DELETE FROM presets WHERE id = ?').run(id);
   return { ok: true };
 }
@@ -819,6 +928,7 @@ function updatePose(id, fields = {}) {
 function deletePose(id) {
   const row = db.prepare('SELECT id FROM poses WHERE id = ?').get(id);
   if (!row) return false;
+  snapshotBeforeDestructive();
   db.prepare('DELETE FROM poses WHERE id = ?').run(id);
   db.prepare('UPDATE chats SET pose_id = NULL WHERE pose_id = ?').run(id);
   return true;
@@ -865,7 +975,7 @@ module.exports = {
   bootstrap: () => ({ characters: getCharacters(), personalities: getPersonalities(), settings: getSettings(), presets: getPresets() }),
   getCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter,
   createChat, getChat, deleteChat, renameChat,
-  getTree, treeTip, pathNodes, addNode, addReply, editNode, deleteNode, switchNode,
+  getTree, treeTip, pathNodes, addNode, addReply, editNode, deleteNode, switchNode, poseBefore, poseAtTip, activeChildId,
   getPersonalities, getPersona, createPersona, updatePersona, deletePersona,
   getPresets, getPreset, createPreset, updatePreset, deletePreset,
   getPoses, getPose, createPose, updatePose, deletePose, setChatPose, ensureDefaultPoses,

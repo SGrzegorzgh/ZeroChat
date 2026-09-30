@@ -139,11 +139,21 @@
         </div>
         <div class="field">
           <label>Model</label>
-          <div class="key-row">
-            <input type="text" id="set-model" list="set-model-list" placeholder="model-id">
-            <button id="set-fetch-models" class="mini" type="button">Fetch list</button>
+          <div class="combo" data-combo>
+            <div class="key-row">
+              <input type="text" id="set-model" class="combo-value" placeholder="model-id" autocomplete="off" spellcheck="false">
+              <button id="set-fetch-models" class="mini" type="button">Fetch list</button>
+            </div>
+            <div class="combo-pop" hidden>
+              <input type="text" class="combo-search" placeholder="Search models…" autocomplete="off" spellcheck="false">
+              <div class="combo-list" role="listbox"></div>
+              <div class="combo-foot">
+                <span class="combo-foot-label">Custom id</span>
+                <code class="combo-custom">—</code>
+              </div>
+            </div>
           </div>
-          <datalist id="set-model-list"></datalist>
+          <p class="m-note" style="margin-top:8px">Pick from the dropdown, or type any model id yourself and it is used as-is.</p>
         </div>
         <div class="field">
           <label>Temperature <span class="val" id="temp-val"></span></label>
@@ -264,6 +274,7 @@
           <label>Description</label>
           <textarea id="pf-desc" rows="3" placeholder="How should the AI see you? e.g. Bold and direct, always charges in first..."></textarea>
         </div>
+        <p class="m-note">{{user}} becomes your personality&rsquo;s name here.</p>
       </div>
       <div class="m-foot">
         <button id="pf-cancel" class="btn btn-ghost hidden">Cancel edit</button>
@@ -313,6 +324,7 @@
           <label>Scenario (the opening message)</label>
           <textarea id="ce-scenario" rows="5" placeholder="*The tavern falls silent as they enter...*&#10;&#10;You again. Sit down — we have business to discuss."></textarea>
         </div>
+        <p class="m-note">{{char}} and {{user}} work in the description and scenario — they become the character&rsquo;s and your personality&rsquo;s names.</p>
       </div>
       <div class="m-foot">
         <button id="ce-delete" class="btn btn-danger hidden">Delete character</button>
@@ -432,11 +444,21 @@
         </div>
         <div class="field">
           <label>Model</label>
-          <div class="key-row">
-            <input type="text" id="pr-model" list="pr-model-list" placeholder="model-id">
-            <button id="pr-fetch-models" class="mini" type="button">Fetch list</button>
+          <div class="combo" data-combo>
+            <div class="key-row">
+              <input type="text" id="pr-model" class="combo-value" placeholder="model-id" autocomplete="off" spellcheck="false">
+              <button id="pr-fetch-models" class="mini" type="button">Fetch list</button>
+            </div>
+            <div class="combo-pop" hidden>
+              <input type="text" class="combo-search" placeholder="Search models…" autocomplete="off" spellcheck="false">
+              <div class="combo-list" role="listbox"></div>
+              <div class="combo-foot">
+                <span class="combo-foot-label">Custom id</span>
+                <code class="combo-custom">—</code>
+              </div>
+            </div>
           </div>
-          <datalist id="pr-model-list"></datalist>
+          <p class="m-note" style="margin-top:8px">Empty = use the global model.</p>
         </div>
         <div class="field">
           <label>Temperature <span class="val" id="pr-temp-val"></span></label>

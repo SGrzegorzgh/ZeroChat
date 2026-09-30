@@ -1,9 +1,15 @@
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const db = require('./db');
 
 const PORT = process.env.PORT || 3000;
+/* No HOST means every interface (0.0.0.0), so the app is reachable from other
+   devices on the network. Set HOST=127.0.0.1 to keep it on this machine only.
+   The app has no auth and stores API keys, so a public interface needs a
+   trusted network in front of it. */
+const HOST = (process.env.HOST || '').trim();
 const ROOT = __dirname;
 
 const MIME = {
@@ -115,12 +121,25 @@ function poseCfg(settings) {
   };
 }
 
-function buildTurns(pathNodes) {
+/* Template tags usable in anything the user writes for the model. Expanded when
+   the prompt is built, never stored expanded, so renaming the character or the
+   persona updates every field at once. Unrecognised tags are left as typed. */
+function expandPromptMacros(s, char, persona) {
+  if (s == null) return '';
+  const userName = persona ? persona.name : 'the user';
+  /* Function replacement, so a name containing "$&" or "$1" is inserted
+     literally instead of being read as a substitution pattern. */
+  return String(s)
+    .replace(/\{\{\s*char\s*\}\}/gi, () => char.name)
+    .replace(/\{\{\s*user\s*\}\}/gi, () => userName);
+}
+
+function buildTurns(pathNodes, char, persona) {
   const turns = [];
   let hasInjection = false;
   for (const n of pathNodes) {
     if (n.role === 'scenario' || n.role === 'root') continue;
-    let content = n.content;
+    let content = expandPromptMacros(n.content, char, persona);
     if (n.role === 'injection') {
       hasInjection = true;
       content = `((OOC directive: ${content}))`;
@@ -137,17 +156,14 @@ const STYLE_LINE = 'Do not make the character dialog lines too long — focus mo
 const OOC_LINE = '((OOC directive: ...)) blocks are out-of-character steering from the user. Treat them as authoritative instructions for what happens next in the scene and weave them into your reply naturally.';
 const DEFAULT_PRESET_PROMPT = 'Write "{{char}}\'s" next reply in a fictional roleplay chat between "{{user}}" and "{{char}}".';
 
-function expandPromptMacros(s, char, userName) {
-  return s.replace(/\{\{char\}\}/gi, char.name).replace(/\{\{user\}\}/gi, userName);
-}
-
 function buildSystemText(char, persona, hasInjection, cfg) {
   const userName = persona ? persona.name : 'the user';
+  const ex = (s) => expandPromptMacros(s, char, persona);
   if (cfg.systemPrompt.trim()) {
     const parts = [
-      expandPromptMacros(cfg.systemPrompt.trim(), char, userName),
-      `The scenario that started this conversation: ${char.scenario}`,
-      persona ? `The user is playing as: ${persona.name} — ${persona.description}` : 'The user plays themselves.',
+      ex(cfg.systemPrompt.trim()),
+      `The scenario that started this conversation: ${ex(char.scenario)}`,
+      persona ? `The user is playing as: ${persona.name} — ${ex(persona.description)}` : 'The user plays themselves.',
       STYLE_LINE,
     ];
     if (hasInjection) parts.push(OOC_LINE);
@@ -155,14 +171,14 @@ function buildSystemText(char, persona, hasInjection, cfg) {
   }
   const parts = [
     `Write "${char.name}'s" next reply in a fictional roleplay chat between "${userName}" and "${char.name}".`,
-    `"${char.name}'s" Persona:\n${char.description || 'A mysterious stranger.'}`,
+    `"${char.name}'s" Persona:\n${ex(char.description) || 'A mysterious stranger.'}`,
     persona
-      ? `"${userName}'s" Persona:\n${persona.description || 'An ordinary person.'}`
+      ? `"${userName}'s" Persona:\n${ex(persona.description) || 'An ordinary person.'}`
       : `"The user's" Persona:\nAn ordinary person — the user plays themselves.`,
   ];
-  if (char.scenario) parts.push(`The scenario of the conversation:\n${char.scenario}`);
+  if (char.scenario) parts.push(`The scenario of the conversation:\n${ex(char.scenario)}`);
   const examples = (char.responses || []).filter(Boolean);
-  if (examples.length) parts.push(`This is how "${char.name}" talks and acts:\n${examples.map((r) => '- ' + r).join('\n')}`);
+  if (examples.length) parts.push(`This is how "${char.name}" talks and acts:\n${examples.map((r) => '- ' + ex(r)).join('\n')}`);
   parts.push(STYLE_LINE);
   if (hasInjection) parts.push(OOC_LINE);
   parts.push(`Then the roleplay chat between "${char.name}" and "${userName}" begins.`);
@@ -303,14 +319,14 @@ async function streamAnthropic(base, body, apiKey, onDelta, ctrl) {
 }
 
 async function generateReplyStream(char, nodes, persona, settings, onDelta, signal) {
-  const built = buildTurns(nodes);
+  const built = buildTurns(nodes, char, persona);
   const history = built.turns.slice(-40);
   const cfg = resolveAiConfig(settings);
   const systemText = buildSystemText(char, persona, built.hasInjection, cfg);
 
   if (!cfg.apiKey && cfg.provider !== 'ollama') {
     const pool = char.responses || [];
-    const text = pool[Math.floor(Math.random() * pool.length)] || '*They listen carefully, then nod.* Go on — I am curious where this goes.';
+    const text = expandPromptMacros(pool[Math.floor(Math.random() * pool.length)], char, persona) || '*They listen carefully, then nod.* Go on — I am curious where this goes.';
     for (const chunk of text.match(/[\s\S]{1,8}/g) || [text]) {
       if (signal && signal.aborted) throw new Error('Aborted');
       onDelta(chunk);
@@ -376,11 +392,20 @@ async function retryOnce(call, onDelta, signal) {
 const POSE_SYSTEM_PROMPT = [
   'You direct the camera for a visual novel. You are given the available shots and the most recent character reply. Pick the single shot that best matches what the character is doing right now.',
   'Rules:',
-  '- Call set_pose ONLY when the reply clearly shows the character changed position, posture, framing, or the location matters more than the face.',
+  '- TIMING IS THE MOST IMPORTANT RULE. Change the shot only when the reply shows the character is ALREADY doing the thing: the action has started, is under way, or has just happened. Never switch for something that is only announced, intended, considered or about to happen. Plans, intentions and predictions keep the current shot.',
+  '- Change the shot only when the reply clearly shows the character changed position, posture, framing, or the location matters more than the face.',
   '- If the reply continues the same situation with no visual change, DO NOT call any tool. Staying on the current shot is always a valid and common answer.',
   '- Never invent a pose id. Only use ids from the shot list.',
-  '- confidence is your honest probability that this is the right shot (0-1). A small change is rarely worth more than 0.5.',
+  '- confidence is your honest probability that this is the right shot (0-1). A small change is rarely worth more than 0.5. For an announced-but-not-started action, do not call the tool at all.',
 ].join('\n');
+
+const POSE_TIMING_EXAMPLES = [
+  'Reply: "She glances at the door, then sets down her cup." — nothing has moved to a new place yet. DO NOT call set_pose; keep the current shot. Only a glance is not a change of shot.',
+  'Reply: "She says she might head out after dessert." — that is an intention, not an event. DO NOT call set_pose.',
+  'Reply: "She pushes back from the booth, grabs her jacket and heads for the door." — the movement is already happening. DO call set_pose, and pick the shot that shows her standing or leaving.',
+  'Reply: "She drops into the seat across from you and exhales." — the sitting has already started. DO call set_pose and pick the shot that shows her seated.',
+  'Reply: "She is about to sit down." — the sitting has not begun. DO NOT call set_pose. The switch belongs to the later reply that shows her actually sitting.',
+];
 
 function poseToolProps(candidates) {
   return {
@@ -400,7 +425,7 @@ function buildPoseBrief({ char, persona, chat, candidates, currentPoseId, replyT
   if (chat && chat.tree) {
     const tip = db.treeTip(chat.tree);
     if (tip) {
-      const { turns } = buildTurns(db.pathNodes(chat.tree, tip));
+      const { turns } = buildTurns(db.pathNodes(chat.tree, tip), char, persona);
       const recent = turns.slice(-3);
       if (recent.length) {
         lines.push('Recent turns:');
@@ -409,6 +434,9 @@ function buildPoseBrief({ char, persona, chat, candidates, currentPoseId, replyT
     }
   }
   lines.push(`Reply to direct: ${truncTitle(replyText || '', 1200)}`);
+  lines.push('');
+  lines.push('Timing examples (these replies are illustrative, not real):');
+  for (const ex of POSE_TIMING_EXAMPLES) lines.push(ex);
   return lines.join('\n');
 }
 
@@ -466,7 +494,7 @@ async function runPoseAgent({ char, persona, chat, poses, currentPoseId, replyTe
     const userText = buildPoseBrief({ char, persona, chat, candidates, currentPoseId, replyText });
     const tool = {
       name: 'set_pose',
-      description: 'Show a different shot of the character. Call only when the scene visibly changed.',
+      description: 'Show a different shot of the character. Call only once the described action is already happening or has just happened on screen — never for an action that is only announced, intended or about to happen.',
     };
     const props = poseToolProps(candidates);
 
@@ -728,10 +756,29 @@ async function route(req, res, u) {
     const poses = db.getPoses(chat.characterId, { withImages: false });
     const aiCfg = resolveAiConfig(settings);
     const simulated = !aiCfg.apiKey && aiCfg.provider !== 'ollama';
+    // Re-generating from an earlier point throws away the reply that is on
+    // screen, so fall the chat back to the shot that was showing before that
+    // reply — otherwise its image lingers while the new one is written, and
+    // the director would judge its swap against a pose that no longer exists.
+    let resetPose = null;
+    let didReset = false;
+    const replaced = db.activeChildId(chat.tree, parentId);
+    if (replaced && parentId !== db.treeTip(chat.tree)) {
+      try {
+        resetPose = db.poseBefore(chat.id, replaced);
+        db.setChatPose(chat.id, resetPose);
+        chat.poseId = resetPose;
+        didReset = true;
+      } catch (e) { console.error('[pose] revert failed:', e.message); }
+    }
     startEventStream(res, async (emit, ctrl) => {
       let posePromise = null;
       let streamed = '';
       try {
+        if (didReset) {
+          const p = resetPose ? poses.find((x) => x.id === resetPose) : null;
+          emit({ type: 'pose', poseId: resetPose, poseName: p ? p.name : null, reset: true });
+        }
         const text = await generateReplyStream(char, path, persona, settings, (d) => {
           streamed += d;
           emit({ type: 'delta', text: d });
@@ -776,11 +823,17 @@ async function route(req, res, u) {
       let node;
       try { node = db.editNode(chatId, nodeId, content); }
       catch (e) { return send(res, 400, { error: e.message }); }
+      // The edited message is a fresh variant with no pose of its own, so the
+      // image follows the history of the branch now on screen.
+      try { db.setChatPose(chatId, db.poseAtTip(chatId)); } catch {}
       return send(res, 200, { chat: db.getChat(chatId), node });
     }
     if (req.method === 'DELETE') {
       try { db.deleteNode(chatId, nodeId); }
       catch (e) { return send(res, 400, { error: e.message }); }
+      // The deleted message and its stamps are gone: fall back to the shot that
+      // was showing before it, rather than leaving its image on screen.
+      try { db.setChatPose(chatId, db.poseAtTip(chatId)); } catch {}
       return send(res, 200, { chat: db.getChat(chatId) });
     }
   }
@@ -790,6 +843,9 @@ async function route(req, res, u) {
     if (!db.getChat(chatId)) return send(res, 404, { error: 'Chat not found' });
     try { db.switchNode(chatId, body.nodeId); }
     catch (e) { return send(res, 400, { error: e.message }); }
+    // Another version of a message is now on screen, so the image follows that
+    // version's history instead of the one just navigated away from.
+    try { db.setChatPose(chatId, db.poseAtTip(chatId)); } catch {}
     return send(res, 200, { chat: db.getChat(chatId) });
   }
 
@@ -877,6 +933,13 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`aichat running → http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  const bound = HOST || '0.0.0.0';
+  /* Only advertise addresses when actually listening on the network. */
+  const open = !HOST || HOST === '0.0.0.0' || HOST === '::';
+  const nets = open
+    ? Object.values(os.networkInterfaces()).flat().filter((n) => n && n.family === 'IPv4' && !n.internal)
+    : [];
+  const where = nets.length ? ` → also try ${nets.map((n) => `http://${n.address}:${PORT}`).join(', ')}` : '';
+  console.log(`aichat running → ${bound}:${PORT}${where}`);
 });

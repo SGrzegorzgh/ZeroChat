@@ -76,8 +76,19 @@ async function streamGenerate(path, body, onDelta) {
       let ev;
       try { ev = JSON.parse(line.slice(6)); } catch { continue; }
       if (ev.type === 'pose') {
-        applyPoseLive(ev.poseId, ev.poseName);
-        toast('Pose: ' + ev.poseName);
+        const chat = activeChat(activeChar());
+        if (ev.reset) {
+          // Revert (delete / edit / re-generate): repaint the shot that was on
+          // screen before the removed message, but leave the last message's own
+          // avatar alone — it is stamped with its own pose, not the current one.
+          if (chat) chat.poseId = ev.poseId || null;
+          applyChatBg();
+          renderHeader();
+          toast(ev.poseName ? 'Back to: ' + ev.poseName : 'Image cleared');
+        } else {
+          applyPoseLive(ev.poseId, ev.poseName);
+          toast('Pose: ' + ev.poseName);
+        }
         continue;
       }
       if (ev.type === 'delta') {
@@ -352,6 +363,19 @@ function editBoxHtml(n) {
   </div>`;
 }
 
+/* Mirror of the server's template tags, for display only: character-authored
+   text shows the names substituted, while the user's own messages stay exactly
+   as they were typed. */
+function expandTags(s, characterId) {
+  if (s == null || s.indexOf('{{') === -1) return s;
+  const persona = activePersona();
+  const charName = (state.characters.find((c) => c.id === characterId) || {}).name || 'the character';
+  const userName = (persona && persona.name) || 'the user';
+  return String(s)
+    .replace(/\{\{\s*char\s*\}\}/gi, () => charName)
+    .replace(/\{\{\s*user\s*\}\}/gi, () => userName);
+}
+
 function msgHtml(c, p, n, chat) {
   const msgPose = n.role === 'char' ? poseById(chat.characterId, n.poseId) : null;
   const meta = msgMetaHtml(n, chat, { regen: n.role === 'char' }, poseTagHtml(msgPose));
@@ -362,9 +386,11 @@ function msgHtml(c, p, n, chat) {
     const dot = n.state === 'pending' ? '<span class="inj-dot" title="Will be sent with the next reply"></span>' : '';
     body = `<div class="bubble"><span class="inj-tag">${I.zap}<span>Directive</span>${dot}</span>${md(n.content)}</div>`;
   } else if (n.role === 'scenario') {
-    body = `<div class="ms-body">${md(n.content)}</div>`;
+    body = `<div class="ms-body">${md(expandTags(n.content, chat.characterId))}</div>`;
   } else {
-    body = `<div class="bubble">${md(n.content)}</div>`;
+    /* Character lines render their tags; the user's own text is left alone. */
+    const text = n.role === 'char' ? expandTags(n.content, chat.characterId) : n.content;
+    body = `<div class="bubble">${md(text)}</div>`;
   }
   if (n.role === 'scenario') {
     return `<div class="msg-scenario" data-id="${n.id}">
@@ -610,14 +636,22 @@ async function regenMsg(id) {
   await generateReplyAt(node.parent);
 }
 
+function poseRevertNote(prevPoseId, chat) {
+  if (!chat || (chat.poseId || null) === (prevPoseId || null)) return;
+  const p = chat.poseId ? poseById(chat.characterId, chat.poseId) : null;
+  toast(p ? 'Back to: ' + p.name : 'Image cleared');
+}
+
 async function delMsg(id) {
   const c = activeChar();
   const chat = c && activeChat(c);
   if (!chat || !chat.tree.nodes[id]) return;
   if (!confirm('Delete this message and everything after it on this branch?')) return;
+  const prev = chat.poseId;
   try {
     const r = await api(`/chats/${chat.id}/nodes/${id}`, { method: 'DELETE' });
     mergeChat(chat, r.chat);
+    poseRevertNote(prev, chat);
   } catch (e) { toast(e.message); return; }
   saveUi();
   renderChat({ keepScroll: true });
@@ -631,9 +665,11 @@ async function saveEdit(id) {
   const ta = $('#edit-ta');
   const text = ta ? ta.value.trim() : '';
   if (!text) { toast('Message is empty'); return; }
+  const prev = chat.poseId;
   try {
     const r = await api(`/chats/${chat.id}/nodes/${id}`, { method: 'PUT', body: JSON.stringify({ content: text }) });
     mergeChat(chat, r.chat);
+    poseRevertNote(prev, chat);
   } catch (e) { toast(e.message); return; }
   editingId = null;
   saveUi();
@@ -650,9 +686,11 @@ async function switchVariant(dir, nodeId) {
   const idx = parent.children.indexOf(nodeId);
   const target = parent.children[dir === 'prev' ? idx - 1 : idx + 1];
   if (!target) return;
+  const prev = chat.poseId;
   try {
     const r = await api(`/chats/${chat.id}/switch`, { method: 'POST', body: JSON.stringify({ nodeId: target }) });
     mergeChat(chat, r.chat);
+    poseRevertNote(prev, chat);
   } catch (e) { toast(e.message); return; }
   saveUi();
   renderChat({ keepScroll: true });
@@ -1182,7 +1220,7 @@ function openSettings() {
   $('#set-key').type = 'password';
   $('#key-toggle').textContent = 'Show';
   $('#set-model').value = s.model;
-  $('#set-model-list').innerHTML = (PROVIDERS[s.provider]?.models || []).map((m) => `<option value="${esc(m)}">`).join('');
+  setComboModels($('#set-model').closest('.combo'), PROVIDERS[s.provider]?.models || []);
   $('#set-temp').value = s.temperature;
   $('#temp-val').textContent = (+s.temperature).toFixed(1);
   $('#set-bgop').value = Math.round((+s.bgOpacity || 0) * 100);
@@ -1205,23 +1243,201 @@ function openSettings() {
   openModal('modal-settings');
 }
 
+/* --- model picker ---------------------------------------------------------
+   A dropdown of the provider's models with a search box, sitting on top of a
+   text field that stays free for a custom model id. Everything is scoped to the
+   .combo root so the settings and preset forms can both use it. */
+const comboState = new WeakMap();
+
+function comboEl(combo) {
+  return {
+    value: $('.combo-value', combo),
+    pop: $('.combo-pop', combo),
+    search: $('.combo-search', combo),
+    list: $('.combo-list', combo),
+    custom: $('.combo-custom', combo),
+  };
+}
+
+function comboMatch(model, q) {
+  if (!q) return true;
+  const m = model.toLowerCase();
+  if (m.includes(q)) return true;
+  // Also match on any segment of a namespaced id, so "gpt" finds
+  // "openai/gpt-4o" and "4o" finds it too.
+  return m.split(/[\/:._-]/).some((seg) => seg.includes(q));
+}
+
+function comboCustomLabel(combo, el) {
+  const typed = el.value.value.trim();
+  const known = (comboState.get(combo)?.models || []).includes(typed);
+  el.custom.textContent = typed || '—';
+  el.custom.classList.toggle('pending', !!typed && !known);
+  el.custom.title = typed ? (known ? 'Already in the list' : 'Not in the list — will be sent as-is') : '';
+}
+
+function comboRender(combo) {
+  const el = comboEl(combo);
+  const st = comboState.get(combo);
+  const q = el.search.value.trim().toLowerCase();
+  const models = (st.models || []).filter((m) => comboMatch(m, q));
+  const current = el.value.value.trim();
+  if (!models.length) {
+    el.list.innerHTML = `<div class="combo-empty">${st.models.length ? 'No model matches that search' : 'No models yet — press “Fetch list”'}</div>`;
+  } else {
+    el.list.innerHTML = models
+      .map((m) => `<button type="button" class="combo-opt ${m === current ? 'current' : ''}" data-model="${esc(m)}" role="option" aria-selected="${m === current}">${esc(m)}${m === current ? '<span class="combo-tick">●</span>' : ''}</button>`)
+      .join('');
+  }
+  $$('.combo-opt', el.list).forEach((b, i) => b.classList.toggle('sel', i === st.sel));
+  if (st.sel >= $$('.combo-opt', el.list).length) st.sel = -1;
+  if (el.list.scrollHeight && st.sel >= 0) {
+    const node = $$('.combo-opt', el.list)[st.sel];
+    if (node) node.scrollIntoView({ block: 'nearest' });
+  }
+  comboCustomLabel(combo, el);
+}
+
+function comboOpen(combo, focusSearch = true) {
+  const st = comboState.get(combo);
+  if (!st) return;
+  comboCloseAll();
+  st.open = true;
+  const el = comboEl(combo);
+  el.pop.hidden = false;
+  el.search.value = '';
+  st.sel = -1;
+  comboRender(combo);
+  /* Open on the full list, scrolled to the model already in use. */
+  const cur = $('.combo-opt.current', el.list);
+  if (cur) cur.scrollIntoView({ block: 'center' });
+  if (focusSearch) el.search.focus();
+}
+
+function comboClose(combo) {
+  const st = comboState.get(combo);
+  if (!st) return;
+  st.open = false;
+  comboEl(combo).pop.hidden = true;
+}
+
+function comboCloseAll() {
+  $$('.combo').forEach(comboClose);
+}
+
+function comboPick(combo, model) {
+  const el = comboEl(combo);
+  el.value.value = model;
+  comboCustomLabel(combo, el);
+  comboFocusValue(combo);
+}
+
+/* Hand the caret back to the id field after closing, without the focus handler
+   helpfully reopening the list we just dismissed. */
+function comboFocusValue(combo) {
+  const st = comboState.get(combo);
+  const el = comboEl(combo);
+  comboClose(combo);
+  st.refocusing = true;
+  el.value.focus();
+}
+
+function comboStep(combo, dir) {
+  const st = comboState.get(combo);
+  const el = comboEl(combo);
+  const n = $$('.combo-opt', el.list).length;
+  if (!n) return;
+  st.sel = (st.sel + dir + n) % n;
+  comboRender(combo);
+}
+
+function setupModelCombo(combo, initialModels = []) {
+  if (!combo || comboState.has(combo)) return;
+  const el = comboEl(combo);
+  const st = { models: initialModels.slice(), open: false, sel: -1 };
+  comboState.set(combo, st);
+
+  /* Clicking the field reveals the list but keeps the caret where the user
+     clicked — they may be typing a custom id, and yanking focus into the
+     search box would swallow those keystrokes. */
+  el.value.addEventListener('focus', () => {
+    if (st.refocusing) { st.refocusing = false; return; }
+    comboOpen(combo, false);
+  });
+  el.value.addEventListener('input', () => comboCustomLabel(combo, el));
+  el.value.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); comboOpen(combo); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const opt = $$('.combo-opt', el.list)[st.sel];
+      comboPick(combo, opt ? opt.dataset.model : el.value.value.trim());
+    } else if (e.key === 'Escape') comboClose(combo);
+  });
+  el.search.addEventListener('input', () => { st.sel = -1; comboRender(combo); });
+  el.search.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); comboStep(combo, 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); comboStep(combo, -1); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const opt = $$('.combo-opt', el.list)[st.sel];
+      /* Enter with nothing highlighted accepts the typed id as a custom model,
+         which is what the field is for. */
+      comboPick(combo, opt ? opt.dataset.model : el.value.value.trim());
+    } else if (e.key === 'Escape') { comboFocusValue(combo); }
+  });
+  /* Keep the caret in the search box when an option is pressed, so the list
+     stays put while the click completes. */
+  el.list.addEventListener('mousedown', (e) => {
+    if (e.target.closest('[data-model]')) e.preventDefault();
+  });
+  el.list.addEventListener('click', (e) => {
+    const opt = e.target.closest('[data-model]');
+    if (opt) comboPick(combo, opt.dataset.model);
+  });
+  el.list.addEventListener('mousemove', (e) => {
+    const opt = e.target.closest('[data-model]');
+    if (!opt) return;
+    const i = $$('.combo-opt', el.list).indexOf(opt);
+    if (i === st.sel) return;
+    st.sel = i;
+    comboRender(combo);
+  });
+  comboCustomLabel(combo, el);
+}
+
+function setComboModels(combo, models) {
+  const st = comboState.get(combo);
+  if (!st) return;
+  st.models = [...new Set(models.filter(Boolean))];
+  st.sel = -1;
+  comboRender(combo);
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.combo')) comboCloseAll();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') comboCloseAll();
+});
+
 function setProviderUI(pv) {
   $$('#prov-grid .prov').forEach((b) => b.classList.toggle('selected', b.dataset.pv === pv));
   const meta = PROVIDERS[pv];
   if (!meta) return;
   $('#set-url').value = meta.baseUrl;
-  $('#set-model-list').innerHTML = meta.models.map((m) => `<option value="${esc(m)}">`).join('');
+  setComboModels($('#set-model').closest('.combo'), meta.models);
   $('#set-model').value = meta.models[0] || '';
 }
 
-async function fetchModelList(baseUrl, apiKey, datalistSel, btn) {
+async function fetchModelList(baseUrl, apiKey, combo, btn) {
   if (!baseUrl) { toast('Set a base URL first'); return; }
   const old = btn.textContent;
   btn.textContent = '…';
   btn.disabled = true;
   try {
     const r = await api(`/provider/models?baseUrl=${encodeURIComponent(baseUrl)}&apiKey=${encodeURIComponent(apiKey)}`);
-    $(datalistSel).innerHTML = r.models.map((m) => `<option value="${esc(m)}">`).join('');
+    setComboModels(combo, r.models);
+    comboOpen(combo);
     toast(r.models.length ? `Found ${r.models.length} models` : 'No models returned');
   } catch (e) {
     toast(e.message);
@@ -1341,7 +1557,7 @@ function openPresetModal(p) {
   $('#pr-key').type = 'password';
   $('#pr-key-toggle').textContent = 'Show';
   $('#pr-model').value = p ? p.model : '';
-  $('#pr-model-list').innerHTML = (PROVIDERS[p ? p.provider : state.settings.provider]?.models || []).map((m) => `<option value="${esc(m)}">`).join('');
+  setComboModels($('#pr-model').closest('.combo'), PROVIDERS[p ? p.provider : state.settings.provider]?.models || []);
   $('#pr-temp').value = p && p.temperature !== null && p.temperature !== undefined ? p.temperature : state.settings.temperature;
   $('#pr-temp-val').textContent = (+$('#pr-temp').value).toFixed(1);
   $('#pr-maxtok').value = p && p.maxTokens !== null && p.maxTokens !== undefined ? p.maxTokens : '';
@@ -1650,6 +1866,7 @@ function skipFullCrop() {
 }
 
 function wireEvents() {
+  $$('.combo').forEach((c) => setupModelCombo(c));
   $('#new-char-btn').addEventListener('click', () => openCharModal(null));
   $('#char-list').addEventListener('click', (e) => {
     const item = e.target.closest('.char-item');
@@ -1700,7 +1917,7 @@ function wireEvents() {
     const meta = PROVIDERS[card.dataset.pv];
     if (meta) {
       $('#pr-url').value = meta.baseUrl;
-      $('#pr-model-list').innerHTML = meta.models.map((m) => `<option value="${esc(m)}">`).join('');
+      setComboModels($('#pr-model').closest('.combo'), meta.models);
       if (meta.models.length) $('#pr-model').value = meta.models[0];
     }
   });
@@ -1714,14 +1931,17 @@ function wireEvents() {
     $('#pr-temp-val').textContent = (+e.target.value).toFixed(1);
   });
   $('#pr-fetch-models').addEventListener('click', () => {
-    fetchModelList($('#pr-url').value.trim(), $('#pr-key').value.trim(), '#pr-model-list', $('#pr-fetch-models'));
+    /* Same fallback the server does at generation time: an empty preset key
+       means "use the global one", so the list fetch must send it too. */
+    const key = $('#pr-key').value.trim() || state.settings.apiKey;
+    fetchModelList($('#pr-url').value.trim(), key, $('#pr-model').closest('.combo'), $('#pr-fetch-models'));
   });
   $('#pr-save').addEventListener('click', presetFormSave);
   $('#pr-cancel').addEventListener('click', () => closeModal('modal-preset'));
   $('#pr-delete').addEventListener('click', presetDelete);
 
   $('#set-fetch-models').addEventListener('click', () => {
-    fetchModelList($('#set-url').value.trim(), $('#set-key').value.trim(), '#set-model-list', $('#set-fetch-models'));
+    fetchModelList($('#set-url').value.trim(), $('#set-key').value.trim(), $('#set-model').closest('.combo'), $('#set-fetch-models'));
   });
   $('#set-bgop').addEventListener('input', (e) => {
     $('#bgop-val').textContent = e.target.value + '%';
