@@ -44,7 +44,10 @@
       </section>
 
       <section id="chat-view" class="hidden">
-        <div id="chat-bg"></div>
+        <div id="chat-bg">
+          <div class="chat-bg-layer" id="chat-bg-a"></div>
+          <div class="chat-bg-layer" id="chat-bg-b"></div>
+        </div>
         <header id="chat-header">
           <button id="menu-btn" class="icon-btn" aria-label="Open menu">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -273,6 +276,10 @@
         <div class="field">
           <label>Description</label>
           <textarea id="pf-desc" rows="3" placeholder="How should the AI see you? e.g. Bold and direct, always charges in first..."></textarea>
+        </div>
+        <div class="field">
+          <label>Note for user</label>
+          <textarea id="pf-note" rows="2" placeholder="A private reminder shown under your name — the model never sees this."></textarea>
         </div>
         <p class="m-note">{{user}} becomes your personality&rsquo;s name here.</p>
       </div>

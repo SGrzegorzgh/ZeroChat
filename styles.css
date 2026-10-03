@@ -282,15 +282,27 @@ body.sidebar-open #scrim {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background-size: contain;
-  background-position: center;
-  background-repeat: no-repeat;
   opacity: var(--bgop, 0.35);
   filter: blur(var(--bgblur, 0px)) saturate(0.88);
   pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 #chat-bg.none {
   display: none;
+}
+.chat-bg-layer {
+  position: absolute;
+  inset: 0;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  will-change: opacity;
+}
+.chat-bg-layer.active {
+  opacity: 1;
 }
 #chat-view::after {
   content: '';

@@ -156,6 +156,20 @@ const STYLE_LINE = 'Do not make the character dialog lines too long — focus mo
 const OOC_LINE = '((OOC directive: ...)) blocks are out-of-character steering from the user. Treat them as authoritative instructions for what happens next in the scene and weave them into your reply naturally.';
 const DEFAULT_PRESET_PROMPT = 'Write "{{char}}\'s" next reply in a fictional roleplay chat between "{{user}}" and "{{char}}".';
 
+const GENERIC_RESPONSE_SET = new Set([
+  '*They tilt their head, considering your words carefully before answering.* That is an interesting thing to say. Tell me more — I am listening.',
+  '*A slow smile crosses their face.* You always find the most unexpected angles, you know that? Alright, I am in. What is the plan?',
+  '*They nod slowly, the light catching in their eyes.* Very well. Let us see where this road leads us.',
+]);
+
+const SIMULATED_FALLBACKS = [
+  '*They listen carefully, their eyes reflecting the light.* Go on — I am curious where this leads.',
+  '*A thoughtful pause settles between you before they speak.* I hear you. What do you think our next step should be?',
+  '*They lean back slightly, considering what you said.* That gives me plenty to think about. Tell me what else is on your mind.',
+  '*A subtle smile touches their lips.* You always bring an interesting perspective to the table. Let us explore that further.',
+  '*They nod slowly, taking in your words.* Understood. Where should we take things from here?',
+];
+
 /* A preset's system prompt replaces the opening instruction only. Everything that
    defines who is in the scene — the character's persona, the user's persona, the
    scenario and the example replies — is appended either way, so a custom prompt
@@ -172,7 +186,7 @@ function buildSystemText(char, persona, hasInjection, cfg) {
       : `"The user's" Persona:\nAn ordinary person — the user plays themselves.`,
   ];
   if (char.scenario) parts.push(`The scenario of the conversation:\n${ex(char.scenario)}`);
-  const examples = (char.responses || []).filter(Boolean);
+  const examples = (char.responses || []).filter((r) => r && !GENERIC_RESPONSE_SET.has(String(r).trim()));
   if (examples.length) parts.push(`This is how "${char.name}" talks and acts:\n${examples.map((r) => '- ' + ex(r)).join('\n')}`);
   parts.push(STYLE_LINE);
   if (hasInjection) parts.push(OOC_LINE);
@@ -320,8 +334,10 @@ async function generateReplyStream(char, nodes, persona, settings, onDelta, sign
   const systemText = buildSystemText(char, persona, built.hasInjection, cfg);
 
   if (!cfg.apiKey && cfg.provider !== 'ollama') {
-    const pool = char.responses || [];
-    const text = expandPromptMacros(pool[Math.floor(Math.random() * pool.length)], char, persona) || '*They listen carefully, then nod.* Go on — I am curious where this goes.';
+    const pool = (char.responses || []).filter((r) => r && !GENERIC_RESPONSE_SET.has(String(r).trim()));
+    const candidates = pool.length ? pool : SIMULATED_FALLBACKS;
+    const picked = candidates[Math.floor(Math.random() * candidates.length)];
+    const text = expandPromptMacros(picked, char, persona) || '*They listen carefully, then nod.* Go on — I am curious where this goes.';
     for (const chunk of text.match(/[\s\S]{1,8}/g) || [text]) {
       if (signal && signal.aborted) throw new Error('Aborted');
       onDelta(chunk);

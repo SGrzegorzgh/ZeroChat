@@ -312,22 +312,59 @@ function renderHeader() {
   $('#preset-label').textContent = pr ? pr.name : 'AI';
 }
 
+let currentBgSrc = null;
+let currentBgLayer = 0;
+
 function applyChatBg() {
   const c = activeChar();
   const bg = $('#chat-bg');
+  if (!bg) return;
   const op = Math.min(1, Math.max(0, Number(state.settings.bgOpacity)));
   const bl = Math.min(24, Math.max(0, Number(state.settings.bgBlur)));
   const dim = Math.min(1, Math.max(0.3, Number.isFinite(+state.settings.actionDim) ? +state.settings.actionDim : 0.72));
   document.documentElement.style.setProperty('--bgop', String(op));
   document.documentElement.style.setProperty('--bgblur', bl + 'px');
   document.documentElement.style.setProperty('--act-dim', String(dim));
-  const src = poseBackdrop(currentPose()) || fullImageSrc(c);
-  if (src && op > 0) {
-    bg.style.backgroundImage = `url('${src}')`;
-    bg.classList.remove('none');
-  } else {
-    bg.style.backgroundImage = '';
+
+  let layers = bg.querySelectorAll('.chat-bg-layer');
+  if (!layers.length) {
+    bg.innerHTML = '<div class="chat-bg-layer" id="chat-bg-a"></div><div class="chat-bg-layer" id="chat-bg-b"></div>';
+    layers = bg.querySelectorAll('.chat-bg-layer');
+  }
+
+  const src = (c && op > 0) ? (poseBackdrop(currentPose()) || fullImageSrc(c)) : null;
+
+  if (!src) {
+    currentBgSrc = null;
+    layers.forEach((l) => l.classList.remove('active'));
     bg.classList.add('none');
+    return;
+  }
+
+  bg.classList.remove('none');
+  if (src === currentBgSrc) return;
+
+  currentBgSrc = src;
+  const nextIdx = (currentBgLayer + 1) % layers.length;
+  const curLayer = layers[currentBgLayer];
+  const nextLayer = layers[nextIdx];
+
+  const activate = () => {
+    if (currentBgSrc !== src) return;
+    nextLayer.style.backgroundImage = `url("${src.replace(/"/g, '\\"')}")`;
+    void nextLayer.offsetWidth;
+    nextLayer.classList.add('active');
+    if (curLayer) curLayer.classList.remove('active');
+    currentBgLayer = nextIdx;
+  };
+
+  const img = new Image();
+  img.src = src;
+  if (img.complete) {
+    activate();
+  } else {
+    img.onload = activate;
+    img.onerror = activate;
   }
 }
 
@@ -733,7 +770,7 @@ function renderPersonaMenu() {
         ${personaAvatarHtml(p, 'sm')}
         <span class="mi-main">
           <span class="mi-name">${esc(p.name)}</span>
-          <span class="mi-desc">${esc(p.description)}</span>
+          <span class="mi-desc">${esc(p.note || p.description)}</span>
         </span>
         ${p.id === state.settings.activePersonalityId ? `<span class="mi-check">${I.check}</span>` : ''}
       </button>`).join('')}
@@ -775,7 +812,7 @@ function renderPersonaList() {
       ${personaAvatarHtml(p)}
       <span class="prow-text">
         <span class="prow-name">${esc(p.name)}${p.id === state.settings.activePersonalityId ? ' <span class="prow-you">· playing now</span>' : ''}</span>
-        <span class="prow-desc">${esc(p.description)}</span>
+        <span class="prow-desc">${esc(p.note || p.description)}</span>
       </span>
       <span class="row-actions">
         <button class="icon-btn tiny" data-edit="${p.id}" title="Edit">${I.pencil}</button>
@@ -826,6 +863,7 @@ function openPersonaModal() {
   peImage = null;
   $('#pf-name').value = '';
   $('#pf-desc').value = '';
+  $('#pf-note').value = '';
   updatePersonaForm();
   updatePfAvatarUI();
   renderPersonaList();
@@ -842,8 +880,9 @@ function updatePersonaForm() {
 async function personaFormSave() {
   const name = $('#pf-name').value.trim();
   const description = $('#pf-desc').value.trim();
+  const note = $('#pf-note').value.trim();
   if (!name) { toast('Give the personality a name'); return; }
-  const body = { name, description, avatar: peAvatar, image: peImage };
+  const body = { name, description, note, avatar: peAvatar, image: peImage };
   try {
     if (peMode === 'edit') {
       const r = await api('/personalities/' + peId, { method: 'PUT', body: JSON.stringify(body) });
@@ -860,7 +899,7 @@ async function personaFormSave() {
   renderPersonaList();
   renderChat();
   peMode = 'new'; peId = null; peAvatar = null; peImage = null;
-  $('#pf-name').value = ''; $('#pf-desc').value = '';
+  $('#pf-name').value = ''; $('#pf-desc').value = ''; $('#pf-note').value = '';
   updatePersonaForm();
   closeModal('modal-persona');
 }
@@ -2085,6 +2124,7 @@ function wireEvents() {
       peMode = 'edit'; peId = p.id; peAvatar = p.avatar || null; peImage = p.image || null;
       $('#pf-name').value = p.name;
       $('#pf-desc').value = p.description;
+      $('#pf-note').value = p.note || '';
       updatePersonaForm();
       updatePfAvatarUI();
       $('#pf-name').focus();
@@ -2109,7 +2149,7 @@ function wireEvents() {
   $('#pf-save').addEventListener('click', personaFormSave);
   $('#pf-cancel').addEventListener('click', () => {
     peMode = 'new'; peId = null; peAvatar = null; peImage = null;
-    $('#pf-name').value = ''; $('#pf-desc').value = '';
+    $('#pf-name').value = ''; $('#pf-desc').value = ''; $('#pf-note').value = '';
     updatePersonaForm();
     updatePfAvatarUI();
   });

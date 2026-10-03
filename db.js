@@ -89,7 +89,8 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE TABLE IF NOT EXISTS personalities (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  description TEXT DEFAULT ''
+  description TEXT DEFAULT '',
+  note TEXT DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
@@ -117,6 +118,7 @@ function ensureColumn(table, col, ddl) {
   if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${ddl}`);
 }
 ensureColumn('personalities', 'avatar', 'TEXT');
+ensureColumn('personalities', 'note', "TEXT DEFAULT ''");
 ensureColumn('characters', 'image', 'TEXT');
 ensureColumn('characters', 'note', "TEXT DEFAULT ''");
 ensureColumn('personalities', 'image', 'TEXT');
@@ -457,27 +459,28 @@ function updateSettings(patch) {
 }
 
 function getPersonalities() {
-  return db.prepare('SELECT id, name, description, avatar, image FROM personalities ORDER BY rowid').all();
+  return db.prepare('SELECT id, name, description, note, avatar, image FROM personalities ORDER BY rowid').all();
 }
 
 function getPersona(id) {
-  return db.prepare('SELECT id, name, description, avatar, image FROM personalities WHERE id = ?').get(id) || null;
+  return db.prepare('SELECT id, name, description, note, avatar, image FROM personalities WHERE id = ?').get(id) || null;
 }
 
-function createPersona({ name, description, avatar, image }) {
-  const p = { id: uid(), name: String(name || 'Unnamed').slice(0, 80), description: String(description || ''), avatar: avatar || null, image: image || null };
-  db.prepare('INSERT INTO personalities (id, name, description, avatar, image) VALUES (?,?,?,?,?)').run(p.id, p.name, p.description, p.avatar, p.image);
+function createPersona({ name, description, note, avatar, image }) {
+  const p = { id: uid(), name: String(name || 'Unnamed').slice(0, 80), description: String(description || ''), note: String(note || ''), avatar: avatar || null, image: image || null };
+  db.prepare('INSERT INTO personalities (id, name, description, note, avatar, image) VALUES (?,?,?,?,?,?)').run(p.id, p.name, p.description, p.note, p.avatar, p.image);
   return p;
 }
 
-function updatePersona(id, { name, description, avatar, image }) {
+function updatePersona(id, { name, description, note, avatar, image }) {
   const p = db.prepare('SELECT id FROM personalities WHERE id = ?').get(id);
   if (!p) return null;
   if (name !== undefined) db.prepare('UPDATE personalities SET name = ? WHERE id = ?').run(String(name).slice(0, 80), id);
   if (description !== undefined) db.prepare('UPDATE personalities SET description = ? WHERE id = ?').run(String(description), id);
+  if (note !== undefined) db.prepare('UPDATE personalities SET note = ? WHERE id = ?').run(String(note), id);
   if (avatar !== undefined) db.prepare('UPDATE personalities SET avatar = ? WHERE id = ?').run(avatar || null, id);
   if (image !== undefined) db.prepare('UPDATE personalities SET image = ? WHERE id = ?').run(image || null, id);
-  return db.prepare('SELECT id, name, description, avatar, image FROM personalities WHERE id = ?').get(id);
+  return db.prepare('SELECT id, name, description, note, avatar, image FROM personalities WHERE id = ?').get(id);
 }
 
 function deletePersona(id) {
@@ -537,7 +540,7 @@ function getCharacters() {
 function createCharacter({ name, description, note, scenario, emoji, avatar, image }) {
   const id = uid();
   db.prepare('INSERT INTO characters (id, name, description, note, scenario, emoji, avatar, image, responses, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .run(id, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, JSON.stringify(GENERIC_RESPONSES), Date.now());
+    .run(id, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, '[]', Date.now());
   createChatInternal(id);
   ensureDefaultPoses(id);
   return getCharacter(id);
@@ -969,6 +972,9 @@ function ensurePosesIntegrity() {
     db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(POSES_SEED_FLAG, '1');
     if (n > 0) console.log(`[poses] default poses ensured for ${n} characters`);
   }
+  try {
+    db.prepare("UPDATE characters SET responses = '[]' WHERE responses = ?").run(JSON.stringify(GENERIC_RESPONSES));
+  } catch {}
   db.prepare('UPDATE chats SET pose_id = NULL WHERE pose_id IS NOT NULL AND pose_id NOT IN (SELECT id FROM poses)').run();
 }
 
