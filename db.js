@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS characters (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT DEFAULT '',
+  note TEXT DEFAULT '',
   scenario TEXT DEFAULT '',
   emoji TEXT DEFAULT '🎭',
   avatar TEXT,
@@ -117,6 +118,7 @@ function ensureColumn(table, col, ddl) {
 }
 ensureColumn('personalities', 'avatar', 'TEXT');
 ensureColumn('characters', 'image', 'TEXT');
+ensureColumn('characters', 'note', "TEXT DEFAULT ''");
 ensureColumn('personalities', 'image', 'TEXT');
 ensureColumn('chats', 'tree', 'TEXT');
 ensureColumn('chats', 'pose_id', 'TEXT');
@@ -501,6 +503,7 @@ function shapeCharacter(row, withChats) {
     id: row.id,
     name: row.name,
     description: row.description,
+    note: row.note || '',
     scenario: row.scenario,
     emoji: row.emoji,
     avatar: row.avatar,
@@ -531,10 +534,10 @@ function getCharacters() {
   return db.prepare('SELECT * FROM characters ORDER BY created_at').all().map((r) => shapeCharacter(r, true));
 }
 
-function createCharacter({ name, description, scenario, emoji, avatar, image }) {
+function createCharacter({ name, description, note, scenario, emoji, avatar, image }) {
   const id = uid();
-  db.prepare('INSERT INTO characters (id, name, description, scenario, emoji, avatar, image, responses, created_at) VALUES (?,?,?,?,?,?,?,?,?)')
-    .run(id, String(name).slice(0, 120), String(description || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, JSON.stringify(GENERIC_RESPONSES), Date.now());
+  db.prepare('INSERT INTO characters (id, name, description, note, scenario, emoji, avatar, image, responses, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    .run(id, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, JSON.stringify(GENERIC_RESPONSES), Date.now());
   createChatInternal(id);
   ensureDefaultPoses(id);
   return getCharacter(id);
@@ -545,7 +548,7 @@ function updateCharacter(id, fields) {
   if (!c) return null;
   const sets = [];
   const vals = [];
-  for (const k of ['name', 'description', 'scenario', 'emoji']) {
+  for (const k of ['name', 'description', 'note', 'scenario', 'emoji']) {
     if (fields[k] !== undefined) { sets.push(`${k} = ?`); vals.push(String(fields[k])); }
   }
   if ('avatar' in fields) { sets.push('avatar = ?'); vals.push(fields.avatar || null); }

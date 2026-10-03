@@ -607,10 +607,14 @@ body.sidebar-open #scrim {
   opacity: 0.65;
 }
 
-/* Roleplay formatting: *actions* dimmed (user-tunable via --act-dim), "quotes" stay full color */
+/* Roleplay formatting: *actions* dimmed (user-tunable via --act-dim), spoken
+   "lines" pushed to full white so they read clearly against the pose image. */
 .msg:not(.injection) .bubble em,
 .msg-scenario .ms-body em {
   opacity: var(--act-dim, 0.72);
+}
+.dlg {
+  color: #fff;
 }
 
 .bubble {

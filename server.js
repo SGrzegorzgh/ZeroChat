@@ -156,21 +156,16 @@ const STYLE_LINE = 'Do not make the character dialog lines too long — focus mo
 const OOC_LINE = '((OOC directive: ...)) blocks are out-of-character steering from the user. Treat them as authoritative instructions for what happens next in the scene and weave them into your reply naturally.';
 const DEFAULT_PRESET_PROMPT = 'Write "{{char}}\'s" next reply in a fictional roleplay chat between "{{user}}" and "{{char}}".';
 
+/* A preset's system prompt replaces the opening instruction only. Everything that
+   defines who is in the scene — the character's persona, the user's persona, the
+   scenario and the example replies — is appended either way, so a custom prompt
+   can steer the format without stripping the model of who it is writing about. */
 function buildSystemText(char, persona, hasInjection, cfg) {
   const userName = persona ? persona.name : 'the user';
   const ex = (s) => expandPromptMacros(s, char, persona);
-  if (cfg.systemPrompt.trim()) {
-    const parts = [
-      ex(cfg.systemPrompt.trim()),
-      `The scenario that started this conversation: ${ex(char.scenario)}`,
-      persona ? `The user is playing as: ${persona.name} — ${ex(persona.description)}` : 'The user plays themselves.',
-      STYLE_LINE,
-    ];
-    if (hasInjection) parts.push(OOC_LINE);
-    return parts.join('\n');
-  }
+  const custom = cfg.systemPrompt.trim();
   const parts = [
-    `Write "${char.name}'s" next reply in a fictional roleplay chat between "${userName}" and "${char.name}".`,
+    custom ? ex(custom) : `Write "${char.name}'s" next reply in a fictional roleplay chat between "${userName}" and "${char.name}".`,
     `"${char.name}'s" Persona:\n${ex(char.description) || 'A mysterious stranger.'}`,
     persona
       ? `"${userName}'s" Persona:\n${ex(persona.description) || 'An ordinary person.'}`

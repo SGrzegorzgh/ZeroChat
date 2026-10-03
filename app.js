@@ -149,6 +149,10 @@ function md(s) {
   t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   t = t.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
   t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+  /* Spoken lines. esc() has already turned every " into &quot;, so the pairs are
+     matched as entities here. Lazy matching means a stray or inch-mark quote is
+     left as plain text rather than swallowing the rest of the line. */
+  t = t.replace(/&quot;(.*?)&quot;/g, '<span class="dlg">$1</span>');
   return t.replace(/\n/g, '<br>');
 }
 
@@ -273,7 +277,7 @@ function renderSidebar() {
       ${avatarHtml(c)}
       <span class="ci-text">
         <span class="ci-name">${esc(c.name)}</span>
-        <span class="ci-tag">${esc(c.description)}</span>
+        <span class="ci-tag">${esc(c.note || c.description)}</span>
       </span>
     </div>`).join('');
 }
@@ -877,6 +881,7 @@ function openCharModal(char) {
   $('#ce-title').textContent = char ? 'Edit character' : 'New character';
   $('#ce-name').value = char ? char.name : '';
   $('#ce-desc').value = char ? char.description : '';
+  $('#ce-note').value = char ? char.note || '' : '';
   $('#ce-scenario').value = char ? char.scenario : '';
   renderCeEmojiGrid();
   updateCeAvatarUI();
@@ -926,6 +931,7 @@ async function charFormSave() {
   const body = {
     name,
     description: $('#ce-desc').value.trim(),
+    note: $('#ce-note').value.trim(),
     scenario: $('#ce-scenario').value.trim() || '*They look at you, waiting for you to speak first.*',
     emoji: ceEmoji,
     avatar: ceAvatar,
