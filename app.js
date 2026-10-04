@@ -1986,13 +1986,23 @@ function openScenarioPicker(c) {
 
 let pickCharScenario = null;
 
-function openCharPickerForScenario(s) {
-  pickCharScenario = s;
-  $('#pc-title').textContent = `Play: ${s.title}`;
-  const allowed = state.characters.filter((c) => isScenarioAllowed(s, c.id));
+function renderPcList(query = '') {
+  if (!pickCharScenario) return;
+  const q = (query || '').trim().toLowerCase();
+  let allowed = state.characters.filter((c) => isScenarioAllowed(pickCharScenario, c.id));
+  if (q) {
+    allowed = allowed.filter((c) =>
+      c.name.toLowerCase().includes(q) ||
+      (c.description && c.description.toLowerCase().includes(q)) ||
+      (c.note && c.note.toLowerCase().includes(q))
+    );
+  }
   const list = $('#pc-list');
+  if (!list) return;
   if (allowed.length === 0) {
-    list.innerHTML = `<div class="prow-desc" style="padding:16px;text-align:center">No characters have access to this scenario based on its access list.</div>`;
+    list.innerHTML = q
+      ? `<div class="prow-desc" style="padding:16px;text-align:center">No characters matching "${esc(query)}".</div>`
+      : `<div class="prow-desc" style="padding:16px;text-align:center">No characters have access to this scenario based on its access list.</div>`;
   } else {
     list.innerHTML = allowed.map((c) => `
       <div class="pc-row" data-char-id="${c.id}">
@@ -2005,8 +2015,17 @@ function openCharPickerForScenario(s) {
       </div>
     `).join('');
   }
+}
+
+function openCharPickerForScenario(s) {
+  pickCharScenario = s;
+  $('#pc-title').textContent = `Play: ${s.title}`;
+  const sInp = $('#pc-search');
+  if (sInp) sInp.value = '';
+  renderPcList('');
   closeModal('modal-scenario');
   openModal('modal-pick-char');
+  setTimeout(() => { if (sInp) sInp.focus(); }, 60);
 }
 
 function closeSidebar() {
@@ -2351,6 +2370,9 @@ function wireEvents() {
   });
 
   // Character Picker for Scenario modal events
+  $('#pc-search').addEventListener('input', (e) => {
+    renderPcList(e.target.value);
+  });
   $('#pc-list').addEventListener('click', async (e) => {
     const row = e.target.closest('.pc-row');
     if (!row || !pickCharScenario) return;
