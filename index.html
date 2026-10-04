@@ -233,6 +233,11 @@
           <input type="range" id="set-poselike" min="0" max="100" step="1">
           <p class="m-note" style="margin-top:8px">Minimum confidence before the image is allowed to change. Higher = fewer, steadier swaps.</p>
         </div>
+        <div class="field">
+          <label>Context messages for Jev <span class="val" id="posecontext-val"></span></label>
+          <input type="range" id="set-posecontext" min="0" max="10" step="1">
+          <p class="m-note" style="margin-top:8px">Number of recent messages sent to Jev alongside the latest reply to understand dialogue and scene changes.</p>
+        </div>
 
         <p class="m-note">Requests are proxied through the local server, which stores this configuration (including the API key) in its SQLite database. Single-user setup — keys are not encrypted.</p>
       </div>

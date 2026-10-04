@@ -1329,6 +1329,9 @@ function openSettings() {
   const posePct = Math.round((Number.isFinite(+s.poseLikelihood) ? +s.poseLikelihood : 0.6) * 100);
   $('#set-poselike').value = posePct;
   $('#poselike-val').textContent = posePct + '%';
+  const poseCtx = Number.isFinite(+s.poseContextCount) ? +s.poseContextCount : 3;
+  $('#set-posecontext').value = poseCtx;
+  $('#posecontext-val').textContent = poseCtx === 0 ? 'None (latest reply only)' : `${poseCtx} message${poseCtx === 1 ? '' : 's'}`;
   renderPresetList();
   openModal('modal-settings');
 }
@@ -1597,6 +1600,7 @@ async function settingsSave() {
     poseApiKey: $('#pose-key').value.trim(),
     poseModel: $('#pose-model').value.trim(),
     poseLikelihood: (+$('#set-poselike').value || 0) / 100,
+    poseContextCount: Math.round(+$('#set-posecontext').value || 0),
   };
   try {
     state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(body) });
@@ -2063,6 +2067,10 @@ function wireEvents() {
   });
   $('#set-poselike').addEventListener('input', (e) => {
     $('#poselike-val').textContent = e.target.value + '%';
+  });
+  $('#set-posecontext').addEventListener('input', (e) => {
+    const v = +e.target.value;
+    $('#posecontext-val').textContent = v === 0 ? 'None (latest reply only)' : `${v} message${v === 1 ? '' : 's'}`;
   });
 
   $('#img-viewer').addEventListener('click', closeViewer);

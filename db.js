@@ -418,6 +418,7 @@ const SETTINGS_DEFAULTS = {
   poseModel: 'typesafe/jev-1.13',
   poseLikelihood: 0.6,
   poseRecheck: true,
+  poseContextCount: 3,
 };
 
 const POSES_SEED_FLAG = 'poses.seeded.v1';
@@ -443,7 +444,7 @@ function getSettings() {
 }
 
 function updateSettings(patch) {
-  const allowed = ['provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId', 'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey', 'poseModel', 'poseLikelihood', 'poseRecheck'];
+  const allowed = ['provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId', 'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey', 'poseModel', 'poseLikelihood', 'poseRecheck', 'poseContextCount'];
   const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
   for (const k of allowed) {
     if (!(k in patch)) continue;
@@ -453,6 +454,7 @@ function updateSettings(patch) {
     if (k === 'actionDim') v = clamp(v, 0.3, 1, 0.72);
     if (k === 'temperature') v = clamp(v, 0, 2, 0.8);
     if (k === 'poseLikelihood') v = clamp(v, 0, 1, 0.6);
+    if (k === 'poseContextCount') v = Math.round(clamp(v, 0, 20, 3));
     if (k === 'poseAgent' || k === 'poseRecheck') v = !!v;
     if (k === 'poseProvider') v = PROVIDER_IDS.includes(String(v)) ? String(v) : 'openrouter';
     if (k === 'poseBaseUrl' || k === 'poseApiKey' || k === 'poseModel') v = String(v ?? '');

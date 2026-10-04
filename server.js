@@ -125,6 +125,7 @@ function poseCfg(settings) {
     model,
     likelihood: clamp(typeof settings.poseLikelihood === 'number' ? settings.poseLikelihood : 0.6, 0, 1, 0.6),
     recheck: settings.poseRecheck !== false,
+    contextCount: clamp(typeof settings.poseContextCount === 'number' ? settings.poseContextCount : 3, 0, 20, 3),
   };
 }
 
@@ -480,7 +481,7 @@ async function runPoseAgent({ char, persona, chat, poses, currentPoseId, replyTe
 
     // Criteria: provide an option to stay on the current pose/scene, plus each candidate pose
     const criteria = {};
-    criteria['keep_current'] = `Keep current pose ("${currentPose.name}"). Character maintains current posture/activity, no visual change is needed, or action is only announced/intended.`;
+    criteria['keep_current'] = `Keep current pose ("${currentPose.name}"). Character is still actively performing this action or posture, or no other candidate pose fits the new situation.`;
 
     for (const p of candidates) {
       const desc = (p.description || '').trim();
@@ -492,23 +493,27 @@ async function runPoseAgent({ char, persona, chat, poses, currentPoseId, replyTe
       current_pose: currentPose.description
         ? `${currentPose.name} (${currentPose.description})`
         : currentPose.name,
-      latest_reply: truncTitle(replyText || '', 1200),
+      latest_reply: String(replyText || '').trim(),
     };
 
-    if (chat && chat.tree) {
+    const contextCount = typeof cfg.contextCount === 'number' ? cfg.contextCount : 3;
+    if (chat && chat.tree && contextCount > 0) {
       const tip = db.treeTip(chat.tree);
       if (tip) {
         const { turns } = buildTurns(db.pathNodes(chat.tree, tip), char, persona);
-        const recent = turns.slice(-2);
+        const recent = turns.slice(-contextCount);
         if (recent.length) {
           state.recent_dialogue = recent
-            .map((t) => `${t.role === 'assistant' ? char.name : (persona ? persona.name : 'user')}: ${truncTitle(t.content, 250)}`)
-            .join('\n');
+            .map((t) => {
+              const speaker = t.role === 'assistant' ? char.name : (persona ? persona.name : 'User');
+              return `${speaker}: ${String(t.content || '').trim()}`;
+            })
+            .join('\n\n');
         }
       }
     }
 
-    const instructions = `Select the pose that best depicts what ${char.name} is physically doing, expressing, or experiencing right now in the latest reply. Only pick a new pose if the action is already happening on screen. Otherwise select keep_current.`;
+    const instructions = `Analyze ${char.name}'s current physical actions, posture, location, and situation at the end of the latest reply. If ${char.name} has stopped what they were doing or changed posture from "${currentPose.name}", select the candidate pose that best matches their new posture or situation. If they are still actively performing the action depicted by "${currentPose.name}", or if no other candidate pose fits, select keep_current.`;
 
     const model = cfg.model || (cfg.provider === 'openrouter' ? 'typesafe/jev-1.13' : 'jev');
     const url = resolveDecisionsUrl(cfg);
@@ -773,13 +778,8 @@ async function route(req, res, u) {
         const text = await generateReplyStream(char, db.pathNodes(fresh.tree, node.id), persona, settings, (d) => {
           streamed += d;
           emit({ type: 'delta', text: d });
-          if (!posePromise && poseEnabled && streamed.length >= 120) {
-            try {
-              posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: streamed, settings, signal: ctrl.signal });
-            } catch (e) { console.error('[pose/jev] director failed:', e.message); }
-          }
         }, ctrl.signal);
-        if (!posePromise && poseEnabled && text && text.trim().length > 0) {
+        if (poseEnabled && text && text.trim().length > 0) {
           try {
             posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: text, settings, signal: ctrl.signal });
           } catch (e) { console.error('[pose/jev] director failed:', e.message); }
@@ -851,13 +851,8 @@ async function route(req, res, u) {
         const text = await generateReplyStream(char, path, persona, settings, (d) => {
           streamed += d;
           emit({ type: 'delta', text: d });
-          if (!posePromise && poseEnabled && streamed.length >= 120) {
-            try {
-              posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: streamed, settings, signal: ctrl.signal });
-            } catch (e) { console.error('[pose/jev] director failed:', e.message); }
-          }
         }, ctrl.signal);
-        if (!posePromise && poseEnabled && text && text.trim().length > 0) {
+        if (poseEnabled && text && text.trim().length > 0) {
           try {
             posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: text, settings, signal: ctrl.signal });
           } catch (e) { console.error('[pose/jev] director failed:', e.message); }
