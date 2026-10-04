@@ -933,8 +933,133 @@ function renderPersonaList() {
     </div>`).join('');
 }
 
-function openModal(id) { $('#' + id).classList.add('open'); }
-function closeModal(id) { $('#' + id).classList.remove('open'); }
+const modalSnapshots = {};
+
+function getModalSnapshot(id) {
+  if (id === 'modal-char') {
+    if (typeof syncCeVariablesFromInputs === 'function') syncCeVariablesFromInputs();
+    const sortedVars = {};
+    if (ceVariables && typeof ceVariables === 'object') {
+      Object.keys(ceVariables).sort().forEach((k) => {
+        sortedVars[k] = ceVariables[k];
+      });
+    }
+    return JSON.stringify({
+      name: ($('#ce-name')?.value || '').trim(),
+      desc: ($('#ce-desc')?.value || '').trim(),
+      note: ($('#ce-note')?.value || '').trim(),
+      posesEnabled: Boolean($('#ce-poses-enabled')?.checked),
+      emoji: ceEmoji || null,
+      avatar: ceAvatar || null,
+      image: ceImage || null,
+      variables: sortedVars
+    });
+  }
+  if (id === 'modal-scenario') {
+    return JSON.stringify({
+      title: ($('#se-title')?.value || '').trim(),
+      desc: ($('#se-desc')?.value || '').trim(),
+      content: ($('#se-content')?.value || '').trim(),
+      accessMode: seAccessMode || 'all',
+      characterIds: Array.from(seCharacterIds || []).sort()
+    });
+  }
+  if (id === 'modal-settings') {
+    const selected = $('#prov-grid .prov.selected');
+    return JSON.stringify({
+      provider: selected ? selected.dataset.pv : 'custom',
+      baseUrl: ($('#set-url')?.value || '').trim(),
+      apiKey: ($('#set-key')?.value || '').trim(),
+      model: ($('#set-model')?.value || '').trim(),
+      temperature: +($('#set-temp')?.value || 1),
+      bgOpacity: Math.round(+($('#set-bgop')?.value || 50)),
+      bgBlur: Math.round(+($('#set-bgblur')?.value || 12)),
+      actionDim: Math.round(+($('#set-actdim')?.value || 65)),
+      poseAgent: Boolean($('#pose-agent')?.checked),
+      poseRecheck: Boolean($('#pose-recheck')?.checked),
+      poseProvider: ($('#pose-provider')?.value || '').trim(),
+      poseBaseUrl: ($('#pose-url')?.value || '').trim(),
+      poseApiKey: ($('#pose-key')?.value || '').trim(),
+      poseModel: ($('#pose-model')?.value || '').trim(),
+      poseLikelihood: Math.round(+($('#set-poselike')?.value || 50)),
+      poseContextCount: Math.round(+($('#set-posecontext')?.value || 3))
+    });
+  }
+  if (id === 'modal-preset') {
+    const selected = $('#pr-prov-grid .prov.selected');
+    return JSON.stringify({
+      name: ($('#pr-name')?.value || '').trim(),
+      provider: selected ? selected.dataset.pv : 'custom',
+      baseUrl: ($('#pr-url')?.value || '').trim(),
+      apiKey: ($('#pr-key')?.value || '').trim(),
+      model: ($('#pr-model')?.value || '').trim(),
+      temperature: +($('#pr-temp')?.value || 1),
+      tokens: ($('#pr-tokens')?.value || '').trim(),
+      reasoning: $('#pr-reasoning')?.value || 'default',
+      sysprompt: ($('#pr-sysprompt')?.value || '').trim()
+    });
+  }
+  if (id === 'modal-persona') {
+    return JSON.stringify({
+      name: ($('#pf-name')?.value || '').trim(),
+      desc: ($('#pf-desc')?.value || '').trim(),
+      note: ($('#pf-note')?.value || '').trim(),
+      avatar: peAvatar || null,
+      image: peImage || null
+    });
+  }
+  if (id === 'modal-poses') {
+    const form = $('#pose-form');
+    if (form && !form.classList.contains('hidden')) {
+      const name = ($('#pose-name')?.value || '').trim();
+      const desc = ($('#pose-desc')?.value || '').trim();
+      return JSON.stringify({ editing: true, name, desc });
+    }
+    return JSON.stringify({ editing: false });
+  }
+  return null;
+}
+
+function takeModalSnapshot(id) {
+  modalSnapshots[id] = getModalSnapshot(id);
+}
+
+function clearModalSnapshot(id) {
+  delete modalSnapshots[id];
+}
+
+function isModalDirty(id) {
+  if (!(id in modalSnapshots)) return false;
+  const initial = modalSnapshots[id];
+  if (initial === null || initial === undefined) return false;
+  const current = getModalSnapshot(id);
+  return current !== initial;
+}
+
+function openModal(id) {
+  const el = $('#' + id);
+  if (!el) return;
+  el.classList.add('open');
+  takeModalSnapshot(id);
+}
+
+function closeModal(id) {
+  const el = $('#' + id);
+  if (!el) return;
+  clearModalSnapshot(id);
+  el.classList.remove('open');
+}
+
+function requestCloseModal(modalOrId) {
+  const m = typeof modalOrId === 'string' ? $('#' + modalOrId) : modalOrId;
+  if (!m || !m.classList.contains('open')) return true;
+  if (isModalDirty(m.id)) {
+    const discard = confirm('You have unsaved changes. Are you sure you want to close without saving?');
+    if (!discard) return false;
+  }
+  closeModal(m.id);
+  return true;
+}
 
 function openViewer(src) {
   $('#img-viewer-img').src = src;
@@ -981,6 +1106,7 @@ function openPersonaModal() {
   renderPersonaList();
   openModal('modal-persona');
   setTimeout(() => $('#pf-name').focus(), 60);
+  takeModalSnapshot('modal-persona');
 }
 
 function updatePersonaForm() {
@@ -1549,6 +1675,7 @@ function openCharModal(char) {
   setTimeout(() => $('#ce-name').focus(), 60);
   if (ceId) loadPoses(ceId);
   updateCePosesNote();
+  takeModalSnapshot('modal-char');
 }
 
 function updateCePosesToggleUI() {
@@ -1736,6 +1863,7 @@ async function openPosesModal() {
   $('#pose-char-name').textContent = c.name;
   renderPosesGrid();
   openModal('modal-poses');
+  takeModalSnapshot('modal-poses');
 }
 
 function renderPosesGrid() {
@@ -1955,6 +2083,7 @@ function openSettings() {
   $('#posecontext-val').textContent = poseCtx === 0 ? 'None (latest reply only)' : `${poseCtx} message${poseCtx === 1 ? '' : 's'}`;
   renderPresetList();
   openModal('modal-settings');
+  takeModalSnapshot('modal-settings');
 }
 
 function updatePoseProviderHints() {
@@ -2309,6 +2438,7 @@ function openPresetModal(p) {
   $('#pr-delete').classList.toggle('hidden', prMode !== 'edit');
   openModal('modal-preset');
   setTimeout(() => $('#pr-name').focus(), 60);
+  takeModalSnapshot('modal-preset');
 }
 
 async function presetFormSave() {
@@ -2542,6 +2672,7 @@ function openScenarioModal(sc = null) {
 
   openModal('modal-scenario');
   setTimeout(() => $('#se-title').focus(), 60);
+  takeModalSnapshot('modal-scenario');
 }
 
 function updateSeAccessUI() {
@@ -3227,7 +3358,7 @@ function wireEvents() {
     fetchModelList($('#pr-url').value.trim(), key, $('#pr-model').closest('.combo'), $('#pr-fetch-models'));
   });
   $('#pr-save').addEventListener('click', presetFormSave);
-  $('#pr-cancel').addEventListener('click', () => closeModal('modal-preset'));
+  $('#pr-cancel').addEventListener('click', () => requestCloseModal('modal-preset'));
   $('#pr-delete').addEventListener('click', presetDelete);
 
   $('#set-fetch-models').addEventListener('click', () => {
@@ -3340,14 +3471,32 @@ function wireEvents() {
   });
 
   $$('.modal').forEach((m) => {
-    m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('open'); });
+    m.addEventListener('click', (e) => { if (e.target === m) requestCloseModal(m); });
   });
-  $$('[data-close]').forEach((b) => b.addEventListener('click', () => b.closest('.modal').classList.remove('open')));
+  $$('[data-close]').forEach((b) => b.addEventListener('click', () => {
+    const m = b.closest('.modal');
+    if (m) requestCloseModal(m);
+  }));
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      $$('.modal.open').forEach((m) => m.classList.remove('open'));
+      const openModals = Array.from($$('.modal.open'));
+      if (openModals.length) {
+        const top = openModals[openModals.length - 1];
+        requestCloseModal(top);
+        return;
+      }
       closeMenus(); closeSidebar(); closeViewer();
       if (editingId) { editingId = null; renderChat({ keepScroll: true }); }
+    }
+  });
+
+  window.addEventListener('beforeunload', (e) => {
+    const openModals = Array.from($$('.modal.open'));
+    const hasDirty = openModals.some((m) => isModalDirty(m.id));
+    if (hasDirty) {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
     }
   });
 
@@ -3594,7 +3743,14 @@ function wireEvents() {
   $('#ce-poses-enabled').addEventListener('change', updateCePosesToggleUI);
   $('#pose-add').addEventListener('click', poseAdd);
   $('#pose-save').addEventListener('click', poseFormSave);
-  $('#pose-cancel').addEventListener('click', closePoseForm);
+  $('#pose-cancel').addEventListener('click', () => {
+    const name = ($('#pose-name')?.value || '').trim();
+    const desc = ($('#pose-desc')?.value || '').trim();
+    if (name || desc) {
+      if (!confirm('Discard pose changes?')) return;
+    }
+    closePoseForm();
+  });
   $('#poses-grid').addEventListener('click', (e) => {
     const card = e.target.closest('.pose-card');
     if (!card) return;
