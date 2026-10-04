@@ -182,7 +182,7 @@ const SIMULATED_FALLBACKS = [
    defines who is in the scene — the character's persona, the user's persona, the
    scenario and the example replies — is appended either way, so a custom prompt
    can steer the format without stripping the model of who it is writing about. */
-function buildSystemText(char, persona, hasInjection, cfg) {
+function buildSystemText(char, persona, hasInjection, cfg, scenarioText) {
   const userName = persona ? persona.name : 'the user';
   const ex = (s) => expandPromptMacros(s, char, persona);
   const custom = cfg.systemPrompt.trim();
@@ -193,7 +193,8 @@ function buildSystemText(char, persona, hasInjection, cfg) {
       ? `"${userName}'s" Persona:\n${ex(persona.description) || 'An ordinary person.'}`
       : `"The user's" Persona:\nAn ordinary person — the user plays themselves.`,
   ];
-  if (char.scenario) parts.push(`The scenario of the conversation:\n${ex(char.scenario)}`);
+  const sc = scenarioText !== undefined ? scenarioText : (char.scenario || '');
+  if (sc) parts.push(`The scenario of the conversation:\n${ex(sc)}`);
   const examples = (char.responses || []).filter((r) => r && !GENERIC_RESPONSE_SET.has(String(r).trim()));
   if (examples.length) parts.push(`This is how "${char.name}" talks and acts:\n${examples.map((r) => '- ' + ex(r)).join('\n')}`);
   parts.push(STYLE_LINE);
@@ -339,7 +340,9 @@ async function generateReplyStream(char, nodes, persona, settings, onDelta, sign
   const built = buildTurns(nodes, char, persona);
   const history = built.turns.slice(-40);
   const cfg = resolveAiConfig(settings);
-  const systemText = buildSystemText(char, persona, built.hasInjection, cfg);
+  const scenarioNode = (nodes || []).find((n) => n.role === 'scenario');
+  const scenarioText = scenarioNode ? scenarioNode.content : (char.scenario || '');
+  const systemText = buildSystemText(char, persona, built.hasInjection, cfg, scenarioText);
 
   if (!cfg.apiKey && cfg.provider !== 'ollama') {
     const pool = (char.responses || []).filter((r) => r && !GENERIC_RESPONSE_SET.has(String(r).trim()));
@@ -669,6 +672,46 @@ async function route(req, res, u) {
 
   if (req.method === 'GET' && p === '/api/default-prompt') return send(res, 200, { prompt: DEFAULT_PRESET_PROMPT });
 
+  if (req.method === 'GET' && p === '/api/scenarios') {
+    const characterId = u.searchParams.get('characterId');
+    return send(res, 200, db.getScenarios({ characterId }));
+  }
+  if ((m = p.match(/^\/api\/scenarios\/([\w-]+)$/)) && req.method === 'GET') {
+    const sc = db.getScenario(m[1]);
+    if (!sc) return send(res, 404, { error: 'Scenario not found' });
+    return send(res, 200, sc);
+  }
+  if (req.method === 'POST' && p === '/api/scenarios') {
+    const title = (body.title || '').trim();
+    const content = (body.content || '').trim();
+    if (!title) return send(res, 400, { error: 'Scenario title is required' });
+    if (!content) return send(res, 400, { error: 'Scenario prompt/content is required' });
+    try {
+      const sc = db.createScenario({
+        title,
+        description: (body.description || '').trim(),
+        content,
+        accessMode: body.accessMode || 'all',
+        characterIds: body.characterIds || [],
+      });
+      return send(res, 201, sc);
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+  if ((m = p.match(/^\/api\/scenarios\/([\w-]+)$/)) && req.method === 'PUT') {
+    try {
+      const sc = db.updateScenario(m[1], body);
+      if (!sc) return send(res, 404, { error: 'Scenario not found' });
+      return send(res, 200, sc);
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+  if ((m = p.match(/^\/api\/scenarios\/([\w-]+)$/)) && req.method === 'DELETE') {
+    return send(res, 200, db.deleteScenario(m[1]));
+  }
+
   if ((m = p.match(/^\/api\/characters\/([\w-]+)$/))) {
     const id = m[1];
     if (req.method === 'GET') {
@@ -736,8 +779,8 @@ async function route(req, res, u) {
 
   if (req.method === 'POST' && p === '/api/chats') {
     if (!body.characterId) return send(res, 400, { error: 'characterId is required' });
-    try { return send(res, 200, db.createChat(body.characterId)); }
-    catch (e) { return send(res, 404, { error: e.message }); }
+    try { return send(res, 200, db.createChat(body.characterId, body.scenarioId || null)); }
+    catch (e) { return send(res, 400, { error: e.message }); }
   }
   if ((m = p.match(/^\/api\/chats\/([\w-]+)$/)) && req.method === 'DELETE') {
     return send(res, 200, db.deleteChat(m[1]));

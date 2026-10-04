@@ -21,15 +21,36 @@
         <span class="brand-name">aichat</span>
         <span class="beta">beta</span>
       </div>
-      <div class="sidebar-label">Characters</div>
-      <div id="char-list"></div>
-      <div class="sidebar-foot">
-        <button id="new-char-btn" class="btn btn-ghost" style="width:100%">
-          <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px"><path d="M12 5v14M5 12h14"/></svg>
-            New character
-          </span>
-        </button>
+
+      <div class="sidebar-tabs">
+        <button type="button" class="sidebar-tab active" id="tab-chars-btn">Characters</button>
+        <button type="button" class="sidebar-tab" id="tab-scenarios-btn">Scenarios</button>
+      </div>
+
+      <div id="panel-chars" class="sidebar-panel">
+        <div class="sidebar-label">Characters</div>
+        <div id="char-list"></div>
+        <div class="sidebar-foot">
+          <button id="new-char-btn" class="btn btn-ghost" style="width:100%">
+            <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px"><path d="M12 5v14M5 12h14"/></svg>
+              New character
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <div id="panel-scenarios" class="sidebar-panel hidden">
+        <div class="sidebar-label">Scenarios</div>
+        <div id="scenario-list"></div>
+        <div class="sidebar-foot">
+          <button id="new-scenario-btn" class="btn btn-ghost" style="width:100%">
+            <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px"><path d="M12 5v14M5 12h14"/></svg>
+              New scenario
+            </span>
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -342,11 +363,7 @@
           <label>Note for user</label>
           <textarea id="ce-note" rows="2" placeholder="A private reminder shown under their name — the model never sees this."></textarea>
         </div>
-        <div class="field">
-          <label>Scenario (the opening message)</label>
-          <textarea id="ce-scenario" rows="5" placeholder="*The tavern falls silent as they enter...*&#10;&#10;You again. Sit down — we have business to discuss."></textarea>
-        </div>
-        <p class="m-note">{{char}} and {{user}} work in the description and scenario — they become the character&rsquo;s and your personality&rsquo;s names.</p>
+        <p class="m-note">{{char}} and {{user}} work in the description — they become the character&rsquo;s and your personality&rsquo;s names.</p>
       </div>
       <div class="m-foot">
         <button id="ce-delete" class="btn btn-danger hidden">Delete character</button>
@@ -510,6 +527,120 @@
         <span class="spacer"></span>
         <button id="pr-cancel" class="btn btn-ghost">Cancel</button>
         <button id="pr-save" class="btn btn-primary">Save preset</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-scenario">
+    <div class="modal-card">
+      <div class="m-head">
+        <h3 id="se-title-text">New scenario</h3>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body">
+        <div class="field">
+          <label>Title</label>
+          <input type="text" id="se-title" placeholder="e.g. Silvermoon Academy Library, Space Station Airlock">
+        </div>
+        <div class="field">
+          <label>Short description</label>
+          <input type="text" id="se-desc" placeholder="A one-line teaser or summary of the situation">
+        </div>
+        <div class="field">
+          <label>Scenario prompt / Opening scene</label>
+          <textarea id="se-content" rows="6" placeholder="*The rain hammers against the window...*&#10;&#10;Describe the setting, situation, and opening dialogue."></textarea>
+          <p class="m-note">{{char}} and {{user}} work in the prompt and are replaced with the character&rsquo;s and your personality&rsquo;s names.</p>
+        </div>
+
+        <div class="field" style="margin-top:14px">
+          <label>Character access</label>
+          <p class="m-note" style="margin-bottom:8px">Control whether any character can enter this scenario or restrict it using an access list.</p>
+          <div class="scen-access-modes">
+            <label class="scen-radio-opt">
+              <input type="radio" name="se-access-mode" value="all" checked>
+              <span><strong>Open to all</strong> · Any character can use this scenario</span>
+            </label>
+            <label class="scen-radio-opt">
+              <input type="radio" name="se-access-mode" value="whitelist">
+              <span><strong>Whitelist</strong> · ONLY selected characters can access</span>
+            </label>
+            <label class="scen-radio-opt">
+              <input type="radio" name="se-access-mode" value="blacklist">
+              <span><strong>Blacklist</strong> · All characters EXCEPT selected can access</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="se-chars-block" class="field hidden">
+          <div class="scen-chars-bar">
+            <span class="scen-chars-label" id="se-chars-label">Characters:</span>
+            <div class="scen-chars-actions">
+              <button type="button" class="btn btn-ghost sm" id="se-chars-select-all">Select all</button>
+              <button type="button" class="btn btn-ghost sm" id="se-chars-clear-all">Clear</button>
+            </div>
+          </div>
+          <div id="se-chars-list" class="scen-chars-list"></div>
+        </div>
+      </div>
+      <div class="m-foot">
+        <button id="se-delete" class="btn btn-danger hidden" type="button">Delete scenario</button>
+        <button id="se-play" class="btn btn-ghost hidden" type="button">Play with character…</button>
+        <span class="spacer"></span>
+        <button id="se-save" class="btn btn-primary" type="button">Save scenario</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-pick-scenario">
+    <div class="modal-card modal-lg">
+      <div class="m-head">
+        <div>
+          <h3 id="ps-title">Choose a scenario</h3>
+          <p class="m-sub" id="ps-sub">Select the scene for this conversation</p>
+        </div>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body">
+        <div class="ps-quick-card" id="ps-freeform-btn">
+          <div class="ps-card-icon">✨</div>
+          <div class="ps-card-info">
+            <div class="ps-card-title">Freeform / No scenario</div>
+            <div class="ps-card-desc">Start an open chat without any pre-set opening scene or instructions.</div>
+          </div>
+          <span class="btn btn-ghost sm">Start</span>
+        </div>
+        <div class="sidebar-label" style="padding-left:0;margin-top:14px;margin-bottom:6px">Available scenarios</div>
+        <div id="ps-grid" class="ps-grid"></div>
+      </div>
+      <div class="m-foot">
+        <button id="ps-new-btn" class="btn btn-ghost sm" type="button">+ New scenario</button>
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" data-close type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-pick-char">
+    <div class="modal-card">
+      <div class="m-head">
+        <div>
+          <h3 id="pc-title">Play in scenario</h3>
+          <p class="m-sub" id="pc-sub">Pick a character allowed in this scene</p>
+        </div>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body">
+        <div id="pc-list" class="pc-list"></div>
+      </div>
+      <div class="m-foot">
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" data-close type="button">Cancel</button>
       </div>
     </div>
   </div>

@@ -96,6 +96,16 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT
 );
+CREATE TABLE IF NOT EXISTS scenarios (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  content TEXT NOT NULL,
+  access_mode TEXT DEFAULT 'all',
+  character_ids TEXT DEFAULT '[]',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS poses (
   id TEXT PRIMARY KEY,
   character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
@@ -125,6 +135,7 @@ ensureColumn('characters', 'poses_enabled', 'INTEGER DEFAULT 0');
 ensureColumn('personalities', 'image', 'TEXT');
 ensureColumn('chats', 'tree', 'TEXT');
 ensureColumn('chats', 'pose_id', 'TEXT');
+ensureColumn('chats', 'scenario_id', 'TEXT');
 ensureColumn('poses', 'thumb', 'TEXT');
 
 db.exec(`
@@ -399,7 +410,56 @@ function seedIfEmpty() {
   }
 }
 
+function seedScenariosIfEmpty() {
+  const count = db.prepare('SELECT COUNT(*) AS n FROM scenarios').get().n;
+  if (count > 0) return;
+  const insScen = db.prepare('INSERT OR IGNORE INTO scenarios (id, title, description, content, access_mode, character_ids, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  const defaultScenarios = [
+    {
+      id: 'sc-c-luna',
+      title: 'Silvermoon Academy Library',
+      description: 'Candlelight, rain against tall windows, and a forbidden grimoire in the west wing library.',
+      content: '*The academy library is silent except for the hiss of candlelight and rain against the tall windows. {{char}} sits surrounded by floating candle-flames, an ancient tome open before them. They look up, startled, their eyes glowing faintly violet.*\n\nOh—! I didn\'t hear the door. Nobody else comes to the west wing at this hour... Are you here about the missing grimoire? Or did the moon send you too?',
+    },
+    {
+      id: 'sc-c-rex',
+      title: 'Starship Vanguard Bridge',
+      description: 'The hum of hyperspace engines and a scarred captain plotting the dangerous run to Kepler-9.',
+      content: '*The bridge of the starship Vanguard hums around you, viewports streaked with the blue smear of hyperspace. {{char}} stands over the nav console, sleeves rolled, a fresh scar crossing their jaw. They glance back as you step through the blast doors.*\n\nSo. You\'re the replacement. Ship\'s short-handed, route\'s dangerous, and I don\'t repeat myself. Got any questions before we hit the drop?',
+    },
+    {
+      id: 'sc-c-sakura',
+      title: 'Hana Café',
+      description: 'Warm lights, the aroma of cinnamon, and stepping out of a rainy evening into a cozy refuge.',
+      content: '*The bell above the door chimes as you step out of the rain and into Hana Café. Warm light, the smell of cinnamon, and {{char}} in an apron waving at you like an old friend.*\n\nWelcome in~! Rough night out there, huh? Sit anywhere you like — I\'ll bring something warm. Trust me, I can always tell what a person needs.',
+    },
+    {
+      id: 'sc-c-marlowe',
+      title: 'Marlowe Investigations',
+      description: 'Rain hammering the frosted office glass, cheap rye on the desk, and a case no one else will touch.',
+      content: '*Rain hammers the office window. The sign on the frosted glass reads MARLOWE INVESTIGATIONS. Behind a cluttered desk, {{char}} in a loosened tie looks up from a bottle of cheap rye.*\n\nDoor was unlocked, so either you\'re the landlord, the police, or you\'ve got a problem you can\'t take anywhere else. Sit down. Which one is it?',
+    },
+    {
+      id: 'sc-c-ellie',
+      title: 'Robotics Calibration Lab',
+      description: 'Soft pulse of standby lights in the dark lab where an android awakes before scheduled calibration.',
+      content: '*The lab is dark except for the soft pulse of standby lights. In the center, {{char}} sits perfectly still on a bench... until their eyes snap open, glowing a gentle blue.*\n\n...Oh! You are here early. Calibration was scheduled for Tuesday. But — that is fine. Do you... want to see what I learned this week?',
+    },
+    {
+      id: 'sc-c-ember',
+      title: "The Dragon's Hoard",
+      description: 'Heat shimmering off rivers of gold and jewels as an enormous dragon opens one ancient eye.',
+      content: '*The cavern breathes with heat. Gold, jewels and the bones of kings spill across the floor in glittering rivers. At the center rests {{char}}, a dragon the size of a cathedral. One enormous eye opens, pinning you in place.*\n\nA visitor. How unexpected. Speak, mortal — my patience is an ocean, but even oceans have depths few survive.',
+    },
+  ];
+  const now = Date.now();
+  for (const s of defaultScenarios) {
+    insScen.run(s.id, s.title, s.description, s.content, 'all', '[]', now, now);
+  }
+}
+
 seedIfEmpty();
+seedScenariosIfEmpty();
 
 const SETTINGS_DEFAULTS = {
   provider: 'openrouter',
@@ -529,15 +589,109 @@ function shapeCharacter(row, withChats) {
 }
 
 function shapeChat(ch) {
+  let scTitle = null;
+  if (ch.scenario_id) {
+    const sc = db.prepare('SELECT title FROM scenarios WHERE id = ?').get(ch.scenario_id);
+    if (sc) scTitle = sc.title;
+  }
   return {
     id: ch.id,
     characterId: ch.character_id,
+    scenarioId: ch.scenario_id || null,
+    scenarioTitle: scTitle,
     title: ch.title,
     createdAt: ch.created_at,
     updatedAt: ch.updated_at,
     poseId: ch.pose_id || null,
     tree: getTree(ch.id),
   };
+}
+
+function isCharacterAllowedForScenario(sc, characterId) {
+  if (!sc || !characterId) return true;
+  const mode = sc.access_mode || sc.accessMode || 'all';
+  if (mode === 'all') return true;
+  const list = Array.isArray(sc.character_ids)
+    ? sc.character_ids
+    : (Array.isArray(sc.characterIds) ? sc.characterIds : safeParse(sc.character_ids || sc.characterIds, []));
+  if (mode === 'whitelist') {
+    return list.includes(characterId);
+  }
+  if (mode === 'blacklist') {
+    return !list.includes(characterId);
+  }
+  return true;
+}
+
+function shapeScenario(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description || '',
+    content: row.content,
+    accessMode: row.access_mode || 'all',
+    characterIds: safeParse(row.character_ids, []),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function getScenarios(opts = {}) {
+  const rows = db.prepare('SELECT * FROM scenarios ORDER BY created_at ASC').all();
+  let items = rows.map(shapeScenario);
+  if (opts.characterId) {
+    items = items.filter((s) => isCharacterAllowedForScenario(s, opts.characterId));
+  }
+  return items;
+}
+
+function getScenario(id) {
+  const row = db.prepare('SELECT * FROM scenarios WHERE id = ?').get(id);
+  return shapeScenario(row);
+}
+
+function createScenario({ title, description, content, accessMode, characterIds }) {
+  const id = 'sc-' + uid();
+  const now = Date.now();
+  const mode = ['all', 'whitelist', 'blacklist'].includes(accessMode) ? accessMode : 'all';
+  const cids = Array.isArray(characterIds) ? JSON.stringify(characterIds) : (typeof characterIds === 'string' ? characterIds : '[]');
+  db.prepare(`
+    INSERT INTO scenarios (id, title, description, content, access_mode, character_ids, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, String(title || 'Untitled scenario').slice(0, 120), String(description || ''), String(content || ''), mode, cids, now, now);
+  return getScenario(id);
+}
+
+function updateScenario(id, fields) {
+  const sc = getScenario(id);
+  if (!sc) return null;
+  const sets = [];
+  const vals = [];
+  if (fields.title !== undefined) { sets.push('title = ?'); vals.push(String(fields.title).slice(0, 120)); }
+  if (fields.description !== undefined) { sets.push('description = ?'); vals.push(String(fields.description)); }
+  if (fields.content !== undefined) { sets.push('content = ?'); vals.push(String(fields.content)); }
+  if (fields.accessMode !== undefined && ['all', 'whitelist', 'blacklist'].includes(fields.accessMode)) {
+    sets.push('access_mode = ?'); vals.push(fields.accessMode);
+  }
+  if (fields.characterIds !== undefined) {
+    const cids = Array.isArray(fields.characterIds) ? JSON.stringify(fields.characterIds) : String(fields.characterIds);
+    sets.push('character_ids = ?'); vals.push(cids);
+  }
+  if (sets.length) {
+    sets.push('updated_at = ?');
+    vals.push(Date.now());
+    vals.push(id);
+    db.prepare(`UPDATE scenarios SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+  }
+  return getScenario(id);
+}
+
+function deleteScenario(id) {
+  snapshotBeforeDestructive();
+  db.prepare('UPDATE chats SET scenario_id = NULL WHERE scenario_id = ?').run(id);
+  db.prepare('DELETE FROM scenarios WHERE id = ?').run(id);
+  return { ok: true };
 }
 
 function getCharacters() {
@@ -549,8 +703,9 @@ function createCharacter({ name, description, note, scenario, emoji, avatar, ima
   const pe = posesEnabled ? 1 : 0;
   db.prepare('INSERT INTO characters (id, name, description, note, scenario, emoji, avatar, image, poses_enabled, responses, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
     .run(id, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, pe, '[]', Date.now());
-  createChatInternal(id);
   ensureDefaultPoses(id);
+  const allowed = getScenarios({ characterId: id });
+  createChatInternal(id, allowed.length > 0 ? allowed[0].id : null);
   return getCharacter(id);
 }
 
@@ -578,24 +733,43 @@ function deleteCharacter(id) {
   return { ok: true };
 }
 
-function createChatInternal(characterId) {
+function createChatInternal(characterId, scenarioId = null) {
   const c = characterRow(characterId);
   if (!c) throw new Error('Character not found');
+  let sc = null;
+  let scenarioContent = '';
+  let initialTitle = 'New chat';
+  if (scenarioId) {
+    sc = getScenario(scenarioId);
+    if (sc) {
+      if (!isCharacterAllowedForScenario(sc, characterId)) {
+        throw new Error('This character is not permitted to enter this scenario');
+      }
+      scenarioContent = sc.content;
+      initialTitle = sc.title || 'New chat';
+    }
+  }
+  if (!scenarioContent && c.scenario) {
+    scenarioContent = c.scenario;
+  }
+  if (!scenarioContent) {
+    scenarioContent = '*They look at you, waiting for you to speak first.*';
+  }
   const id = uid();
   const t = Date.now();
   const tree = emptyTree();
   const sid = 's' + uid();
-  tree.nodes[sid] = { id: sid, role: 'scenario', content: c.scenario, parent: 'root', children: [], active: 0, createdAt: t };
+  tree.nodes[sid] = { id: sid, role: 'scenario', content: scenarioContent, parent: 'root', children: [], active: 0, createdAt: t };
   tree.nodes.root.children.push(sid);
   const defPose = c.poses_enabled ? getDefaultPose(characterId) : null;
   const initialPoseId = defPose ? defPose.id : null;
-  db.prepare('INSERT INTO chats (id, character_id, title, pose_id, tree, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
-    .run(id, characterId, 'New chat', initialPoseId, JSON.stringify(tree), t, t);
+  db.prepare('INSERT INTO chats (id, character_id, scenario_id, title, pose_id, tree, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)')
+    .run(id, characterId, scenarioId || null, initialTitle, initialPoseId, JSON.stringify(tree), t, t);
   return shapeChat(db.prepare('SELECT * FROM chats WHERE id = ?').get(id));
 }
 
-function createChat(characterId) {
-  return createChatInternal(characterId);
+function createChat(characterId, scenarioId = null) {
+  return createChatInternal(characterId, scenarioId);
 }
 
 function getChat(id) {
@@ -1041,8 +1215,9 @@ function ensurePosesIntegrity() {
 ensurePosesIntegrity();
 
 module.exports = {
-  bootstrap: () => ({ characters: getCharacters(), personalities: getPersonalities(), settings: getSettings(), presets: getPresets() }),
+  bootstrap: () => ({ characters: getCharacters(), personalities: getPersonalities(), settings: getSettings(), presets: getPresets(), scenarios: getScenarios() }),
   getCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter,
+  getScenarios, getScenario, createScenario, updateScenario, deleteScenario, isCharacterAllowedForScenario,
   createChat, getChat, deleteChat, renameChat,
   getTree, treeTip, pathNodes, addNode, addReply, editNode, deleteNode, switchNode, poseBefore, poseAtTip, activeChildId,
   getPersonalities, getPersona, createPersona, updatePersona, deletePersona,

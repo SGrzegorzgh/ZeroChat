@@ -39,9 +39,9 @@ const trunc = (s, n = 34) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 const now = () => Date.now();
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-let state = { characters: [], personalities: [], presets: [], settings: {}, poses: {}, posesLoaded: {} };
+let state = { characters: [], personalities: [], presets: [], settings: {}, poses: {}, posesLoaded: {}, scenarios: [] };
 const UI_KEY = 'aichat.ui.v1';
-let ui = { activeCharacterId: null, activeChatIds: {} };
+let ui = { activeCharacterId: null, activeChatIds: {}, sidebarTab: 'chars' };
 try { const s = JSON.parse(localStorage.getItem(UI_KEY)); if (s) ui = { ...ui, ...s }; } catch {}
 const saveUi = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch {} };
 let typing = false;
@@ -143,6 +143,7 @@ async function bootstrap() {
   state.personalities = d.personalities;
   state.presets = d.presets || [];
   state.settings = d.settings;
+  state.scenarios = d.scenarios || [];
   api('/default-prompt').then((r) => { defaultPromptCache = r.prompt; }).catch(() => {});
 }
 
@@ -307,9 +308,14 @@ function renderHeader() {
   const c = activeChar();
   if (!c) return;
   const pose = c.posesEnabled ? currentPose() : null;
+  const chat = activeChat(c);
+  const scenTitle = chat && (chat.scenarioTitle || (chat.scenarioId && state.scenarios.find((s) => s.id === chat.scenarioId)?.title));
   $('#char-info').innerHTML = `${avatarHtml(c, '', true, pose && pose.thumb)}
     <div class="ch-text">
-      <div class="ch-name">${esc(c.name)}</div>
+      <div class="ch-name-row">
+        <span class="ch-name">${esc(c.name)}</span>
+        ${scenTitle ? `<span class="ch-scenario-badge" title="Scenario: ${esc(scenTitle)}">🎬 ${esc(scenTitle)}</span>` : ''}
+      </div>
       <div class="ch-tag">${esc(c.description)}</div>
     </div>`;
   const p = activePersona();
@@ -519,7 +525,8 @@ async function openCharacter(id, chatId) {
     if (ch) ui.activeChatIds[c.id] = ch.id;
   }
   if (!ch) {
-    ch = await createChatFor(c);
+    const allowed = state.scenarios.filter((s) => isScenarioAllowed(s, c.id));
+    ch = await createChatFor(c, allowed.length > 0 ? allowed[0].id : null);
   }
   saveUi();
   closeSidebar();
@@ -528,8 +535,10 @@ async function openCharacter(id, chatId) {
   loadPoses(id);
 }
 
-async function createChatFor(c) {
-  const ch = await api('/chats', { method: 'POST', body: JSON.stringify({ characterId: c.id }) });
+async function createChatFor(c, scenarioId = null) {
+  const body = { characterId: c.id };
+  if (scenarioId) body.scenarioId = scenarioId;
+  const ch = await api('/chats', { method: 'POST', body: JSON.stringify(body) });
   c.chats.unshift(ch);
   ui.activeChatIds[c.id] = ch.id;
   return ch;
@@ -538,11 +547,7 @@ async function createChatFor(c) {
 async function newChat() {
   const c = activeChar();
   if (!c) return;
-  try {
-    await createChatFor(c);
-  } catch (e) { toast(e.message); return; }
-  saveUi();
-  renderChat();
+  openScenarioPicker(c);
 }
 
 async function delChat(id) {
@@ -793,14 +798,19 @@ function renderChatsMenu() {
   menu.innerHTML = `
     <button class="menu-item primary" id="cm-new">${I.plus}<span>New chat</span></button>
     <div class="menu-title">Chats with ${esc(c.name)}</div>
-    ${c.chats.slice().sort((a, b) => b.updatedAt - a.updatedAt).map((ch) => `
+    ${c.chats.slice().sort((a, b) => b.updatedAt - a.updatedAt).map((ch) => {
+      const sTitle = ch.scenarioTitle || (ch.scenarioId && state.scenarios.find((s) => s.id === ch.scenarioId)?.title);
+      return `
       <button class="menu-item chat-row ${chat && ch.id === chat.id ? 'active' : ''}" data-cid="${ch.id}">
         <span class="mi-main">
           <span class="mi-name">${esc(ch.title)}</span>
-          <span class="mi-desc">${pathOf(ch.tree).filter((n) => n.role !== 'scenario').length} messages · ${fmtDate(ch.updatedAt)}</span>
+          <span class="mi-desc">
+            ${sTitle ? `<span class="mi-scen-tag">${esc(sTitle)}</span> · ` : ''}${pathOf(ch.tree).filter((n) => n.role !== 'scenario').length} messages · ${fmtDate(ch.updatedAt)}
+          </span>
         </span>
         <span class="row-del" data-del="${ch.id}" title="Delete chat">${I.trash}</span>
-      </button>`).join('')}`;
+      </button>`;
+    }).join('')}`;
 }
 
 async function setPersona(pid) {
@@ -929,7 +939,6 @@ function openCharModal(char) {
   $('#ce-name').value = char ? char.name : '';
   $('#ce-desc').value = char ? char.description : '';
   $('#ce-note').value = char ? char.note || '' : '';
-  $('#ce-scenario').value = char ? char.scenario : '';
   renderCeEmojiGrid();
   updateCeAvatarUI();
   updateCePosesToggleUI();
@@ -988,7 +997,6 @@ async function charFormSave() {
     name,
     description: $('#ce-desc').value.trim(),
     note: $('#ce-note').value.trim(),
-    scenario: $('#ce-scenario').value.trim() || '*They look at you, waiting for you to speak first.*',
     emoji: ceEmoji,
     avatar: ceAvatar,
     image: ceImage,
@@ -1738,13 +1746,244 @@ async function presetDelete() {
   setHint();
 }
 
+/* ---- Scenarios Management & Access List --------------------------------- */
+
+function isScenarioAllowed(s, charId) {
+  if (!s || !charId) return true;
+  const mode = s.accessMode || 'all';
+  if (mode === 'all') return true;
+  const list = Array.isArray(s.characterIds) ? s.characterIds : [];
+  if (mode === 'whitelist') return list.includes(charId);
+  if (mode === 'blacklist') return !list.includes(charId);
+  return true;
+}
+
+function accessBadgeLabel(s) {
+  if (s.accessMode === 'whitelist') return `${(s.characterIds || []).length} allowed`;
+  if (s.accessMode === 'blacklist') return `${(s.characterIds || []).length} blocked`;
+  return 'All chars';
+}
+
+function switchSidebarTab(tab) {
+  ui.sidebarTab = tab;
+  saveUi();
+  const isChars = tab === 'chars';
+  $('#tab-chars-btn').classList.toggle('active', isChars);
+  $('#tab-scenarios-btn').classList.toggle('active', !isChars);
+  $('#panel-chars').classList.toggle('hidden', !isChars);
+  $('#panel-scenarios').classList.toggle('hidden', isChars);
+  if (isChars) renderSidebar();
+  else renderSidebarScenarios();
+}
+
+function renderSidebarScenarios() {
+  const list = $('#scenario-list');
+  if (!list) return;
+  if (!state.scenarios || state.scenarios.length === 0) {
+    list.innerHTML = `<div class="prow-desc" style="padding:16px 10px;text-align:center">No scenarios found.<br>Click "New scenario" below.</div>`;
+    return;
+  }
+  list.innerHTML = state.scenarios.map((s) => `
+    <div class="scen-item" data-id="${s.id}">
+      <span class="scen-icon">🎬</span>
+      <span class="scen-main">
+        <span class="scen-row">
+          <span class="scen-name">${esc(s.title)}</span>
+          <span class="scen-badge ${s.accessMode}">${accessBadgeLabel(s)}</span>
+        </span>
+        <span class="scen-desc">${esc(s.description || s.content.slice(0, 85))}</span>
+      </span>
+    </div>
+  `).join('');
+}
+
+let seMode = 'new';
+let seId = null;
+let seAccessMode = 'all';
+let seCharacterIds = new Set();
+let seDelArmed = null;
+
+function openScenarioModal(sc = null) {
+  seMode = sc ? 'edit' : 'new';
+  seId = sc ? sc.id : null;
+  seAccessMode = sc ? (sc.accessMode || 'all') : 'all';
+  seCharacterIds = new Set(sc && Array.isArray(sc.characterIds) ? sc.characterIds : []);
+
+  $('#se-title-text').textContent = sc ? 'Edit scenario' : 'New scenario';
+  $('#se-title').value = sc ? sc.title : '';
+  $('#se-desc').value = sc ? sc.description : '';
+  $('#se-content').value = sc ? sc.content : '';
+
+  const radios = $$('input[name="se-access-mode"]');
+  radios.forEach((r) => { r.checked = (r.value === seAccessMode); });
+
+  updateSeAccessUI();
+  renderSeCharsList();
+
+  const del = $('#se-delete');
+  del.classList.toggle('hidden', seMode !== 'edit');
+  disarmSeDelete();
+
+  const play = $('#se-play');
+  play.classList.toggle('hidden', seMode !== 'edit');
+
+  openModal('modal-scenario');
+  setTimeout(() => $('#se-title').focus(), 60);
+}
+
+function updateSeAccessUI() {
+  const isRestricted = seAccessMode !== 'all';
+  $('#se-chars-block').classList.toggle('hidden', !isRestricted);
+  const lbl = $('#se-chars-label');
+  if (lbl) {
+    lbl.textContent = seAccessMode === 'whitelist'
+      ? 'Whitelisted characters (allowed to enter):'
+      : 'Blacklisted characters (blocked from entering):';
+  }
+}
+
+function renderSeCharsList() {
+  const list = $('#se-chars-list');
+  if (!list) return;
+  list.innerHTML = state.characters.map((c) => {
+    const checked = seCharacterIds.has(c.id);
+    return `
+      <label class="scen-char-chk-row">
+        <input type="checkbox" class="scen-char-chk" data-cid="${c.id}" ${checked ? 'checked' : ''}>
+        ${avatarHtml(c, 'sm')}
+        <span class="scen-char-chk-name">${esc(c.name)}</span>
+      </label>
+    `;
+  }).join('');
+}
+
+function disarmSeDelete() {
+  const btn = $('#se-delete');
+  if (!btn) return;
+  btn.classList.remove('armed');
+  btn.textContent = 'Delete scenario';
+  clearTimeout(seDelArmed);
+  seDelArmed = null;
+}
+
+async function scenarioFormSave() {
+  const title = $('#se-title').value.trim();
+  if (!title) { toast('Give your scenario a title'); return; }
+  const content = $('#se-content').value.trim();
+  if (!content) { toast('Enter the opening scenario scene'); return; }
+
+  const body = {
+    title,
+    description: $('#se-desc').value.trim(),
+    content,
+    accessMode: seAccessMode,
+    characterIds: Array.from(seCharacterIds),
+  };
+
+  try {
+    let saved;
+    if (seMode === 'new') {
+      saved = await api('/scenarios', { method: 'POST', body: JSON.stringify(body) });
+      state.scenarios.push(saved);
+      toast('Scenario created');
+    } else {
+      saved = await api('/scenarios/' + seId, { method: 'PUT', body: JSON.stringify(body) });
+      const idx = state.scenarios.findIndex((x) => x.id === seId);
+      if (idx !== -1) state.scenarios[idx] = saved;
+      toast('Scenario saved');
+    }
+    closeModal('modal-scenario');
+    renderSidebarScenarios();
+    renderHeader();
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+async function scenarioDelete() {
+  const btn = $('#se-delete');
+  if (!btn.classList.contains('armed')) {
+    btn.classList.add('armed');
+    btn.textContent = 'Click again to confirm';
+    seDelArmed = setTimeout(disarmSeDelete, 2600);
+    return;
+  }
+  try {
+    await api('/scenarios/' + seId, { method: 'DELETE' });
+    state.scenarios = state.scenarios.filter((x) => x.id !== seId);
+    disarmSeDelete();
+    closeModal('modal-scenario');
+    renderSidebarScenarios();
+    renderHeader();
+    toast('Scenario deleted');
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+let pickScenarioChar = null;
+
+function openScenarioPicker(c) {
+  pickScenarioChar = c;
+  $('#ps-title').textContent = `Choose a scenario for ${c.name}`;
+  const allowed = state.scenarios.filter((s) => isScenarioAllowed(s, c.id));
+  const grid = $('#ps-grid');
+  if (allowed.length === 0) {
+    grid.innerHTML = `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No accessible scenarios for ${esc(c.name)}. Create one or start freeform.</div>`;
+  } else {
+    grid.innerHTML = allowed.map((s) => `
+      <div class="ps-item-card" data-scen-id="${s.id}">
+        <div class="ps-item-top">
+          <div class="ps-item-header">
+            <span class="ps-item-title">${esc(s.title)}</span>
+            <span class="scen-badge ${s.accessMode}">${accessBadgeLabel(s)}</span>
+          </div>
+          <div class="ps-item-desc">${esc(s.description || s.content.slice(0, 110))}</div>
+        </div>
+        <div class="ps-item-foot">
+          <button type="button" class="btn btn-ghost sm">Start chat</button>
+        </div>
+      </div>
+    `).join('');
+  }
+  openModal('modal-pick-scenario');
+}
+
+let pickCharScenario = null;
+
+function openCharPickerForScenario(s) {
+  pickCharScenario = s;
+  $('#pc-title').textContent = `Play: ${s.title}`;
+  const allowed = state.characters.filter((c) => isScenarioAllowed(s, c.id));
+  const list = $('#pc-list');
+  if (allowed.length === 0) {
+    list.innerHTML = `<div class="prow-desc" style="padding:16px;text-align:center">No characters have access to this scenario based on its access list.</div>`;
+  } else {
+    list.innerHTML = allowed.map((c) => `
+      <div class="pc-row" data-char-id="${c.id}">
+        ${avatarHtml(c)}
+        <div class="pc-info">
+          <div class="pc-name">${esc(c.name)}</div>
+          <div class="pc-desc">${esc(c.description)}</div>
+        </div>
+        <button type="button" class="btn btn-ghost sm">Play</button>
+      </div>
+    `).join('');
+  }
+  closeModal('modal-scenario');
+  openModal('modal-pick-char');
+}
+
 function closeSidebar() {
   document.body.classList.remove('sidebar-open');
 }
 
 function renderAll() {
   renderSidebar();
+  renderSidebarScenarios();
   setHint();
+  if (ui.sidebarTab === 'scenarios') switchSidebarTab('scenarios');
+  else switchSidebarTab('chars');
   if (ui.activeCharacterId && state.characters.find((c) => c.id === ui.activeCharacterId)) {
     openCharacter(ui.activeCharacterId);
   } else {
@@ -1977,18 +2216,107 @@ function skipFullCrop() {
 
 function wireEvents() {
   $$('.combo').forEach((c) => setupModelCombo(c));
+  $('#tab-chars-btn').addEventListener('click', () => switchSidebarTab('chars'));
+  $('#tab-scenarios-btn').addEventListener('click', () => switchSidebarTab('scenarios'));
   $('#new-char-btn').addEventListener('click', () => openCharModal(null));
+  $('#new-scenario-btn').addEventListener('click', () => openScenarioModal(null));
   $('#char-list').addEventListener('click', (e) => {
     const item = e.target.closest('.char-item');
     if (item) openCharacter(item.dataset.id);
   });
+  $('#scenario-list').addEventListener('click', (e) => {
+    const item = e.target.closest('.scen-item');
+    if (!item) return;
+    const sc = state.scenarios.find((x) => x.id === item.dataset.id);
+    if (sc) openScenarioModal(sc);
+  });
   $('#welcome-grid').addEventListener('click', (e) => {
     if (e.target.closest('[data-new]')) { openCharModal(null); return; }
     const card = e.target.closest('.w-card');
-    if (card) openCharacter(card.dataset.id);
+    if (card) {
+      const c = state.characters.find((x) => x.id === card.dataset.id);
+      if (!c) return;
+      if (c.chats && c.chats.length > 0) openCharacter(c.id);
+      else { ui.activeCharacterId = c.id; openScenarioPicker(c); }
+    }
   });
   $('#menu-btn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
   $('#scrim').addEventListener('click', closeSidebar);
+
+  // Scenario Modal events
+  $$('input[name="se-access-mode"]').forEach((r) => {
+    r.addEventListener('change', (e) => {
+      seAccessMode = e.target.value;
+      updateSeAccessUI();
+    });
+  });
+  $('#se-chars-list').addEventListener('change', (e) => {
+    const chk = e.target.closest('.scen-char-chk');
+    if (!chk) return;
+    if (chk.checked) seCharacterIds.add(chk.dataset.cid);
+    else seCharacterIds.delete(chk.dataset.cid);
+  });
+  $('#se-chars-select-all').addEventListener('click', () => {
+    state.characters.forEach((c) => seCharacterIds.add(c.id));
+    renderSeCharsList();
+  });
+  $('#se-chars-clear-all').addEventListener('click', () => {
+    seCharacterIds.clear();
+    renderSeCharsList();
+  });
+  $('#se-save').addEventListener('click', scenarioFormSave);
+  $('#se-delete').addEventListener('click', scenarioDelete);
+  $('#se-play').addEventListener('click', () => {
+    const sc = state.scenarios.find((x) => x.id === seId);
+    if (sc) openCharPickerForScenario(sc);
+  });
+
+  // Scenario Picker Modal events
+  $('#ps-freeform-btn').addEventListener('click', async () => {
+    if (!pickScenarioChar) return;
+    closeModal('modal-pick-scenario');
+    try {
+      await createChatFor(pickScenarioChar, null);
+      saveUi();
+      renderSidebar();
+      renderChat();
+    } catch (e) { toast(e.message); }
+  });
+  $('#ps-grid').addEventListener('click', async (e) => {
+    const card = e.target.closest('.ps-item-card');
+    if (!card || !pickScenarioChar) return;
+    const scId = card.dataset.scenId;
+    closeModal('modal-pick-scenario');
+    try {
+      await createChatFor(pickScenarioChar, scId);
+      saveUi();
+      renderSidebar();
+      renderChat();
+    } catch (e) { toast(e.message); }
+  });
+  $('#ps-new-btn').addEventListener('click', () => {
+    closeModal('modal-pick-scenario');
+    openScenarioModal(null);
+  });
+
+  // Character Picker for Scenario modal events
+  $('#pc-list').addEventListener('click', async (e) => {
+    const row = e.target.closest('.pc-row');
+    if (!row || !pickCharScenario) return;
+    const charId = row.dataset.charId;
+    const c = state.characters.find((x) => x.id === charId);
+    if (!c) return;
+    closeModal('modal-pick-char');
+    try {
+      ui.activeCharacterId = c.id;
+      const ch = await createChatFor(c, pickCharScenario.id);
+      saveUi();
+      closeSidebar();
+      renderSidebar();
+      renderChat();
+      loadPoses(c.id);
+    } catch (err) { toast(err.message); }
+  });
 
   $('#persona-btn').addEventListener('click', () => toggleMenu('persona-wrap'));
   $('#chats-btn').addEventListener('click', () => toggleMenu('chats-wrap'));

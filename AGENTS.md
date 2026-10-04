@@ -43,6 +43,7 @@ Instructions, architecture guide, and operational conventions for AI agents and 
 ~/aichat
 ├── package.json     # Project metadata and start script (0 dependencies)
 ├── .gitignore       # Ignores aichat.db*, backups/, and node_modules/
+├── migrate-scenarios.js # Database migration script: backups DB & splits characters and scenarios
 ├── server.js        # Native HTTP server, REST/SSE routing, LLM streaming & pose agent
 ├── db.js            # SQLite database schema, tree management, backups, idempotent seed
 ├── index.html       # Single-page application markup and modal dialogs
@@ -65,7 +66,7 @@ Instructions, architecture guide, and operational conventions for AI agents and 
   - Idempotent database seeder (`seedIfEmpty`) providing demo characters and conversations without collision.
 - **`index.html` (~507 lines)**:
   - Semantic SPA layout: `#sidebar`, `#welcome`, `#chat-view`, `#chat-header`, `#messages`, `#composer`.
-  - Modal containers: `#modal-settings`, `#modal-persona`, `#modal-char`, `#modal-poses`, `#modal-crop`, `#modal-preset`.
+  - Modal containers: `#modal-settings`, `#modal-persona`, `#modal-char`, `#modal-poses`, `#modal-crop`, `#modal-preset`, `#modal-scenario`, `#modal-pick-scenario`, `#modal-pick-char`.
 - **`app.js` (~2340 lines)**:
   - Client state store (`state = { characters, personalities, presets, settings, poses }`).
   - Markdown parser (`md`) with character spoken dialogue highlighting (`<span class="dlg">`) and action formatting (`<em>`).
@@ -136,6 +137,28 @@ Characters have multiple poses (`poses` table) containing an image and descripti
   - Triggered on server start and immediately prior to destructive deletions (`snapshotBeforeDestructive`).
   - Rate-limited to at most 1 snapshot per minute to protect disk space during cascading deletes.
   - Automatically prunes old snapshots, retaining the newest 10 backups.
+
+### 4.5 Decoupled Scenarios & Access Control System
+Scenarios and characters are completely separate entities:
+- **Scenarios Table (`scenarios`)**:
+  - `id`: Unique identifier (e.g. `sc-c-luna`).
+  - `title`: Short descriptive title (e.g. *Silvermoon Academy Library*).
+  - `description`: Teaser or summary line.
+  - `content`: Full opening scene and prompt beats (supporting `{{char}}` and `{{user}}` macros).
+  - `access_mode`:
+    - `'all'`: Open to all characters.
+    - `'whitelist'`: Only characters in `character_ids` can use this scenario.
+    - `'blacklist'`: All characters except those in `character_ids` can use this scenario.
+  - `character_ids`: JSON array of character IDs.
+- **Chats Integration**:
+  - `chats.scenario_id`: References the scenario in which the conversation takes place.
+  - Scenario prompts populate the root node (`role: 'scenario'`) in the conversation tree.
+  - System prompt generation in `server.js` dynamically pulls the exact scenario text from the conversation tree's scenario node.
+- **Migration Engine (`migrate-scenarios.js`)**:
+  - Standalone, zero-dependency script (`npm run migrate` or `node migrate-scenarios.js`).
+  - Backs up the database into `backups/aichat-pre-scenario-migration-<timestamp>.db`.
+  - Extracts scenarios from all character records, configures them with `access_mode = 'all'`, and links existing chats.
+  - Completely idempotent and safe to run multiple times.
 
 ---
 
