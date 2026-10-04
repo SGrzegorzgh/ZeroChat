@@ -2501,3 +2501,30 @@ input[type="range"] {
   color: var(--accent);
   font-weight: 500;
 }
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--fg);
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.search-input:focus {
+  border-color: var(--accent);
+  background: var(--panel);
+}
+.search-input::placeholder {
+  color: var(--muted2);
+}
+
+.ps-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 8px;
+}

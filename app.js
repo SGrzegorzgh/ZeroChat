@@ -1817,6 +1817,9 @@ function openScenarioModal(sc = null) {
   const radios = $$('input[name="se-access-mode"]');
   radios.forEach((r) => { r.checked = (r.value === seAccessMode); });
 
+  const sInp = $('#se-chars-search');
+  if (sInp) sInp.value = '';
+
   updateSeAccessUI();
   renderSeCharsList();
 
@@ -1842,10 +1845,23 @@ function updateSeAccessUI() {
   }
 }
 
-function renderSeCharsList() {
+function renderSeCharsList(query = '') {
   const list = $('#se-chars-list');
   if (!list) return;
-  list.innerHTML = state.characters.map((c) => {
+  const q = (query || '').trim().toLowerCase();
+  let chars = state.characters;
+  if (q) {
+    chars = chars.filter((c) =>
+      c.name.toLowerCase().includes(q) ||
+      (c.description && c.description.toLowerCase().includes(q)) ||
+      (c.note && c.note.toLowerCase().includes(q))
+    );
+  }
+  if (chars.length === 0) {
+    list.innerHTML = `<div class="prow-desc" style="grid-column:1/-1;padding:14px;text-align:center">No characters matching "${esc(query)}".</div>`;
+    return;
+  }
+  list.innerHTML = chars.map((c) => {
     const checked = seCharacterIds.has(c.id);
     return `
       <label class="scen-char-chk-row">
@@ -1923,13 +1939,23 @@ async function scenarioDelete() {
 
 let pickScenarioChar = null;
 
-function openScenarioPicker(c) {
-  pickScenarioChar = c;
-  $('#ps-title').textContent = `Choose a scenario for ${c.name}`;
-  const allowed = state.scenarios.filter((s) => isScenarioAllowed(s, c.id));
+function renderPsGrid(query = '') {
+  if (!pickScenarioChar) return;
+  const q = (query || '').trim().toLowerCase();
+  let allowed = state.scenarios.filter((s) => isScenarioAllowed(s, pickScenarioChar.id));
+  if (q) {
+    allowed = allowed.filter((s) =>
+      s.title.toLowerCase().includes(q) ||
+      (s.description && s.description.toLowerCase().includes(q)) ||
+      (s.content && s.content.toLowerCase().includes(q))
+    );
+  }
   const grid = $('#ps-grid');
+  if (!grid) return;
   if (allowed.length === 0) {
-    grid.innerHTML = `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No accessible scenarios for ${esc(c.name)}. Create one or start freeform.</div>`;
+    grid.innerHTML = q
+      ? `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No scenarios matching "${esc(query)}".</div>`
+      : `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No accessible scenarios for ${esc(pickScenarioChar.name)}. Create one or start freeform.</div>`;
   } else {
     grid.innerHTML = allowed.map((s) => `
       <div class="ps-item-card" data-scen-id="${s.id}">
@@ -1946,7 +1972,16 @@ function openScenarioPicker(c) {
       </div>
     `).join('');
   }
+}
+
+function openScenarioPicker(c) {
+  pickScenarioChar = c;
+  $('#ps-title').textContent = `Choose a scenario for ${c.name}`;
+  const sInp = $('#ps-search');
+  if (sInp) sInp.value = '';
+  renderPsGrid('');
   openModal('modal-pick-scenario');
+  setTimeout(() => { if (sInp) sInp.focus(); }, 60);
 }
 
 let pickCharScenario = null;
@@ -2250,6 +2285,9 @@ function wireEvents() {
       updateSeAccessUI();
     });
   });
+  $('#se-chars-search').addEventListener('input', (e) => {
+    renderSeCharsList(e.target.value);
+  });
   $('#se-chars-list').addEventListener('change', (e) => {
     const chk = e.target.closest('.scen-char-chk');
     if (!chk) return;
@@ -2257,12 +2295,22 @@ function wireEvents() {
     else seCharacterIds.delete(chk.dataset.cid);
   });
   $('#se-chars-select-all').addEventListener('click', () => {
-    state.characters.forEach((c) => seCharacterIds.add(c.id));
-    renderSeCharsList();
+    const q = ($('#se-chars-search')?.value || '').trim().toLowerCase();
+    const targets = q
+      ? state.characters.filter((c) => c.name.toLowerCase().includes(q) || (c.description && c.description.toLowerCase().includes(q)) || (c.note && c.note.toLowerCase().includes(q)))
+      : state.characters;
+    targets.forEach((c) => seCharacterIds.add(c.id));
+    renderSeCharsList(q);
   });
   $('#se-chars-clear-all').addEventListener('click', () => {
-    seCharacterIds.clear();
-    renderSeCharsList();
+    const q = ($('#se-chars-search')?.value || '').trim().toLowerCase();
+    if (q) {
+      const targets = state.characters.filter((c) => c.name.toLowerCase().includes(q) || (c.description && c.description.toLowerCase().includes(q)) || (c.note && c.note.toLowerCase().includes(q)));
+      targets.forEach((c) => seCharacterIds.delete(c.id));
+    } else {
+      seCharacterIds.clear();
+    }
+    renderSeCharsList(q);
   });
   $('#se-save').addEventListener('click', scenarioFormSave);
   $('#se-delete').addEventListener('click', scenarioDelete);
@@ -2272,6 +2320,9 @@ function wireEvents() {
   });
 
   // Scenario Picker Modal events
+  $('#ps-search').addEventListener('input', (e) => {
+    renderPsGrid(e.target.value);
+  });
   $('#ps-freeform-btn').addEventListener('click', async () => {
     if (!pickScenarioChar) return;
     closeModal('modal-pick-scenario');

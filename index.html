@@ -581,6 +581,9 @@
               <button type="button" class="btn btn-ghost sm" id="se-chars-clear-all">Clear</button>
             </div>
           </div>
+          <div style="margin-bottom:8px">
+            <input type="text" id="se-chars-search" class="search-input" placeholder="Search characters by name or description…" autocomplete="off">
+          </div>
           <div id="se-chars-list" class="scen-chars-list"></div>
         </div>
       </div>
@@ -613,7 +616,12 @@
           </div>
           <span class="btn btn-ghost sm">Start</span>
         </div>
-        <div class="sidebar-label" style="padding-left:0;margin-top:14px;margin-bottom:6px">Available scenarios</div>
+        <div class="ps-filter-bar">
+          <div class="sidebar-label" style="padding-left:0;margin:0">Available scenarios</div>
+          <div style="flex:1;max-width:280px">
+            <input type="text" id="ps-search" class="search-input" placeholder="Search scenarios…" autocomplete="off">
+          </div>
+        </div>
         <div id="ps-grid" class="ps-grid"></div>
       </div>
       <div class="m-foot">
