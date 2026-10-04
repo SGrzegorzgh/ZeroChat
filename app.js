@@ -2442,7 +2442,7 @@ function renderSidebarVars(query = '') {
     return `
       <div class="var-item" data-var-key="${esc(v.key)}">
         <div class="var-item-head">
-          <code class="var-tag">{{${esc(v.key)}}}</code>
+          <code class="var-tag" title="{{${esc(v.key)}}}">{{${esc(v.key)}}}</code>
           <div class="var-acts">
             <button type="button" class="btn btn-ghost tiny var-copy-btn" data-copy="{{${esc(v.key)}}}">Copy</button>
             <button type="button" class="btn btn-ghost tiny danger var-del-global-btn" data-del-var="${esc(v.key)}" title="Delete from all characters">Delete</button>
