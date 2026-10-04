@@ -441,10 +441,31 @@
             </button>
           </div>
           <div class="ce-scen-panel-body">
-            <div class="field" style="margin-bottom:8px">
-              <label for="ce-scen-select" style="font-size:12px;margin-bottom:6px">Select scenario to test against:</label>
-              <select id="ce-scen-select" class="ce-scen-select"></select>
+            <!-- Rich Scenario Selector matching site design -->
+            <div class="ce-scen-selector" id="ce-scen-selector">
+              <div class="ce-scen-active-card" id="ce-scen-active-card">
+                <div class="ce-scen-active-top">
+                  <div class="ce-scen-active-title-row">
+                    <span class="ce-scen-active-icon">🎬</span>
+                    <span class="ce-scen-active-title" id="ce-scen-active-title">Select a scenario to test against…</span>
+                    <span class="scen-badge all hidden" id="ce-scen-active-badge">All chars</span>
+                  </div>
+                  <button type="button" class="btn btn-ghost sm ce-scen-switch-btn" id="ce-scen-switch-btn">
+                    <span id="ce-scen-switch-btn-text">Choose ▾</span>
+                  </button>
+                </div>
+                <div class="ce-scen-active-desc" id="ce-scen-active-desc">Click here or Choose to select from available scenarios.</div>
+              </div>
+
+              <!-- Collapsible Scenario Cards List with Search Filter -->
+              <div class="ce-scen-dropdown hidden" id="ce-scen-dropdown">
+                <div class="ce-scen-search-bar">
+                  <input type="text" id="ce-scen-search-input" class="search-input sm" placeholder="Search scenarios by title or description…" autocomplete="off">
+                </div>
+                <div class="ce-scen-cards-scroll" id="ce-scen-cards-scroll"></div>
+              </div>
             </div>
+
             <div id="ce-scen-content-wrap" class="hidden">
               <div class="ce-scen-status-banner" id="ce-scen-status-banner"></div>
               <div class="field-tab-header" style="margin-top:8px;margin-bottom:8px">

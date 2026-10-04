@@ -3034,14 +3034,170 @@ input[type="range"] {
   overflow-y: auto;
   flex: 1;
 }
-.ce-scen-select {
+/* Rich Scenario Selector in Character Editor */
+.ce-scen-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.ce-scen-active-card {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
   background: var(--panel);
-  border: 1px solid var(--border2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.ce-scen-active-card:hover {
+  border-color: var(--border2);
+  background: var(--panel2);
+}
+.ce-scen-active-card.is-selected {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.05);
+}
+.ce-scen-active-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ce-scen-active-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.ce-scen-active-icon {
+  font-size: 14px;
+  flex: none;
+}
+.ce-scen-active-title {
+  font-size: 13.5px;
+  font-weight: 700;
   color: var(--fg);
-  border-radius: var(--r-sm);
-  padding: 8px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ce-scen-active-desc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin-top: 5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ce-scen-switch-btn {
+  font-size: 11.5px;
+  padding: 3px 9px;
+  height: 26px;
+  flex: none;
+}
+
+/* Expandable Scenario Cards Dropdown */
+.ce-scen-dropdown {
+  background: var(--panel2);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  animation: fadeIn 0.15s ease-out;
+}
+.ce-scen-dropdown.hidden {
+  display: none !important;
+}
+.ce-scen-search-bar {
+  display: flex;
+}
+.ce-scen-cards-scroll {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-right: 2px;
+}
+
+/* Scenario Option Cards - exact match to site's ps-item-card aesthetics */
+.ce-scen-opt-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.ce-scen-opt-card:hover {
+  border-color: var(--accent);
+  background: var(--panel3);
+  transform: translateY(-1px);
+}
+.ce-scen-opt-card.selected {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+}
+.ce-scen-opt-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.ce-scen-opt-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.ce-scen-opt-card-title {
   font-size: 13px;
-  width: 100%;
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ce-scen-opt-card-desc {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.ce-scen-opt-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted2);
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.ce-scen-opt-vars-pill {
+  font-family: monospace;
+  font-size: 10.5px;
+  color: var(--accent);
+}
+.ce-scen-opt-sel-tick {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #4ade80;
+  text-transform: uppercase;
 }
 .ce-scen-status-banner {
   display: flex;

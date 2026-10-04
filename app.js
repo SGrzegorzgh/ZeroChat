@@ -1196,6 +1196,112 @@ function renderInsertVarList(mode, q = '') {
 
 let ceScenSelectedId = null;
 let ceScenTab = 'preview'; // 'preview' | 'vars'
+let ceScenDropdownOpen = false;
+
+function renderCeScenActiveCard() {
+  const card = $('#ce-scen-active-card');
+  const title = $('#ce-scen-active-title');
+  const badge = $('#ce-scen-active-badge');
+  const desc = $('#ce-scen-active-desc');
+  const switchBtn = $('#ce-scen-switch-btn-text');
+  if (!card || !title || !desc || !switchBtn) return;
+
+  const scen = (state.scenarios || []).find((s) => s.id === ceScenSelectedId);
+  if (scen) {
+    card.classList.add('is-selected');
+    title.textContent = scen.title;
+    desc.textContent = scen.description || scen.content.slice(0, 110);
+    switchBtn.textContent = 'Switch ▾';
+    if (badge) {
+      badge.className = `scen-badge ${scen.accessMode || 'all'}`;
+      badge.textContent = accessBadgeLabel(scen);
+      badge.classList.remove('hidden');
+    }
+  } else {
+    card.classList.remove('is-selected');
+    title.textContent = 'Select a scenario to test against…';
+    desc.textContent = 'Click here or Choose to select from available scenarios.';
+    switchBtn.textContent = 'Choose ▾';
+    if (badge) badge.classList.add('hidden');
+  }
+}
+
+function renderCeScenCards(query = '') {
+  const container = $('#ce-scen-cards-scroll');
+  if (!container) return;
+  const q = (query || '').trim().toLowerCase();
+  let scenarios = state.scenarios || [];
+  if (q) {
+    scenarios = scenarios.filter((s) =>
+      s.title.toLowerCase().includes(q) ||
+      (s.description && s.description.toLowerCase().includes(q)) ||
+      (s.content && s.content.toLowerCase().includes(q))
+    );
+  }
+
+  if (scenarios.length === 0) {
+    container.innerHTML = `<div class="prow-desc" style="padding:16px;text-align:center">${q ? `No scenarios matching "${esc(query)}"` : 'No scenarios available'}</div>`;
+    return;
+  }
+
+  container.innerHTML = scenarios.map((s) => {
+    const isSelected = ceScenSelectedId === s.id;
+    // Count variables in this scenario
+    const tagsRegex = /\{\{\s*([\w.-]+)\s*\}\}/gi;
+    const tags = new Set();
+    let m;
+    while ((m = tagsRegex.exec(s.content)) !== null) {
+      tags.add(m[1].toLowerCase());
+    }
+    const varCount = tags.size;
+
+    return `
+      <div class="ce-scen-opt-card ${isSelected ? 'selected' : ''}" data-scen-id="${s.id}">
+        <div class="ce-scen-opt-card-top">
+          <div class="ce-scen-opt-title-group">
+            <span>🎬</span>
+            <span class="ce-scen-opt-card-title">${esc(s.title)}</span>
+            <span class="scen-badge ${s.accessMode || 'all'}">${accessBadgeLabel(s)}</span>
+          </div>
+          ${isSelected ? '<span class="ce-scen-opt-sel-tick">✓ Active</span>' : ''}
+        </div>
+        <div class="ce-scen-opt-card-desc">${esc(s.description || s.content.slice(0, 95))}</div>
+        <div class="ce-scen-opt-card-foot">
+          <span class="ce-scen-opt-vars-pill">${varCount} template variable${varCount === 1 ? '' : 's'}</span>
+          <span style="color:var(--muted)">Click to select</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openCeScenDropdown() {
+  const menu = $('#ce-scen-dropdown');
+  if (!menu) return;
+  menu.classList.remove('hidden');
+  ceScenDropdownOpen = true;
+  const input = $('#ce-scen-search-input');
+  if (input) {
+    input.value = '';
+    setTimeout(() => input.focus(), 40);
+  }
+  renderCeScenCards('');
+}
+
+function closeCeScenDropdown() {
+  const menu = $('#ce-scen-dropdown');
+  if (!menu) return;
+  menu.classList.add('hidden');
+  ceScenDropdownOpen = false;
+}
+
+function toggleCeScenDropdown() {
+  if (ceScenDropdownOpen) {
+    closeCeScenDropdown();
+  } else {
+    openCeScenDropdown();
+  }
+}
 
 function openCeScenPanel() {
   const panel = $('#ce-scen-panel');
@@ -1205,7 +1311,12 @@ function openCeScenPanel() {
   card.classList.add('with-scen-panel');
   $('#ce-scen-panel-toggle')?.classList.add('active');
   $('#ce-scen-bar-toggle')?.classList.add('active');
-  populateCeScenSelect();
+  renderCeScenActiveCard();
+  if (!ceScenSelectedId) {
+    openCeScenDropdown();
+  } else {
+    closeCeScenDropdown();
+  }
   updateCeScenPanelUI();
 }
 
@@ -1217,6 +1328,7 @@ function closeCeScenPanel() {
   card.classList.remove('with-scen-panel');
   $('#ce-scen-panel-toggle')?.classList.remove('active');
   $('#ce-scen-bar-toggle')?.classList.remove('active');
+  closeCeScenDropdown();
 }
 
 function toggleCeScenPanel() {
@@ -1226,27 +1338,6 @@ function toggleCeScenPanel() {
     openCeScenPanel();
   } else {
     closeCeScenPanel();
-  }
-}
-
-function populateCeScenSelect() {
-  const sel = $('#ce-scen-select');
-  if (!sel) return;
-  const scenarios = state.scenarios || [];
-  if (scenarios.length === 0) {
-    sel.innerHTML = '<option value="">No scenarios available</option>';
-    ceScenSelectedId = null;
-    return;
-  }
-  let optionsHtml = '<option value="">Select a scenario to test against...</option>';
-  for (const s of scenarios) {
-    const isSel = ceScenSelectedId && ceScenSelectedId === s.id ? 'selected' : '';
-    optionsHtml += `<option value="${s.id}" ${isSel}>${esc(s.title)}</option>`;
-  }
-  sel.innerHTML = optionsHtml;
-  if (ceScenSelectedId && !scenarios.some(s => s.id === ceScenSelectedId)) {
-    ceScenSelectedId = null;
-    sel.value = '';
   }
 }
 
@@ -1297,8 +1388,8 @@ function updateCeScenPanelUI() {
   syncCeVariablesFromInputs();
   const charName = $('#ce-name')?.value.trim() || '';
 
-  const scenId = $('#ce-scen-select')?.value || ceScenSelectedId;
-  ceScenSelectedId = scenId;
+  renderCeScenActiveCard();
+  const scenId = ceScenSelectedId;
 
   const contentWrap = $('#ce-scen-content-wrap');
   const emptyHint = $('#ce-scen-empty-hint');
@@ -1445,7 +1536,7 @@ function openCharModal(char) {
   closeCeVarPicker();
   closeInsertVarPopups();
   closeCeScenPanel();
-  populateCeScenSelect();
+  renderCeScenActiveCard();
   switchCeScenTab('preview');
   renderCeVarsList();
   renderCeEmojiGrid();
@@ -3245,6 +3336,7 @@ function wireEvents() {
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu-wrap')) closeMenus();
     if (!e.target.closest('.insert-var-wrap')) closeInsertVarPopups();
+    if (!e.target.closest('.ce-scen-selector')) closeCeScenDropdown();
   });
 
   $$('.modal').forEach((m) => {
@@ -3438,8 +3530,24 @@ function wireEvents() {
   $('#ce-scen-panel-toggle')?.addEventListener('click', toggleCeScenPanel);
   $('#ce-scen-bar-toggle')?.addEventListener('click', toggleCeScenPanel);
   $('#ce-scen-panel-close')?.addEventListener('click', closeCeScenPanel);
-  $('#ce-scen-select')?.addEventListener('change', (e) => {
-    ceScenSelectedId = e.target.value;
+  $('#ce-scen-active-card')?.addEventListener('click', () => {
+    toggleCeScenDropdown();
+  });
+  $('#ce-scen-switch-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleCeScenDropdown();
+  });
+  $('#ce-scen-search-input')?.addEventListener('input', (e) => {
+    renderCeScenCards(e.target.value);
+  });
+  $('#ce-scen-cards-scroll')?.addEventListener('click', (e) => {
+    const card = e.target.closest('.ce-scen-opt-card');
+    if (!card) return;
+    const scenId = card.dataset.scenId;
+    if (!scenId) return;
+    ceScenSelectedId = scenId;
+    closeCeScenDropdown();
+    renderCeScenActiveCard();
     updateCeScenPanelUI();
   });
   $('#ce-scen-tab-preview')?.addEventListener('click', () => switchCeScenTab('preview'));
