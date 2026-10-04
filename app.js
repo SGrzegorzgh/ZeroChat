@@ -1194,6 +1194,239 @@ function renderInsertVarList(mode, q = '') {
   list.innerHTML = html;
 }
 
+let ceScenSelectedId = null;
+let ceScenTab = 'preview'; // 'preview' | 'vars'
+
+function openCeScenPanel() {
+  const panel = $('#ce-scen-panel');
+  const card = $('#ce-modal-card');
+  if (!panel || !card) return;
+  panel.classList.remove('hidden');
+  card.classList.add('with-scen-panel');
+  $('#ce-scen-panel-toggle')?.classList.add('active');
+  $('#ce-scen-bar-toggle')?.classList.add('active');
+  populateCeScenSelect();
+  updateCeScenPanelUI();
+}
+
+function closeCeScenPanel() {
+  const panel = $('#ce-scen-panel');
+  const card = $('#ce-modal-card');
+  if (!panel || !card) return;
+  panel.classList.add('hidden');
+  card.classList.remove('with-scen-panel');
+  $('#ce-scen-panel-toggle')?.classList.remove('active');
+  $('#ce-scen-bar-toggle')?.classList.remove('active');
+}
+
+function toggleCeScenPanel() {
+  const panel = $('#ce-scen-panel');
+  if (!panel) return;
+  if (panel.classList.contains('hidden')) {
+    openCeScenPanel();
+  } else {
+    closeCeScenPanel();
+  }
+}
+
+function populateCeScenSelect() {
+  const sel = $('#ce-scen-select');
+  if (!sel) return;
+  const scenarios = state.scenarios || [];
+  if (scenarios.length === 0) {
+    sel.innerHTML = '<option value="">No scenarios available</option>';
+    ceScenSelectedId = null;
+    return;
+  }
+  let optionsHtml = '<option value="">Select a scenario to test against...</option>';
+  for (const s of scenarios) {
+    const isSel = ceScenSelectedId && ceScenSelectedId === s.id ? 'selected' : '';
+    optionsHtml += `<option value="${s.id}" ${isSel}>${esc(s.title)}</option>`;
+  }
+  sel.innerHTML = optionsHtml;
+  if (ceScenSelectedId && !scenarios.some(s => s.id === ceScenSelectedId)) {
+    ceScenSelectedId = null;
+    sel.value = '';
+  }
+}
+
+function switchCeScenTab(tab) {
+  ceScenTab = tab;
+  const isPrev = tab === 'preview';
+  $('#ce-scen-tab-preview')?.classList.toggle('active', isPrev);
+  $('#ce-scen-tab-vars')?.classList.toggle('active', !isPrev);
+  $('#ce-scen-view-preview')?.classList.toggle('hidden', !isPrev);
+  $('#ce-scen-view-vars')?.classList.toggle('hidden', isPrev);
+}
+
+function renderCeScenPreviewMarkdown(raw, charName, customVars) {
+  if (!raw || !raw.trim()) return '';
+  const persona = activePersona();
+  const userName = (persona && persona.name) || 'the user';
+  const cName = charName || 'the character';
+
+  // 1. Process markdown safely
+  let html = md(raw);
+
+  // 2. Replace {{...}} with highlighted badges (GREEN for configured, RED for unconfigured/missing)
+  html = html.replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
+    const lower = key.toLowerCase();
+    if (lower === 'char') {
+      const hasName = Boolean(cName && cName.trim() && cName !== 'the character');
+      return hasName
+        ? `<mark class="scen-hl configured" title="{{char}}: Character Name (${esc(cName)})">${esc(cName)}</mark>`
+        : `<mark class="scen-hl missing" title="{{char}}: Name not configured">[missing: {{char}}]</mark>`;
+    }
+    if (lower === 'user') {
+      return `<mark class="scen-hl configured" title="{{user}}: Personality Name (${esc(userName)})">${esc(userName)}</mark>`;
+    }
+    const val = customVars && customVars[lower];
+    if (val && String(val).trim()) {
+      return `<mark class="scen-hl configured" title="{{${esc(lower)}}}: Configured (${esc(String(val).trim())})">${esc(String(val).trim())}</mark>`;
+    }
+    return `<mark class="scen-hl missing" title="{{${esc(lower)}}}: Not configured on this character">[missing: {{${esc(lower)}}}]</mark>`;
+  });
+
+  return html;
+}
+
+function updateCeScenPanelUI() {
+  const panel = $('#ce-scen-panel');
+  if (!panel || panel.classList.contains('hidden')) return;
+
+  syncCeVariablesFromInputs();
+  const charName = $('#ce-name')?.value.trim() || '';
+
+  const scenId = $('#ce-scen-select')?.value || ceScenSelectedId;
+  ceScenSelectedId = scenId;
+
+  const contentWrap = $('#ce-scen-content-wrap');
+  const emptyHint = $('#ce-scen-empty-hint');
+  if (!scenId) {
+    contentWrap?.classList.add('hidden');
+    emptyHint?.classList.remove('hidden');
+    return;
+  }
+
+  const scen = (state.scenarios || []).find((s) => s.id === scenId);
+  if (!scen) {
+    contentWrap?.classList.add('hidden');
+    emptyHint?.classList.remove('hidden');
+    return;
+  }
+
+  contentWrap?.classList.remove('hidden');
+  emptyHint?.classList.add('hidden');
+
+  // Extract all {{tag}} tokens from scenario.content
+  const tagsRegex = /\{\{\s*([\w.-]+)\s*\}\}/gi;
+  const foundTags = new Set();
+  let m;
+  while ((m = tagsRegex.exec(scen.content)) !== null) {
+    foundTags.add(m[1].toLowerCase());
+  }
+
+  // Calculate configuration status for each variable
+  const varStatusList = [];
+  let configuredCount = 0;
+  let missingCount = 0;
+
+  for (const tag of foundTags) {
+    if (tag === 'char') {
+      const isSet = Boolean(charName);
+      if (isSet) configuredCount++; else missingCount++;
+      varStatusList.push({
+        key: 'char',
+        label: 'Character Name',
+        isConfigured: isSet,
+        value: charName || 'Name is currently empty',
+        isSystem: true,
+      });
+    } else if (tag === 'user') {
+      const persona = activePersona();
+      configuredCount++;
+      varStatusList.push({
+        key: 'user',
+        label: 'Personality Name',
+        isConfigured: true,
+        value: persona ? persona.name : 'the user',
+        isSystem: true,
+      });
+    } else {
+      const val = ceVariables[tag];
+      const isSet = Boolean(val && String(val).trim());
+      if (isSet) configuredCount++; else missingCount++;
+      varStatusList.push({
+        key: tag,
+        label: `{{${tag}}}`,
+        isConfigured: isSet,
+        value: isSet ? String(val).trim() : 'Not configured on this character',
+        isSystem: false,
+      });
+    }
+  }
+
+  // Sort: missing first, then configured
+  varStatusList.sort((a, b) => {
+    if (a.isConfigured !== b.isConfigured) return a.isConfigured ? 1 : -1;
+    return a.key.localeCompare(b.key);
+  });
+
+  // Update Status Banner
+  const banner = $('#ce-scen-status-banner');
+  if (banner) {
+    if (foundTags.size === 0) {
+      banner.className = 'ce-scen-status-banner all-good';
+      banner.innerHTML = `<span>ℹ This scenario does not use any template variables.</span>`;
+    } else if (missingCount === 0) {
+      banner.className = 'ce-scen-status-banner all-good';
+      banner.innerHTML = `
+        <span>✓ All scenario variables configured</span>
+        <span class="ce-scen-stat-pill green">${configuredCount} of ${foundTags.size}</span>
+      `;
+    } else {
+      banner.className = 'ce-scen-status-banner has-missing';
+      banner.innerHTML = `
+        <span>⚠ ${missingCount} variable${missingCount === 1 ? '' : 's'} not configured for this character</span>
+        <span class="ce-scen-stat-pill red">${missingCount} missing</span>
+      `;
+    }
+  }
+
+  // Update Variables Checklist view
+  const varsList = $('#ce-scen-vars-list');
+  if (varsList) {
+    if (varStatusList.length === 0) {
+      varsList.innerHTML = `<div class="prow-desc" style="padding:14px;text-align:center">No variables found in this scenario.</div>`;
+    } else {
+      varsList.innerHTML = varStatusList.map((v) => `
+        <div class="ce-scen-var-card ${v.isConfigured ? 'configured' : 'missing'}">
+          <div class="ce-scen-var-meta">
+            <span class="ce-scen-var-tag ${v.isConfigured ? 'configured' : 'missing'}">
+              ${v.isConfigured ? '✓' : '✕'} {{${esc(v.key)}}}
+            </span>
+            <span class="ce-scen-var-val">${esc(v.value)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="ce-scen-var-badge ${v.isConfigured ? 'configured' : 'missing'}">
+              ${v.isConfigured ? 'Configured' : 'Missing'}
+            </span>
+            ${!v.isConfigured && !v.isSystem ? `
+              <button type="button" class="btn btn-ghost sm ce-scen-add-var-btn" data-key="${esc(v.key)}" title="Add {{${esc(v.key)}}} to this character">+ Add</button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+
+  // Update Preview view for this specific character
+  const previewBox = $('#ce-scen-preview-text');
+  if (previewBox) {
+    previewBox.innerHTML = renderCeScenPreviewMarkdown(scen.content, charName, ceVariables);
+  }
+}
+
 function openCharModal(char) {
   ceMode = char ? 'edit' : 'new';
   ceId = char ? char.id : null;
@@ -1211,6 +1444,9 @@ function openCharModal(char) {
   switchCeDescTab('edit');
   closeCeVarPicker();
   closeInsertVarPopups();
+  closeCeScenPanel();
+  populateCeScenSelect();
+  switchCeScenTab('preview');
   renderCeVarsList();
   renderCeEmojiGrid();
   updateCeAvatarUI();
@@ -3152,9 +3388,11 @@ function wireEvents() {
   });
   $('#ce-desc').addEventListener('input', () => {
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+    updateCeScenPanelUI();
   });
   $('#ce-name').addEventListener('input', () => {
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+    updateCeScenPanelUI();
   });
   $('#ce-add-var-btn').addEventListener('click', openCeVarPicker);
   $('#ce-var-picker-cancel').addEventListener('click', closeCeVarPicker);
@@ -3178,6 +3416,7 @@ function wireEvents() {
     const row = $(`#ce-vars-list [data-key="${key}"] input`);
     if (row) row.focus();
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+    updateCeScenPanelUI();
   });
   $('#ce-vars-list').addEventListener('click', (e) => {
     const del = e.target.closest('[data-del-var]');
@@ -3185,12 +3424,40 @@ function wireEvents() {
     delete ceVariables[del.dataset.delVar];
     renderCeVarsList();
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+    updateCeScenPanelUI();
   });
   $('#ce-vars-list').addEventListener('input', (e) => {
     const inp = e.target.closest('.ce-var-val-input');
     if (!inp) return;
     ceVariables[inp.dataset.key] = inp.value.trim();
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+    updateCeScenPanelUI();
+  });
+
+  // Character Modal Scenario Inspector Side Panel events
+  $('#ce-scen-panel-toggle')?.addEventListener('click', toggleCeScenPanel);
+  $('#ce-scen-bar-toggle')?.addEventListener('click', toggleCeScenPanel);
+  $('#ce-scen-panel-close')?.addEventListener('click', closeCeScenPanel);
+  $('#ce-scen-select')?.addEventListener('change', (e) => {
+    ceScenSelectedId = e.target.value;
+    updateCeScenPanelUI();
+  });
+  $('#ce-scen-tab-preview')?.addEventListener('click', () => switchCeScenTab('preview'));
+  $('#ce-scen-tab-vars')?.addEventListener('click', () => switchCeScenTab('vars'));
+  $('#ce-scen-vars-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.ce-scen-add-var-btn');
+    if (!btn) return;
+    const key = btn.dataset.key;
+    if (!key) return;
+    ceVariables[key] = '';
+    renderCeVarsList();
+    closeCeVarPicker();
+    const row = $(`#ce-vars-list [data-key="${key}"] input`);
+    if (row) {
+      row.focus();
+      row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    updateCeScenPanelUI();
   });
 
   $('#ce-save').addEventListener('click', charFormSave);

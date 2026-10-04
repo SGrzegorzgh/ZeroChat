@@ -328,95 +328,143 @@
   </div>
 
   <div class="modal" id="modal-char">
-    <div class="modal-card">
+    <div class="modal-card" id="ce-modal-card">
       <div class="m-head">
         <h3 id="ce-title">New character</h3>
-        <button class="icon-btn tiny" data-close aria-label="Close">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
+        <div class="ce-head-actions">
+          <button type="button" class="btn btn-ghost sm" id="ce-scen-panel-toggle" title="Test character against a scenario">
+            <span class="icon-scen">🎬</span> <span id="ce-scen-btn-text">Test with scenario</span>
+          </button>
+          <button class="icon-btn tiny" data-close aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="m-body">
-        <div class="field">
-          <div class="set-check">
-            <label for="ce-poses-enabled">Enable custom pose switching</label>
-            <input type="checkbox" id="ce-poses-enabled">
-          </div>
-          <p class="m-note" style="margin-top:6px">When enabled, Jev switches between the character&rsquo;s poses during chat. When disabled, the single profile picture below is used and Jev is off.</p>
-        </div>
-
-        <div class="field" id="ce-avatar-field">
-          <label id="ce-avatar-label">Profile picture</label>
-          <div class="avatar-row">
-            <span id="ce-preview" class="avatar xl"></span>
-            <span id="ce-preview-full" class="preview-full hidden" title="Full image"></span>
-            <div class="avatar-actions">
-              <button id="ce-upload" class="btn btn-ghost sm" type="button">Upload image…</button>
-              <button id="ce-remove-avatar" class="btn btn-ghost sm hidden" type="button">Remove image</button>
-              <button id="ce-poses" class="btn btn-ghost sm" type="button">Poses…</button>
-              <span id="ce-poses-note" class="avatar-note">Default poses · no images yet</span>
-              <span class="avatar-note">PNG or JPEG · first crop: square icon · second: free shape for background &amp; full view</span>
+      <div class="ce-modal-layout">
+        <div class="ce-modal-main">
+          <div class="m-body">
+            <div class="field">
+              <div class="set-check">
+                <label for="ce-poses-enabled">Enable custom pose switching</label>
+                <input type="checkbox" id="ce-poses-enabled">
+              </div>
+              <p class="m-note" style="margin-top:6px">When enabled, Jev switches between the character&rsquo;s poses during chat. When disabled, the single profile picture below is used and Jev is off.</p>
             </div>
-          </div>
-          <input type="file" id="ce-file" accept="image/*" hidden>
-        </div>
-        <div class="field hidden" id="ce-emoji-block">
-          <label>Fallback emoji (shown until an image is uploaded)</label>
-          <div id="ce-emojis" class="eg"></div>
-        </div>
-        <div class="field">
-          <label>Name</label>
-          <input type="text" id="ce-name" placeholder="e.g. Luna Vasquez">
-        </div>
-        <div class="field">
-          <div class="field-tab-header">
-            <label>Description</label>
-            <div class="field-actions-row">
-              <div class="insert-var-wrap" id="ce-insert-var-wrap">
-                <button type="button" class="btn btn-ghost sm insert-var-trigger" id="ce-insert-var-btn">
-                  <span class="icon-curly">{ }</span> Insert variable ▾
-                </button>
-                <div id="ce-insert-var-popup" class="insert-var-popup hidden">
-                  <input type="text" id="ce-insert-var-search" class="search-input sm insert-var-search" placeholder="Search variable..." autocomplete="off">
-                  <div id="ce-insert-var-list" class="insert-var-list"></div>
+
+            <div class="field" id="ce-avatar-field">
+              <label id="ce-avatar-label">Profile picture</label>
+              <div class="avatar-row">
+                <span id="ce-preview" class="avatar xl"></span>
+                <span id="ce-preview-full" class="preview-full hidden" title="Full image"></span>
+                <div class="avatar-actions">
+                  <button id="ce-upload" class="btn btn-ghost sm" type="button">Upload image…</button>
+                  <button id="ce-remove-avatar" class="btn btn-ghost sm hidden" type="button">Remove image</button>
+                  <button id="ce-poses" class="btn btn-ghost sm" type="button">Poses…</button>
+                  <span id="ce-poses-note" class="avatar-note">Default poses · no images yet</span>
+                  <span class="avatar-note">PNG or JPEG · first crop: square icon · second: free shape for background &amp; full view</span>
                 </div>
               </div>
-              <div class="field-tabs">
-                <button type="button" class="field-tab-btn active" id="ce-tab-edit">Edit</button>
-                <button type="button" class="field-tab-btn" id="ce-tab-preview">Preview</button>
+              <input type="file" id="ce-file" accept="image/*" hidden>
+            </div>
+            <div class="field hidden" id="ce-emoji-block">
+              <label>Fallback emoji (shown until an image is uploaded)</label>
+              <div id="ce-emojis" class="eg"></div>
+            </div>
+            <div class="field">
+              <label>Name</label>
+              <input type="text" id="ce-name" placeholder="e.g. Luna Vasquez">
+            </div>
+            <div class="field">
+              <div class="field-tab-header">
+                <label>Description</label>
+                <div class="field-actions-row">
+                  <div class="insert-var-wrap" id="ce-insert-var-wrap">
+                    <button type="button" class="btn btn-ghost sm insert-var-trigger" id="ce-insert-var-btn">
+                      <span class="icon-curly">{ }</span> Insert variable ▾
+                    </button>
+                    <div id="ce-insert-var-popup" class="insert-var-popup hidden">
+                      <input type="text" id="ce-insert-var-search" class="search-input sm insert-var-search" placeholder="Search variable..." autocomplete="off">
+                      <div id="ce-insert-var-list" class="insert-var-list"></div>
+                    </div>
+                  </div>
+                  <div class="field-tabs">
+                    <button type="button" class="field-tab-btn active" id="ce-tab-edit">Edit</button>
+                    <button type="button" class="field-tab-btn" id="ce-tab-preview">Preview</button>
+                  </div>
+                </div>
+              </div>
+              <div id="ce-desc-edit-wrap">
+                <textarea id="ce-desc" rows="4" placeholder="Who are they? A few sentences — background, personality, quirks, how they treat you..."></textarea>
+              </div>
+              <div id="ce-desc-prev-wrap" class="field-preview-box hidden"></div>
+              <p class="m-note">{{char}}, {{user}}, and any character variables are dynamically evaluated.</p>
+            </div>
+
+            <div class="field" style="margin-top:14px">
+              <div class="scen-chars-bar">
+                <span class="scen-chars-label">Character Variables</span>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <button type="button" class="btn btn-ghost sm" id="ce-scen-bar-toggle" title="Test with scenario">🎬 Test scenario</button>
+                  <button type="button" class="btn btn-ghost sm" id="ce-add-var-btn">+ Add variable</button>
+                </div>
+              </div>
+              <div id="ce-var-picker" class="var-picker-pop hidden">
+                <div class="var-picker-search-row">
+                  <input type="text" id="ce-var-picker-input" class="search-input" placeholder="Pick or type a new variable name..." autocomplete="off">
+                  <button type="button" class="btn btn-ghost sm" id="ce-var-picker-cancel">Close</button>
+                </div>
+                <div id="ce-var-picker-list" class="var-picker-list"></div>
+              </div>
+              <div id="ce-vars-list" class="ce-vars-list"></div>
+            </div>
+
+            <div class="field">
+              <label>Note for user</label>
+              <textarea id="ce-note" rows="2" placeholder="A private reminder shown under their name — the model never sees this."></textarea>
+            </div>
+          </div>
+          <div class="m-foot">
+            <button id="ce-delete" class="btn btn-danger hidden">Delete character</button>
+            <span class="spacer"></span>
+            <button id="ce-save" class="btn btn-primary">Save character</button>
+          </div>
+        </div>
+
+        <div class="ce-scen-panel hidden" id="ce-scen-panel">
+          <div class="ce-scen-panel-head">
+            <div class="ce-scen-panel-title">
+              <span class="icon-scen">🎬</span>
+              <span>Scenario Preview &amp; Checker</span>
+            </div>
+            <button type="button" class="icon-btn tiny" id="ce-scen-panel-close" title="Close scenario panel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="ce-scen-panel-body">
+            <div class="field" style="margin-bottom:8px">
+              <label for="ce-scen-select" style="font-size:12px;margin-bottom:6px">Select scenario to test against:</label>
+              <select id="ce-scen-select" class="ce-scen-select"></select>
+            </div>
+            <div id="ce-scen-content-wrap" class="hidden">
+              <div class="ce-scen-status-banner" id="ce-scen-status-banner"></div>
+              <div class="field-tab-header" style="margin-top:8px;margin-bottom:8px">
+                <div class="field-tabs">
+                  <button type="button" class="field-tab-btn active" id="ce-scen-tab-preview">Preview</button>
+                  <button type="button" class="field-tab-btn" id="ce-scen-tab-vars">Variables</button>
+                </div>
+              </div>
+              <div id="ce-scen-view-preview" class="ce-scen-view">
+                <div class="ce-scen-preview-box" id="ce-scen-preview-text"></div>
+              </div>
+              <div id="ce-scen-view-vars" class="ce-scen-view hidden">
+                <div class="ce-scen-vars-list" id="ce-scen-vars-list"></div>
               </div>
             </div>
-          </div>
-          <div id="ce-desc-edit-wrap">
-            <textarea id="ce-desc" rows="4" placeholder="Who are they? A few sentences — background, personality, quirks, how they treat you..."></textarea>
-          </div>
-          <div id="ce-desc-prev-wrap" class="field-preview-box hidden"></div>
-          <p class="m-note">{{char}}, {{user}}, and any character variables are dynamically evaluated.</p>
-        </div>
-
-        <div class="field" style="margin-top:14px">
-          <div class="scen-chars-bar">
-            <span class="scen-chars-label">Character Variables</span>
-            <button type="button" class="btn btn-ghost sm" id="ce-add-var-btn">+ Add variable</button>
-          </div>
-          <div id="ce-var-picker" class="var-picker-pop hidden">
-            <div class="var-picker-search-row">
-              <input type="text" id="ce-var-picker-input" class="search-input" placeholder="Pick or type a new variable name..." autocomplete="off">
-              <button type="button" class="btn btn-ghost sm" id="ce-var-picker-cancel">Close</button>
+            <div id="ce-scen-empty-hint" class="prow-desc" style="padding:28px 14px;text-align:center">
+              Select a scenario above to check which variables it needs and preview how this character appears in the scene.
             </div>
-            <div id="ce-var-picker-list" class="var-picker-list"></div>
           </div>
-          <div id="ce-vars-list" class="ce-vars-list"></div>
         </div>
-
-        <div class="field">
-          <label>Note for user</label>
-          <textarea id="ce-note" rows="2" placeholder="A private reminder shown under their name — the model never sees this."></textarea>
-        </div>
-      </div>
-      <div class="m-foot">
-        <button id="ce-delete" class="btn btn-danger hidden">Delete character</button>
-        <span class="spacer"></span>
-        <button id="ce-save" class="btn btn-primary">Save character</button>
       </div>
     </div>
   </div>
