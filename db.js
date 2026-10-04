@@ -463,69 +463,6 @@ function seedScenariosIfEmpty() {
 seedIfEmpty();
 seedScenariosIfEmpty();
 
-const VARS_SEED_FLAG = 'vars.seeded.v1';
-
-function seedVariablesIfEmpty() {
-  const seeded = db.prepare('SELECT value FROM settings WHERE key = ?').get(VARS_SEED_FLAG);
-  if (!seeded) {
-    const demoVars = {
-      'c-luna': {
-        hair: 'Long, loose silver hair',
-        eyes: 'Faintly violet, observant and deep',
-        clothing: 'Dark velvet scholar robes with silver celestial stitching',
-        voice: 'Quiet, calm, faintly melodic',
-        species: 'Human mage',
-      },
-      'c-rex': {
-        hair: 'Close-cropped dark gray',
-        eyes: 'Steel gray, squinting against reactor glare',
-        clothing: 'Weathered flight jacket, rolled sleeves, and combat boots',
-        voice: 'Gruff, low, economical with words',
-        quirk: 'Drinks bitter black coffee from a dented metal mug',
-      },
-      'c-ellie': {
-        hair: 'Silver synthetic bob with soft fiber strands',
-        eyes: 'Gentle glowing cyan optical sensors',
-        clothing: 'Clean white and slate-gray technician uniform',
-        voice: 'Earnest, melodic, with immaculate literal cadence',
-        species: 'Prototype Android',
-      },
-      'c-ember': {
-        hair: 'Crest of obsidian horns and fiery spines',
-        eyes: 'Molten gold with slit pupils',
-        clothing: 'Shimmering crimson and coal dragon scales',
-        voice: 'Deep, reverberant, like grinding tectonic plates',
-        species: 'Ancient dragon',
-      },
-      'c-sakura': {
-        hair: 'Dark chestnut tied in a loose messy bun',
-        eyes: 'Warm hazel, expressive and friendly',
-        clothing: 'Embroidered linen apron over a pastel cardigan',
-        voice: 'Bright, cheerful, enthusiastic',
-        species: 'Human',
-      },
-      'c-marlowe': {
-        hair: 'Dark brown, thinning at the temples',
-        eyes: 'Tired blue beneath heavy brows',
-        clothing: 'Crumpled trench coat, loosened striped tie, fedora',
-        voice: 'Raspy from Chesterfield cigarettes, dry and sarcastic',
-        species: 'Human',
-      },
-    };
-    for (const [cid, vars] of Object.entries(demoVars)) {
-      const char = db.prepare('SELECT variables FROM characters WHERE id = ?').get(cid);
-      if (char) {
-        const existing = safeParse(char.variables, {});
-        if (!existing || Object.keys(existing).length === 0) {
-          db.prepare('UPDATE characters SET variables = ? WHERE id = ?').run(JSON.stringify(vars), cid);
-        }
-      }
-    }
-    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(VARS_SEED_FLAG, JSON.stringify(true));
-  }
-}
-seedVariablesIfEmpty();
-
 const SETTINGS_DEFAULTS = {
   provider: 'openrouter',
   baseUrl: 'https://openrouter.ai/api/v1',

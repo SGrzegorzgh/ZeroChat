@@ -370,28 +370,32 @@
         <div class="field">
           <div class="field-tab-header">
             <label>Description</label>
-            <div class="field-tabs">
-              <button type="button" class="field-tab-btn active" id="ce-tab-edit">Edit</button>
-              <button type="button" class="field-tab-btn" id="ce-tab-preview">Preview</button>
+            <div class="field-actions-row">
+              <div class="insert-var-wrap" id="ce-insert-var-wrap">
+                <button type="button" class="btn btn-ghost sm insert-var-trigger" id="ce-insert-var-btn">
+                  <span class="icon-curly">{ }</span> Insert variable ▾
+                </button>
+                <div id="ce-insert-var-popup" class="insert-var-popup hidden">
+                  <input type="text" id="ce-insert-var-search" class="search-input sm insert-var-search" placeholder="Search variable..." autocomplete="off">
+                  <div id="ce-insert-var-list" class="insert-var-list"></div>
+                </div>
+              </div>
+              <div class="field-tabs">
+                <button type="button" class="field-tab-btn active" id="ce-tab-edit">Edit</button>
+                <button type="button" class="field-tab-btn" id="ce-tab-preview">Preview</button>
+              </div>
             </div>
           </div>
           <div id="ce-desc-edit-wrap">
-            <div class="var-insert-bar">
-              <span class="var-bar-label">Insert:</span>
-              <div class="var-chips-scroll" id="ce-var-chips"></div>
-            </div>
             <textarea id="ce-desc" rows="4" placeholder="Who are they? A few sentences — background, personality, quirks, how they treat you..."></textarea>
           </div>
           <div id="ce-desc-prev-wrap" class="field-preview-box hidden"></div>
-          <p class="m-note">{{char}}, {{user}}, and any character variables (e.g. {{hair}}) are dynamically evaluated.</p>
+          <p class="m-note">{{char}}, {{user}}, and any character variables are dynamically evaluated.</p>
         </div>
 
         <div class="field" style="margin-top:14px">
           <div class="scen-chars-bar">
-            <div>
-              <span class="scen-chars-label">Character Variables</span>
-              <p class="m-note" style="margin-top:2px">Custom traits ({{hair}}, {{clothing}}, {{eyes}}) for scenarios to adapt to.</p>
-            </div>
+            <span class="scen-chars-label">Character Variables</span>
             <button type="button" class="btn btn-ghost sm" id="ce-add-var-btn">+ Add variable</button>
           </div>
           <div id="ce-var-picker" class="var-picker-pop hidden">
@@ -600,6 +604,15 @@
                 <span class="se-char-swap-label">Preview as:</span>
                 <select id="se-preview-char-select" class="se-char-select"></select>
               </div>
+              <div class="insert-var-wrap" id="se-insert-var-wrap">
+                <button type="button" class="btn btn-ghost sm insert-var-trigger" id="se-insert-var-btn">
+                  <span class="icon-curly">{ }</span> Insert variable ▾
+                </button>
+                <div id="se-insert-var-popup" class="insert-var-popup hidden">
+                  <input type="text" id="se-insert-var-search" class="search-input sm insert-var-search" placeholder="Search variable..." autocomplete="off">
+                  <div id="se-insert-var-list" class="insert-var-list"></div>
+                </div>
+              </div>
               <div class="field-tabs">
                 <button type="button" class="field-tab-btn active" id="se-tab-edit">Edit</button>
                 <button type="button" class="field-tab-btn" id="se-tab-preview">Preview</button>
@@ -607,10 +620,6 @@
             </div>
           </div>
           <div id="se-content-edit-wrap">
-            <div class="var-insert-bar">
-              <span class="var-bar-label">Insert:</span>
-              <div class="var-chips-scroll" id="se-var-chips"></div>
-            </div>
             <textarea id="se-content" rows="6" placeholder="*The rain hammers against the window...*&#10;&#10;Describe the setting, situation, and opening dialogue."></textarea>
           </div>
           <div id="se-content-prev-wrap" class="field-preview-box hidden"></div>

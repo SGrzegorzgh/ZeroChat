@@ -419,56 +419,32 @@ function editBoxHtml(n) {
 /* Mirror of the server's template tags, for display and preview: character-authored
    text and scenario prompts show the names and character variables substituted,
    while the user's own messages stay exactly as they were typed. */
-const PREMADE_VARIABLES = [
-  { key: 'hair', label: 'Hair style & color', placeholder: 'e.g. Long, straight, blonde' },
-  { key: 'eyes', label: 'Eye color & gaze', placeholder: 'e.g. Deep emerald green, sharp' },
-  { key: 'clothing', label: 'Clothing & attire', placeholder: 'e.g. Dark velvet scholar robes' },
-  { key: 'voice', label: 'Voice & tone', placeholder: 'e.g. Quiet, calm, faintly melodic' },
-  { key: 'species', label: 'Species or race', placeholder: 'e.g. Human / Elf / Android' },
-  { key: 'quirk', label: 'Habit or quirk', placeholder: 'e.g. Fidgets with an amulet' },
-  { key: 'height', label: 'Height & build', placeholder: 'e.g. Tall, lithe and athletic' },
-  { key: 'gender', label: 'Gender', placeholder: 'e.g. Female / Male / Non-binary' },
-  { key: 'age', label: 'Apparent age', placeholder: 'e.g. Early 20s' },
-  { key: 'scent', label: 'Scent', placeholder: 'e.g. Old parchment and midnight rain' },
-];
 
 function getAllVariables() {
   const varsMap = new Map();
-  for (const pv of PREMADE_VARIABLES) {
-    varsMap.set(pv.key.toLowerCase(), {
-      key: pv.key,
-      label: pv.label,
-      placeholder: pv.placeholder,
-      isPremade: true,
-      usedBy: [],
-    });
-  }
   for (const c of (state.characters || [])) {
     if (c.variables && typeof c.variables === 'object') {
       for (const [k, v] of Object.entries(c.variables)) {
         if (!k) continue;
         const norm = k.trim().toLowerCase();
+        const valStr = String(v == null ? '' : v).trim();
+        if (!valStr) continue; // If empty or removed, does not exist!
+
         if (!varsMap.has(norm)) {
           varsMap.set(norm, {
             key: norm,
-            label: norm,
-            placeholder: '',
-            isPremade: false,
             usedBy: [],
           });
         }
-        const item = varsMap.get(norm);
-        if (v && String(v).trim()) {
-          item.usedBy.push({
-            characterId: c.id,
-            characterName: c.name,
-            value: String(v).trim(),
-          });
-        }
+        varsMap.get(norm).usedBy.push({
+          characterId: c.id,
+          characterName: c.name,
+          value: valStr,
+        });
       }
     }
   }
-  return Array.from(varsMap.values());
+  return Array.from(varsMap.values()).sort((a, b) => a.key.localeCompare(b.key));
 }
 
 function insertAtCaret(ta, text) {
@@ -483,10 +459,10 @@ function insertAtCaret(ta, text) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-function expandTags(s, characterId, customVars = null, highlight = false, customCharName = null) {
+function expandTags(s, characterId, customVars = null, customCharName = null) {
   if (s == null) return '';
   const str = String(s);
-  if (!highlight && str.indexOf('{{') === -1) return str;
+  if (str.indexOf('{{') === -1) return str;
   const persona = activePersona();
   const c = state.characters.find((x) => x.id === characterId);
   const charName = customCharName || (c && c.name) || 'the character';
@@ -499,24 +475,53 @@ function expandTags(s, characterId, customVars = null, highlight = false, custom
 
   return str.replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
     const lower = key.toLowerCase();
-    if (lower === 'char') {
-      return highlight ? `<mark class="var-hl char" title="{{char}}">${esc(charName)}</mark>` : charName;
-    }
-    if (lower === 'user') {
-      return highlight ? `<mark class="var-hl user" title="{{user}}">${esc(userName)}</mark>` : userName;
-    }
+    if (lower === 'char') return charName;
+    if (lower === 'user') return userName;
     if (varMap.has(lower)) {
       const val = varMap.get(lower);
-      if (val) {
-        return highlight ? `<mark class="var-hl var" title="{{${lower}}}">${esc(val)}</mark>` : val;
-      }
-      return highlight ? `<span class="var-unset" title="Variable '{{${lower}}}' is empty">[${lower}: empty]</span>` : '';
-    }
-    if (highlight) {
-      return `<span class="var-unset" title="Variable '{{${lower}}}' is not defined for this character">[${lower}: unset]</span>`;
+      return val != null ? String(val) : '';
     }
     return match;
   });
+}
+
+function renderPreviewMarkdown(raw, characterId, customVars = null, customCharName = null) {
+  if (!raw || !raw.trim()) {
+    return `<div class="prow-desc" style="padding:16px;text-align:center">Nothing to preview. Switch to Edit to write.</div>`;
+  }
+  const persona = activePersona();
+  const c = state.characters.find((x) => x.id === characterId);
+  const charName = customCharName || (c && c.name) || 'the character';
+  const userName = (persona && persona.name) || 'the user';
+  const vars = customVars || ((c && c.variables && typeof c.variables === 'object') ? c.variables : {});
+  const varMap = new Map();
+  for (const [k, v] of Object.entries(vars)) {
+    if (k) varMap.set(k.trim().toLowerCase(), String(v == null ? '' : v));
+  }
+
+  // 1. Convert markdown to HTML (safely escaping raw user text)
+  let html = md(raw);
+
+  // 2. Substitute {{...}} tokens into rendered HTML badges (NOT re-escaped)
+  html = html.replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
+    const lower = key.toLowerCase();
+    if (lower === 'char') {
+      return `<mark class="var-hl char" title="{{char}}">${esc(charName)}</mark>`;
+    }
+    if (lower === 'user') {
+      return `<mark class="var-hl user" title="{{user}}">${esc(userName)}</mark>`;
+    }
+    if (varMap.has(lower)) {
+      const val = varMap.get(lower);
+      if (val && val.trim()) {
+        return `<mark class="var-hl var" title="{{${esc(lower)}}}">${esc(val.trim())}</mark>`;
+      }
+      return `<span class="var-unset" title="Variable '{{${esc(lower)}}}' is empty">[empty: {{${esc(lower)}}}]</span>`;
+    }
+    return `<span class="var-unset" title="Variable '{{${esc(lower)}}}' is not defined for this character">[unset: {{${esc(lower)}}}]</span>`;
+  });
+
+  return html;
 }
 
 function msgHtml(c, p, n, chat) {
@@ -1025,6 +1030,8 @@ function switchCeDescTab(tab) {
   $('#ce-tab-preview').classList.toggle('active', !isEdit);
   $('#ce-desc-edit-wrap').classList.toggle('hidden', !isEdit);
   $('#ce-desc-prev-wrap').classList.toggle('hidden', isEdit);
+  const wrap = $('#ce-insert-var-wrap');
+  if (wrap) wrap.classList.toggle('hidden', !isEdit);
   if (!isEdit) renderCeDescPreview();
 }
 
@@ -1040,19 +1047,7 @@ function renderCeDescPreview() {
   const raw = $('#ce-desc').value;
   const charName = $('#ce-name').value.trim() || 'Character';
   syncCeVariablesFromInputs();
-  const out = expandTags(raw, null, ceVariables, true, charName);
-  $('#ce-desc-prev-wrap').innerHTML = md(out);
-}
-
-function renderCeVarChips() {
-  const container = $('#ce-var-chips');
-  if (!container) return;
-  const all = getAllVariables();
-  const keys = ['char', 'user', ...all.map((v) => v.key)];
-  const uniq = [...new Set(keys)];
-  container.innerHTML = uniq.map((k) => `
-    <button type="button" class="var-chip" data-insert="{{${k}}}">{{${k}}}</button>
-  `).join('');
+  $('#ce-desc-prev-wrap').innerHTML = renderPreviewMarkdown(raw, null, ceVariables, charName);
 }
 
 function renderCeVarsList() {
@@ -1060,25 +1055,20 @@ function renderCeVarsList() {
   if (!list) return;
   const entries = Object.entries(ceVariables);
   if (entries.length === 0) {
-    list.innerHTML = `<div class="prow-desc" style="padding:10px;text-align:center">No variables set for this character. Click "+ Add variable" to add traits like hair, clothing, eyes, etc.</div>`;
+    list.innerHTML = `<div class="prow-desc" style="padding:10px;text-align:center">No variables set. Click &ldquo;+ Add variable&rdquo; to create one.</div>`;
     return;
   }
-  const allMap = new Map(getAllVariables().map((v) => [v.key.toLowerCase(), v]));
-  list.innerHTML = entries.map(([key, val]) => {
-    const meta = allMap.get(key.toLowerCase());
-    const placeholder = meta?.placeholder || `Value for {{${key}}}`;
-    return `
-      <div class="ce-var-row" data-key="${esc(key)}">
-        <div class="ce-var-key-col">
-          <span class="ce-var-key-tag" title="{{${esc(key)}}}">{{${esc(key)}}}</span>
-        </div>
-        <div class="ce-var-val-col">
-          <input type="text" class="ce-var-val-input" data-key="${esc(key)}" value="${esc(val)}" placeholder="${esc(placeholder)}">
-        </div>
-        <button type="button" class="icon-btn tiny danger ce-var-del-btn" data-del-var="${esc(key)}" title="Remove variable">${I.trash}</button>
+  list.innerHTML = entries.map(([key, val]) => `
+    <div class="ce-var-row" data-key="${esc(key)}">
+      <div class="ce-var-key-col">
+        <span class="ce-var-key-tag" title="{{${esc(key)}}}">{{${esc(key)}}}</span>
       </div>
-    `;
-  }).join('');
+      <div class="ce-var-val-col">
+        <input type="text" class="ce-var-val-input" data-key="${esc(key)}" value="${esc(val)}" placeholder="Value for {{${esc(key)}}}">
+      </div>
+      <button type="button" class="icon-btn tiny danger ce-var-del-btn" data-del-var="${esc(key)}" title="Remove variable">${I.trash}</button>
+    </div>
+  `).join('');
 }
 
 function openCeVarPicker() {
@@ -1100,7 +1090,7 @@ function renderCeVarPickerList(q = '') {
   const all = getAllVariables().filter((v) => !existingKeys.has(v.key.toLowerCase()));
   let filtered = all;
   if (normQ) {
-    filtered = all.filter((v) => v.key.toLowerCase().includes(normQ) || v.label.toLowerCase().includes(normQ));
+    filtered = all.filter((v) => v.key.toLowerCase().includes(normQ));
   }
   const canCreate = normQ && !all.some((v) => v.key.toLowerCase() === normQ) && !existingKeys.has(normQ);
   let html = '';
@@ -1116,11 +1106,90 @@ function renderCeVarPickerList(q = '') {
     html += filtered.map((v) => `
       <div class="var-picker-item" data-add-key="${esc(v.key)}">
         <span class="var-picker-item-name">{{${esc(v.key)}}}</span>
-        <span class="var-picker-item-sub">${esc(v.label || (v.isPremade ? 'Premade' : 'Custom'))}${v.usedBy.length ? ` · in ${v.usedBy.length} char${v.usedBy.length === 1 ? '' : 's'}` : ''}</span>
+        <span class="var-picker-item-sub">Used in ${v.usedBy.length} char${v.usedBy.length === 1 ? '' : 's'}</span>
       </div>
     `).join('');
   } else if (!canCreate) {
     html += `<div class="prow-desc" style="padding:10px;text-align:center">${normQ ? 'No matching variables' : 'All available variables already added'}</div>`;
+  }
+  list.innerHTML = html;
+}
+
+/* Insert Variable Dropdown Popups for Character and Scenario editors */
+function openInsertVarPopup(mode) {
+  const popup = $(`#${mode}-insert-var-popup`);
+  if (!popup) return;
+  const wasHidden = popup.classList.contains('hidden');
+  closeInsertVarPopups();
+  if (wasHidden) {
+    popup.classList.remove('hidden');
+    const input = $(`#${mode}-insert-var-search`);
+    if (input) {
+      input.value = '';
+      setTimeout(() => input.focus(), 50);
+    }
+    renderInsertVarList(mode, '');
+  }
+}
+
+function closeInsertVarPopups() {
+  $$('.insert-var-popup').forEach((p) => p.classList.add('hidden'));
+}
+
+function renderInsertVarList(mode, q = '') {
+  const list = $(`#${mode}-insert-var-list`);
+  if (!list) return;
+  const normQ = (q || '').trim().toLowerCase();
+
+  const items = [
+    { key: 'char', sub: 'Character name' },
+    { key: 'user', sub: 'Your personality name' },
+  ];
+
+  const seen = new Set(['char', 'user']);
+  if (mode === 'ce') {
+    syncCeVariablesFromInputs();
+    for (const [k, v] of Object.entries(ceVariables)) {
+      const lower = k.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        items.push({ key: lower, sub: v ? `"${v.slice(0, 15)}${v.length > 15 ? '…' : ''}"` : 'This character' });
+      }
+    }
+  }
+  for (const v of getAllVariables()) {
+    const lower = v.key.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      const count = v.usedBy.length;
+      items.push({ key: lower, sub: count > 0 ? `Used in ${count} char${count === 1 ? '' : 's'}` : '' });
+    }
+  }
+
+  let filtered = items;
+  if (normQ) {
+    filtered = items.filter((it) => it.key.includes(normQ) || (it.sub && it.sub.toLowerCase().includes(normQ)));
+  }
+
+  const canInsertCustom = normQ && !items.some((it) => it.key === normQ);
+  let html = '';
+  if (canInsertCustom) {
+    html += `
+      <button type="button" class="insert-var-item" data-insert-key="${esc(normQ)}">
+        <span class="insert-var-tag">➕ {{${esc(normQ)}}}</span>
+        <span class="insert-var-sub">Insert tag</span>
+      </button>
+    `;
+  }
+  if (filtered.length) {
+    html += filtered.map((it) => `
+      <button type="button" class="insert-var-item" data-insert-key="${esc(it.key)}">
+        <span class="insert-var-tag">{{${esc(it.key)}}}</span>
+        <span class="insert-var-sub">${esc(it.sub)}</span>
+      </button>
+    `).join('');
+  } else if (!canInsertCustom) {
+    html += `<div class="prow-desc" style="padding:10px;text-align:center">No variables found</div>`;
   }
   list.innerHTML = html;
 }
@@ -1141,7 +1210,7 @@ function openCharModal(char) {
 
   switchCeDescTab('edit');
   closeCeVarPicker();
-  renderCeVarChips();
+  closeInsertVarPopups();
   renderCeVarsList();
   renderCeEmojiGrid();
   updateCeAvatarUI();
@@ -1198,6 +1267,16 @@ async function charFormSave() {
   const name = $('#ce-name').value.trim();
   if (!name) { toast('Give your character a name'); return; }
   syncCeVariablesFromInputs();
+  // Prune any empty/blank variables so unused variables are automatically deleted
+  const cleanVars = {};
+  for (const [k, v] of Object.entries(ceVariables)) {
+    const norm = k.trim().toLowerCase();
+    const val = (v || '').trim();
+    if (norm && val) {
+      cleanVars[norm] = val;
+    }
+  }
+  ceVariables = cleanVars;
   const body = {
     name,
     description: $('#ce-desc').value.trim(),
@@ -2020,7 +2099,6 @@ function renderSidebarVars(query = '') {
   if (q) {
     all = all.filter((v) =>
       v.key.toLowerCase().includes(q) ||
-      (v.label && v.label.toLowerCase().includes(q)) ||
       v.usedBy.some((u) => u.characterName.toLowerCase().includes(q) || u.value.toLowerCase().includes(q))
     );
   }
@@ -2028,38 +2106,34 @@ function renderSidebarVars(query = '') {
   if (badge) badge.textContent = all.length;
 
   if (all.length === 0) {
-    list.innerHTML = `<div class="prow-desc" style="padding:16px 10px;text-align:center">${q ? `No variables matching "${esc(query)}"` : 'No variables defined yet'}</div>`;
+    list.innerHTML = `<div class="prow-desc" style="padding:24px 14px;text-align:center">${q ? `No variables matching "${esc(query)}"` : 'No variables created yet.<br>Add variables to any character (under Character Editor &rarr; Character Variables) and they will appear here.'}</div>`;
     return;
   }
 
   list.innerHTML = all.map((v) => {
     const usedCount = v.usedBy.length;
-    const badgeClass = v.isPremade ? 'premade' : 'custom';
-    const badgeText = v.isPremade ? 'Premade' : 'Custom';
     return `
       <div class="var-item" data-var-key="${esc(v.key)}">
         <div class="var-item-head">
           <code class="var-tag">{{${esc(v.key)}}}</code>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span class="var-badge ${badgeClass}">${badgeText}</span>
+          <div class="var-acts">
             <button type="button" class="btn btn-ghost tiny var-copy-btn" data-copy="{{${esc(v.key)}}}">Copy</button>
+            <button type="button" class="btn btn-ghost tiny danger var-del-global-btn" data-del-var="${esc(v.key)}" title="Delete from all characters">Delete</button>
           </div>
         </div>
-        <div class="var-item-label">${esc(v.label || v.key)}</div>
+        <div class="var-usage-lbl">${usedCount} character${usedCount === 1 ? '' : 's'} using this</div>
         <div class="var-item-usage" data-toggle-vals="${esc(v.key)}">
-          <span>${usedCount > 0 ? `Used in ${usedCount} character${usedCount === 1 ? '' : 's'}` : 'Unused'}</span>
-          ${usedCount > 0 ? `<span>▾</span>` : ''}
+          <span>View values</span>
+          <span>▾</span>
         </div>
-        ${usedCount > 0 ? `
-          <div class="var-char-values hidden" id="var-vals-${esc(v.key)}">
-            ${v.usedBy.map((u) => `
-              <div class="var-char-row">
-                <span class="var-char-name">${esc(u.characterName)}:</span>
-                <span class="var-char-val" title="${esc(u.value)}">&ldquo;${esc(u.value)}&rdquo;</span>
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
+        <div class="var-char-values hidden" id="var-vals-${esc(v.key)}">
+          ${v.usedBy.map((u) => `
+            <div class="var-char-row">
+              <span class="var-char-name">${esc(u.characterName)}:</span>
+              <span class="var-char-val" title="${esc(u.value)}">&ldquo;${esc(u.value)}&rdquo;</span>
+            </div>
+          `).join('')}
+        </div>
       </div>
     `;
   }).join('');
@@ -2077,6 +2151,8 @@ function switchSeTab(tab) {
   $('#se-tab-preview').classList.toggle('active', !isEdit);
   $('#se-content-edit-wrap').classList.toggle('hidden', !isEdit);
   $('#se-content-prev-wrap').classList.toggle('hidden', isEdit);
+  const wrap = $('#se-insert-var-wrap');
+  if (wrap) wrap.classList.toggle('hidden', !isEdit);
   if (!isEdit) renderSePreview();
 }
 
@@ -2084,19 +2160,7 @@ function renderSePreview() {
   const raw = $('#se-content').value;
   const sel = $('#se-preview-char-select');
   const charId = sel ? sel.value : null;
-  const out = expandTags(raw, charId, null, true);
-  $('#se-content-prev-wrap').innerHTML = md(out);
-}
-
-function renderSeVarChips() {
-  const container = $('#se-var-chips');
-  if (!container) return;
-  const all = getAllVariables();
-  const keys = ['char', 'user', ...all.map((v) => v.key)];
-  const uniq = [...new Set(keys)];
-  container.innerHTML = uniq.map((k) => `
-    <button type="button" class="var-chip" data-insert="{{${k}}}">{{${k}}}</button>
-  `).join('');
+  $('#se-content-prev-wrap').innerHTML = renderPreviewMarkdown(raw, charId, null);
 }
 
 function populateSeCharSelect(selectedCharId = null) {
@@ -2131,7 +2195,7 @@ function openScenarioModal(sc = null) {
 
   populateSeCharSelect(pickScenarioChar ? pickScenarioChar.id : null);
   switchSeTab('edit');
-  renderSeVarChips();
+  closeInsertVarPopups();
 
   const radios = $$('input[name="se-access-mode"]');
   radios.forEach((r) => { r.checked = (r.value === seAccessMode); });
@@ -2623,7 +2687,7 @@ function wireEvents() {
   $('#vars-search').addEventListener('input', (e) => {
     renderSidebarVars(e.target.value);
   });
-  $('#vars-list').addEventListener('click', (e) => {
+  $('#vars-list').addEventListener('click', async (e) => {
     const copyBtn = e.target.closest('.var-copy-btn');
     if (copyBtn) {
       const tag = copyBtn.dataset.copy;
@@ -2632,6 +2696,19 @@ function wireEvents() {
       } else {
         toast(`Tag: ${tag}`);
       }
+      return;
+    }
+    const delGlobal = e.target.closest('.var-del-global-btn');
+    if (delGlobal) {
+      const key = delGlobal.dataset.delVar;
+      if (!confirm(`Delete variable "{{${key}}}" from all characters?`)) return;
+      const affected = state.characters.filter((c) => c.variables && c.variables[key]);
+      for (const c of affected) {
+        delete c.variables[key];
+        api(`/characters/${c.id}`, { method: 'PUT', body: JSON.stringify(c) }).catch(console.error);
+      }
+      renderSidebarVars($('#vars-search')?.value || '');
+      toast(`Deleted {{${key}}} from all characters`);
       return;
     }
     const usage = e.target.closest('[data-toggle-vals]');
@@ -2648,9 +2725,27 @@ function wireEvents() {
   $('#se-preview-char-select').addEventListener('change', () => {
     if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
   });
-  $('#se-var-chips').addEventListener('click', (e) => {
-    const chip = e.target.closest('.var-chip');
-    if (chip) insertAtCaret($('#se-content'), chip.dataset.insert);
+  $('#se-insert-var-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openInsertVarPopup('se');
+  });
+  $('#se-insert-var-search').addEventListener('input', (e) => {
+    renderInsertVarList('se', e.target.value);
+  });
+  $('#se-insert-var-search').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const first = $('#se-insert-var-list .insert-var-item');
+      if (first) first.click();
+    }
+  });
+  $('#se-insert-var-list').addEventListener('click', (e) => {
+    const item = e.target.closest('[data-insert-key]');
+    if (!item) return;
+    const key = item.dataset.insertKey;
+    insertAtCaret($('#se-content'), `{{${key}}}`);
+    closeInsertVarPopups();
+    if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
   });
   $('#se-content').addEventListener('input', () => {
     if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
@@ -2913,6 +3008,7 @@ function wireEvents() {
 
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu-wrap')) closeMenus();
+    if (!e.target.closest('.insert-var-wrap')) closeInsertVarPopups();
   });
 
   $$('.modal').forEach((m) => {
@@ -3032,9 +3128,27 @@ function wireEvents() {
   // Character Modal Tabs & Variables events
   $('#ce-tab-edit').addEventListener('click', () => switchCeDescTab('edit'));
   $('#ce-tab-preview').addEventListener('click', () => switchCeDescTab('preview'));
-  $('#ce-var-chips').addEventListener('click', (e) => {
-    const chip = e.target.closest('.var-chip');
-    if (chip) insertAtCaret($('#ce-desc'), chip.dataset.insert);
+  $('#ce-insert-var-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openInsertVarPopup('ce');
+  });
+  $('#ce-insert-var-search').addEventListener('input', (e) => {
+    renderInsertVarList('ce', e.target.value);
+  });
+  $('#ce-insert-var-search').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const first = $('#ce-insert-var-list .insert-var-item');
+      if (first) first.click();
+    }
+  });
+  $('#ce-insert-var-list').addEventListener('click', (e) => {
+    const item = e.target.closest('[data-insert-key]');
+    if (!item) return;
+    const key = item.dataset.insertKey;
+    insertAtCaret($('#ce-desc'), `{{${key}}}`);
+    closeInsertVarPopups();
+    if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
   });
   $('#ce-desc').addEventListener('input', () => {
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
@@ -3046,6 +3160,13 @@ function wireEvents() {
   $('#ce-var-picker-cancel').addEventListener('click', closeCeVarPicker);
   $('#ce-var-picker-input').addEventListener('input', (e) => {
     renderCeVarPickerList(e.target.value);
+  });
+  $('#ce-var-picker-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const first = $('#ce-var-picker-list [data-add-key]');
+      if (first) first.click();
+    }
   });
   $('#ce-var-picker-list').addEventListener('click', (e) => {
     const item = e.target.closest('[data-add-key]');
