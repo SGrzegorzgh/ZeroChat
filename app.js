@@ -416,17 +416,107 @@ function editBoxHtml(n) {
   </div>`;
 }
 
-/* Mirror of the server's template tags, for display only: character-authored
-   text shows the names substituted, while the user's own messages stay exactly
-   as they were typed. */
-function expandTags(s, characterId) {
-  if (s == null || s.indexOf('{{') === -1) return s;
+/* Mirror of the server's template tags, for display and preview: character-authored
+   text and scenario prompts show the names and character variables substituted,
+   while the user's own messages stay exactly as they were typed. */
+const PREMADE_VARIABLES = [
+  { key: 'hair', label: 'Hair style & color', placeholder: 'e.g. Long, straight, blonde' },
+  { key: 'eyes', label: 'Eye color & gaze', placeholder: 'e.g. Deep emerald green, sharp' },
+  { key: 'clothing', label: 'Clothing & attire', placeholder: 'e.g. Dark velvet scholar robes' },
+  { key: 'voice', label: 'Voice & tone', placeholder: 'e.g. Quiet, calm, faintly melodic' },
+  { key: 'species', label: 'Species or race', placeholder: 'e.g. Human / Elf / Android' },
+  { key: 'quirk', label: 'Habit or quirk', placeholder: 'e.g. Fidgets with an amulet' },
+  { key: 'height', label: 'Height & build', placeholder: 'e.g. Tall, lithe and athletic' },
+  { key: 'gender', label: 'Gender', placeholder: 'e.g. Female / Male / Non-binary' },
+  { key: 'age', label: 'Apparent age', placeholder: 'e.g. Early 20s' },
+  { key: 'scent', label: 'Scent', placeholder: 'e.g. Old parchment and midnight rain' },
+];
+
+function getAllVariables() {
+  const varsMap = new Map();
+  for (const pv of PREMADE_VARIABLES) {
+    varsMap.set(pv.key.toLowerCase(), {
+      key: pv.key,
+      label: pv.label,
+      placeholder: pv.placeholder,
+      isPremade: true,
+      usedBy: [],
+    });
+  }
+  for (const c of (state.characters || [])) {
+    if (c.variables && typeof c.variables === 'object') {
+      for (const [k, v] of Object.entries(c.variables)) {
+        if (!k) continue;
+        const norm = k.trim().toLowerCase();
+        if (!varsMap.has(norm)) {
+          varsMap.set(norm, {
+            key: norm,
+            label: norm,
+            placeholder: '',
+            isPremade: false,
+            usedBy: [],
+          });
+        }
+        const item = varsMap.get(norm);
+        if (v && String(v).trim()) {
+          item.usedBy.push({
+            characterId: c.id,
+            characterName: c.name,
+            value: String(v).trim(),
+          });
+        }
+      }
+    }
+  }
+  return Array.from(varsMap.values());
+}
+
+function insertAtCaret(ta, text) {
+  if (!ta) return;
+  const start = ta.selectionStart || 0;
+  const end = ta.selectionEnd || 0;
+  const val = ta.value;
+  ta.value = val.slice(0, start) + text + val.slice(end);
+  const newPos = start + text.length;
+  ta.setSelectionRange(newPos, newPos);
+  ta.focus();
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function expandTags(s, characterId, customVars = null, highlight = false, customCharName = null) {
+  if (s == null) return '';
+  const str = String(s);
+  if (!highlight && str.indexOf('{{') === -1) return str;
   const persona = activePersona();
-  const charName = (state.characters.find((c) => c.id === characterId) || {}).name || 'the character';
+  const c = state.characters.find((x) => x.id === characterId);
+  const charName = customCharName || (c && c.name) || 'the character';
   const userName = (persona && persona.name) || 'the user';
-  return String(s)
-    .replace(/\{\{\s*char\s*\}\}/gi, () => charName)
-    .replace(/\{\{\s*user\s*\}\}/gi, () => userName);
+  const vars = customVars || ((c && c.variables && typeof c.variables === 'object') ? c.variables : {});
+  const varMap = new Map();
+  for (const [k, v] of Object.entries(vars)) {
+    if (k) varMap.set(k.trim().toLowerCase(), String(v == null ? '' : v));
+  }
+
+  return str.replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
+    const lower = key.toLowerCase();
+    if (lower === 'char') {
+      return highlight ? `<mark class="var-hl char" title="{{char}}">${esc(charName)}</mark>` : charName;
+    }
+    if (lower === 'user') {
+      return highlight ? `<mark class="var-hl user" title="{{user}}">${esc(userName)}</mark>` : userName;
+    }
+    if (varMap.has(lower)) {
+      const val = varMap.get(lower);
+      if (val) {
+        return highlight ? `<mark class="var-hl var" title="{{${lower}}}">${esc(val)}</mark>` : val;
+      }
+      return highlight ? `<span class="var-unset" title="Variable '{{${lower}}}' is empty">[${lower}: empty]</span>` : '';
+    }
+    if (highlight) {
+      return `<span class="var-unset" title="Variable '{{${lower}}}' is not defined for this character">[${lower}: unset]</span>`;
+    }
+    return match;
+  });
 }
 
 function msgHtml(c, p, n, chat) {
@@ -927,6 +1017,113 @@ let ceEmoji = EMOJIS[0];
 let ceAvatar = null;
 let ceImage = null;
 let delArmed = null;
+let ceVariables = {};
+
+function switchCeDescTab(tab) {
+  const isEdit = tab === 'edit';
+  $('#ce-tab-edit').classList.toggle('active', isEdit);
+  $('#ce-tab-preview').classList.toggle('active', !isEdit);
+  $('#ce-desc-edit-wrap').classList.toggle('hidden', !isEdit);
+  $('#ce-desc-prev-wrap').classList.toggle('hidden', isEdit);
+  if (!isEdit) renderCeDescPreview();
+}
+
+function syncCeVariablesFromInputs() {
+  $$('#ce-vars-list .ce-var-row').forEach((row) => {
+    const key = row.dataset.key;
+    const inp = $('.ce-var-val-input', row);
+    if (key && inp) ceVariables[key] = inp.value.trim();
+  });
+}
+
+function renderCeDescPreview() {
+  const raw = $('#ce-desc').value;
+  const charName = $('#ce-name').value.trim() || 'Character';
+  syncCeVariablesFromInputs();
+  const out = expandTags(raw, null, ceVariables, true, charName);
+  $('#ce-desc-prev-wrap').innerHTML = md(out);
+}
+
+function renderCeVarChips() {
+  const container = $('#ce-var-chips');
+  if (!container) return;
+  const all = getAllVariables();
+  const keys = ['char', 'user', ...all.map((v) => v.key)];
+  const uniq = [...new Set(keys)];
+  container.innerHTML = uniq.map((k) => `
+    <button type="button" class="var-chip" data-insert="{{${k}}}">{{${k}}}</button>
+  `).join('');
+}
+
+function renderCeVarsList() {
+  const list = $('#ce-vars-list');
+  if (!list) return;
+  const entries = Object.entries(ceVariables);
+  if (entries.length === 0) {
+    list.innerHTML = `<div class="prow-desc" style="padding:10px;text-align:center">No variables set for this character. Click "+ Add variable" to add traits like hair, clothing, eyes, etc.</div>`;
+    return;
+  }
+  const allMap = new Map(getAllVariables().map((v) => [v.key.toLowerCase(), v]));
+  list.innerHTML = entries.map(([key, val]) => {
+    const meta = allMap.get(key.toLowerCase());
+    const placeholder = meta?.placeholder || `Value for {{${key}}}`;
+    return `
+      <div class="ce-var-row" data-key="${esc(key)}">
+        <div class="ce-var-key-col">
+          <span class="ce-var-key-tag" title="{{${esc(key)}}}">{{${esc(key)}}}</span>
+        </div>
+        <div class="ce-var-val-col">
+          <input type="text" class="ce-var-val-input" data-key="${esc(key)}" value="${esc(val)}" placeholder="${esc(placeholder)}">
+        </div>
+        <button type="button" class="icon-btn tiny danger ce-var-del-btn" data-del-var="${esc(key)}" title="Remove variable">${I.trash}</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function openCeVarPicker() {
+  $('#ce-var-picker').classList.remove('hidden');
+  $('#ce-var-picker-input').value = '';
+  renderCeVarPickerList('');
+  setTimeout(() => $('#ce-var-picker-input').focus(), 60);
+}
+
+function closeCeVarPicker() {
+  $('#ce-var-picker').classList.add('hidden');
+}
+
+function renderCeVarPickerList(q = '') {
+  const list = $('#ce-var-picker-list');
+  if (!list) return;
+  const normQ = q.trim().toLowerCase();
+  const existingKeys = new Set(Object.keys(ceVariables).map((k) => k.toLowerCase()));
+  const all = getAllVariables().filter((v) => !existingKeys.has(v.key.toLowerCase()));
+  let filtered = all;
+  if (normQ) {
+    filtered = all.filter((v) => v.key.toLowerCase().includes(normQ) || v.label.toLowerCase().includes(normQ));
+  }
+  const canCreate = normQ && !all.some((v) => v.key.toLowerCase() === normQ) && !existingKeys.has(normQ);
+  let html = '';
+  if (canCreate) {
+    html += `
+      <div class="var-picker-item" data-add-key="${esc(normQ)}">
+        <span class="var-picker-item-name">➕ Create "{{${esc(normQ)}}}"</span>
+        <span class="var-picker-item-sub">New custom variable</span>
+      </div>
+    `;
+  }
+  if (filtered.length) {
+    html += filtered.map((v) => `
+      <div class="var-picker-item" data-add-key="${esc(v.key)}">
+        <span class="var-picker-item-name">{{${esc(v.key)}}}</span>
+        <span class="var-picker-item-sub">${esc(v.label || (v.isPremade ? 'Premade' : 'Custom'))}${v.usedBy.length ? ` · in ${v.usedBy.length} char${v.usedBy.length === 1 ? '' : 's'}` : ''}</span>
+      </div>
+    `).join('');
+  } else if (!canCreate) {
+    html += `<div class="prow-desc" style="padding:10px;text-align:center">${normQ ? 'No matching variables' : 'All available variables already added'}</div>`;
+  }
+  list.innerHTML = html;
+}
 
 function openCharModal(char) {
   ceMode = char ? 'edit' : 'new';
@@ -934,11 +1131,18 @@ function openCharModal(char) {
   ceEmoji = char ? char.emoji : EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
   ceAvatar = char ? char.avatar : null;
   ceImage = char ? char.image : null;
+  ceVariables = { ...(char && char.variables && typeof char.variables === 'object' ? char.variables : {}) };
+
   $('#ce-title').textContent = char ? 'Edit character' : 'New character';
   $('#ce-poses-enabled').checked = !!(char && char.posesEnabled);
   $('#ce-name').value = char ? char.name : '';
   $('#ce-desc').value = char ? char.description : '';
   $('#ce-note').value = char ? char.note || '' : '';
+
+  switchCeDescTab('edit');
+  closeCeVarPicker();
+  renderCeVarChips();
+  renderCeVarsList();
   renderCeEmojiGrid();
   updateCeAvatarUI();
   updateCePosesToggleUI();
@@ -993,6 +1197,7 @@ function disarmDelete() {
 async function charFormSave() {
   const name = $('#ce-name').value.trim();
   if (!name) { toast('Give your character a name'); return; }
+  syncCeVariablesFromInputs();
   const body = {
     name,
     description: $('#ce-desc').value.trim(),
@@ -1001,6 +1206,7 @@ async function charFormSave() {
     avatar: ceAvatar,
     image: ceImage,
     posesEnabled: $('#ce-poses-enabled').checked,
+    variables: ceVariables,
   };
   try {
     let saved;
@@ -1018,6 +1224,7 @@ async function charFormSave() {
     }
   } catch (e) { toast(e.message); return; }
   renderSidebar();
+  renderSidebarVars();
   renderChat();
   closeModal('modal-char');
   loadPoses(ceMode === 'new' ? ui.activeCharacterId : ceId);
@@ -1768,12 +1975,20 @@ function switchSidebarTab(tab) {
   ui.sidebarTab = tab;
   saveUi();
   const isChars = tab === 'chars';
+  const isScen = tab === 'scenarios';
+  const isVars = tab === 'vars';
+
   $('#tab-chars-btn').classList.toggle('active', isChars);
-  $('#tab-scenarios-btn').classList.toggle('active', !isChars);
+  $('#tab-scenarios-btn').classList.toggle('active', isScen);
+  $('#tab-vars-btn').classList.toggle('active', isVars);
+
   $('#panel-chars').classList.toggle('hidden', !isChars);
-  $('#panel-scenarios').classList.toggle('hidden', isChars);
+  $('#panel-scenarios').classList.toggle('hidden', !isScen);
+  $('#panel-vars').classList.toggle('hidden', !isVars);
+
   if (isChars) renderSidebar();
-  else renderSidebarScenarios();
+  else if (isScen) renderSidebarScenarios();
+  else if (isVars) renderSidebarVars();
 }
 
 function renderSidebarScenarios() {
@@ -1797,11 +2012,111 @@ function renderSidebarScenarios() {
   `).join('');
 }
 
+function renderSidebarVars(query = '') {
+  const list = $('#vars-list');
+  if (!list) return;
+  const q = (query || '').trim().toLowerCase();
+  let all = getAllVariables();
+  if (q) {
+    all = all.filter((v) =>
+      v.key.toLowerCase().includes(q) ||
+      (v.label && v.label.toLowerCase().includes(q)) ||
+      v.usedBy.some((u) => u.characterName.toLowerCase().includes(q) || u.value.toLowerCase().includes(q))
+    );
+  }
+  const badge = $('#vars-count-badge');
+  if (badge) badge.textContent = all.length;
+
+  if (all.length === 0) {
+    list.innerHTML = `<div class="prow-desc" style="padding:16px 10px;text-align:center">${q ? `No variables matching "${esc(query)}"` : 'No variables defined yet'}</div>`;
+    return;
+  }
+
+  list.innerHTML = all.map((v) => {
+    const usedCount = v.usedBy.length;
+    const badgeClass = v.isPremade ? 'premade' : 'custom';
+    const badgeText = v.isPremade ? 'Premade' : 'Custom';
+    return `
+      <div class="var-item" data-var-key="${esc(v.key)}">
+        <div class="var-item-head">
+          <code class="var-tag">{{${esc(v.key)}}}</code>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="var-badge ${badgeClass}">${badgeText}</span>
+            <button type="button" class="btn btn-ghost tiny var-copy-btn" data-copy="{{${esc(v.key)}}}">Copy</button>
+          </div>
+        </div>
+        <div class="var-item-label">${esc(v.label || v.key)}</div>
+        <div class="var-item-usage" data-toggle-vals="${esc(v.key)}">
+          <span>${usedCount > 0 ? `Used in ${usedCount} character${usedCount === 1 ? '' : 's'}` : 'Unused'}</span>
+          ${usedCount > 0 ? `<span>▾</span>` : ''}
+        </div>
+        ${usedCount > 0 ? `
+          <div class="var-char-values hidden" id="var-vals-${esc(v.key)}">
+            ${v.usedBy.map((u) => `
+              <div class="var-char-row">
+                <span class="var-char-name">${esc(u.characterName)}:</span>
+                <span class="var-char-val" title="${esc(u.value)}">&ldquo;${esc(u.value)}&rdquo;</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
 let seMode = 'new';
 let seId = null;
 let seAccessMode = 'all';
 let seCharacterIds = new Set();
 let seDelArmed = null;
+
+function switchSeTab(tab) {
+  const isEdit = tab === 'edit';
+  $('#se-tab-edit').classList.toggle('active', isEdit);
+  $('#se-tab-preview').classList.toggle('active', !isEdit);
+  $('#se-content-edit-wrap').classList.toggle('hidden', !isEdit);
+  $('#se-content-prev-wrap').classList.toggle('hidden', isEdit);
+  if (!isEdit) renderSePreview();
+}
+
+function renderSePreview() {
+  const raw = $('#se-content').value;
+  const sel = $('#se-preview-char-select');
+  const charId = sel ? sel.value : null;
+  const out = expandTags(raw, charId, null, true);
+  $('#se-content-prev-wrap').innerHTML = md(out);
+}
+
+function renderSeVarChips() {
+  const container = $('#se-var-chips');
+  if (!container) return;
+  const all = getAllVariables();
+  const keys = ['char', 'user', ...all.map((v) => v.key)];
+  const uniq = [...new Set(keys)];
+  container.innerHTML = uniq.map((k) => `
+    <button type="button" class="var-chip" data-insert="{{${k}}}">{{${k}}}</button>
+  `).join('');
+}
+
+function populateSeCharSelect(selectedCharId = null) {
+  const sel = $('#se-preview-char-select');
+  if (!sel) return;
+  if (!state.characters || state.characters.length === 0) {
+    sel.innerHTML = '<option value="">No characters</option>';
+    return;
+  }
+  sel.innerHTML = state.characters.map((c) => `
+    <option value="${c.id}">${esc(c.name)}</option>
+  `).join('');
+  if (selectedCharId && state.characters.some((c) => c.id === selectedCharId)) {
+    sel.value = selectedCharId;
+  } else if (ui.activeCharacterId && state.characters.some((c) => c.id === ui.activeCharacterId)) {
+    sel.value = ui.activeCharacterId;
+  } else {
+    sel.value = state.characters[0].id;
+  }
+}
 
 function openScenarioModal(sc = null) {
   seMode = sc ? 'edit' : 'new';
@@ -1813,6 +2128,10 @@ function openScenarioModal(sc = null) {
   $('#se-title').value = sc ? sc.title : '';
   $('#se-desc').value = sc ? sc.description : '';
   $('#se-content').value = sc ? sc.content : '';
+
+  populateSeCharSelect(pickScenarioChar ? pickScenarioChar.id : null);
+  switchSeTab('edit');
+  renderSeVarChips();
 
   const radios = $$('input[name="se-access-mode"]');
   radios.forEach((r) => { r.checked = (r.value === seAccessMode); });
@@ -2035,8 +2354,10 @@ function closeSidebar() {
 function renderAll() {
   renderSidebar();
   renderSidebarScenarios();
+  renderSidebarVars();
   setHint();
   if (ui.sidebarTab === 'scenarios') switchSidebarTab('scenarios');
+  else if (ui.sidebarTab === 'vars') switchSidebarTab('vars');
   else switchSidebarTab('chars');
   if (ui.activeCharacterId && state.characters.find((c) => c.id === ui.activeCharacterId)) {
     openCharacter(ui.activeCharacterId);
@@ -2272,6 +2593,7 @@ function wireEvents() {
   $$('.combo').forEach((c) => setupModelCombo(c));
   $('#tab-chars-btn').addEventListener('click', () => switchSidebarTab('chars'));
   $('#tab-scenarios-btn').addEventListener('click', () => switchSidebarTab('scenarios'));
+  $('#tab-vars-btn').addEventListener('click', () => switchSidebarTab('vars'));
   $('#new-char-btn').addEventListener('click', () => openCharModal(null));
   $('#new-scenario-btn').addEventListener('click', () => openScenarioModal(null));
   $('#char-list').addEventListener('click', (e) => {
@@ -2297,7 +2619,42 @@ function wireEvents() {
   $('#menu-btn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
   $('#scrim').addEventListener('click', closeSidebar);
 
+  // Variables Directory in Sidebar
+  $('#vars-search').addEventListener('input', (e) => {
+    renderSidebarVars(e.target.value);
+  });
+  $('#vars-list').addEventListener('click', (e) => {
+    const copyBtn = e.target.closest('.var-copy-btn');
+    if (copyBtn) {
+      const tag = copyBtn.dataset.copy;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(tag).then(() => toast(`Copied ${tag} to clipboard`));
+      } else {
+        toast(`Tag: ${tag}`);
+      }
+      return;
+    }
+    const usage = e.target.closest('[data-toggle-vals]');
+    if (usage) {
+      const key = usage.dataset.toggleVals;
+      const vals = $(`#var-vals-${key}`);
+      if (vals) vals.classList.toggle('hidden');
+    }
+  });
+
   // Scenario Modal events
+  $('#se-tab-edit').addEventListener('click', () => switchSeTab('edit'));
+  $('#se-tab-preview').addEventListener('click', () => switchSeTab('preview'));
+  $('#se-preview-char-select').addEventListener('change', () => {
+    if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
+  });
+  $('#se-var-chips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.var-chip');
+    if (chip) insertAtCaret($('#se-content'), chip.dataset.insert);
+  });
+  $('#se-content').addEventListener('input', () => {
+    if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
+  });
   $$('input[name="se-access-mode"]').forEach((r) => {
     r.addEventListener('change', (e) => {
       seAccessMode = e.target.value;
@@ -2671,6 +3028,50 @@ function wireEvents() {
     ceImage = null;
     updateCeAvatarUI();
   });
+
+  // Character Modal Tabs & Variables events
+  $('#ce-tab-edit').addEventListener('click', () => switchCeDescTab('edit'));
+  $('#ce-tab-preview').addEventListener('click', () => switchCeDescTab('preview'));
+  $('#ce-var-chips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.var-chip');
+    if (chip) insertAtCaret($('#ce-desc'), chip.dataset.insert);
+  });
+  $('#ce-desc').addEventListener('input', () => {
+    if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+  });
+  $('#ce-name').addEventListener('input', () => {
+    if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+  });
+  $('#ce-add-var-btn').addEventListener('click', openCeVarPicker);
+  $('#ce-var-picker-cancel').addEventListener('click', closeCeVarPicker);
+  $('#ce-var-picker-input').addEventListener('input', (e) => {
+    renderCeVarPickerList(e.target.value);
+  });
+  $('#ce-var-picker-list').addEventListener('click', (e) => {
+    const item = e.target.closest('[data-add-key]');
+    if (!item) return;
+    const key = item.dataset.addKey;
+    ceVariables[key] = '';
+    renderCeVarsList();
+    closeCeVarPicker();
+    const row = $(`#ce-vars-list [data-key="${key}"] input`);
+    if (row) row.focus();
+    if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+  });
+  $('#ce-vars-list').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-del-var]');
+    if (!del) return;
+    delete ceVariables[del.dataset.delVar];
+    renderCeVarsList();
+    if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+  });
+  $('#ce-vars-list').addEventListener('input', (e) => {
+    const inp = e.target.closest('.ce-var-val-input');
+    if (!inp) return;
+    ceVariables[inp.dataset.key] = inp.value.trim();
+    if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+  });
+
   $('#ce-save').addEventListener('click', charFormSave);
   $('#ce-delete').addEventListener('click', async () => {
     const btn = $('#ce-delete');

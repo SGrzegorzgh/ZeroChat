@@ -135,11 +135,19 @@ function poseCfg(settings) {
 function expandPromptMacros(s, char, persona) {
   if (s == null) return '';
   const userName = persona ? persona.name : 'the user';
-  /* Function replacement, so a name containing "$&" or "$1" is inserted
-     literally instead of being read as a substitution pattern. */
-  return String(s)
-    .replace(/\{\{\s*char\s*\}\}/gi, () => char.name)
-    .replace(/\{\{\s*user\s*\}\}/gi, () => userName);
+  const charName = (char && char.name) || 'the character';
+  const vars = (char && char.variables && typeof char.variables === 'object') ? char.variables : {};
+  const varMap = new Map();
+  for (const [k, v] of Object.entries(vars)) {
+    if (k) varMap.set(k.trim().toLowerCase(), String(v == null ? '' : v));
+  }
+  return String(s).replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
+    const lower = key.toLowerCase();
+    if (lower === 'char') return charName;
+    if (lower === 'user') return userName;
+    if (varMap.has(lower)) return varMap.get(lower);
+    return match;
+  });
 }
 
 function buildTurns(pathNodes, char, persona) {

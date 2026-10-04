@@ -25,6 +25,7 @@
       <div class="sidebar-tabs">
         <button type="button" class="sidebar-tab active" id="tab-chars-btn">Characters</button>
         <button type="button" class="sidebar-tab" id="tab-scenarios-btn">Scenarios</button>
+        <button type="button" class="sidebar-tab" id="tab-vars-btn">Variables</button>
       </div>
 
       <div id="panel-chars" class="sidebar-panel">
@@ -51,6 +52,17 @@
             </span>
           </button>
         </div>
+      </div>
+
+      <div id="panel-vars" class="sidebar-panel hidden">
+        <div class="sidebar-label" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Variables directory</span>
+          <span id="vars-count-badge" class="badge">0</span>
+        </div>
+        <div style="padding:0 10px 8px">
+          <input type="text" id="vars-search" class="search-input" placeholder="Search variables or values…" autocomplete="off">
+        </div>
+        <div id="vars-list" class="vars-list"></div>
       </div>
     </aside>
 
@@ -356,14 +368,46 @@
           <input type="text" id="ce-name" placeholder="e.g. Luna Vasquez">
         </div>
         <div class="field">
-          <label>Description</label>
-          <textarea id="ce-desc" rows="4" placeholder="Who are they? A few sentences — background, personality, quirks, how they treat you..."></textarea>
+          <div class="field-tab-header">
+            <label>Description</label>
+            <div class="field-tabs">
+              <button type="button" class="field-tab-btn active" id="ce-tab-edit">Edit</button>
+              <button type="button" class="field-tab-btn" id="ce-tab-preview">Preview</button>
+            </div>
+          </div>
+          <div id="ce-desc-edit-wrap">
+            <div class="var-insert-bar">
+              <span class="var-bar-label">Insert:</span>
+              <div class="var-chips-scroll" id="ce-var-chips"></div>
+            </div>
+            <textarea id="ce-desc" rows="4" placeholder="Who are they? A few sentences — background, personality, quirks, how they treat you..."></textarea>
+          </div>
+          <div id="ce-desc-prev-wrap" class="field-preview-box hidden"></div>
+          <p class="m-note">{{char}}, {{user}}, and any character variables (e.g. {{hair}}) are dynamically evaluated.</p>
         </div>
+
+        <div class="field" style="margin-top:14px">
+          <div class="scen-chars-bar">
+            <div>
+              <span class="scen-chars-label">Character Variables</span>
+              <p class="m-note" style="margin-top:2px">Custom traits ({{hair}}, {{clothing}}, {{eyes}}) for scenarios to adapt to.</p>
+            </div>
+            <button type="button" class="btn btn-ghost sm" id="ce-add-var-btn">+ Add variable</button>
+          </div>
+          <div id="ce-var-picker" class="var-picker-pop hidden">
+            <div class="var-picker-search-row">
+              <input type="text" id="ce-var-picker-input" class="search-input" placeholder="Pick or type a new variable name..." autocomplete="off">
+              <button type="button" class="btn btn-ghost sm" id="ce-var-picker-cancel">Close</button>
+            </div>
+            <div id="ce-var-picker-list" class="var-picker-list"></div>
+          </div>
+          <div id="ce-vars-list" class="ce-vars-list"></div>
+        </div>
+
         <div class="field">
           <label>Note for user</label>
           <textarea id="ce-note" rows="2" placeholder="A private reminder shown under their name — the model never sees this."></textarea>
         </div>
-        <p class="m-note">{{char}} and {{user}} work in the description — they become the character&rsquo;s and your personality&rsquo;s names.</p>
       </div>
       <div class="m-foot">
         <button id="ce-delete" class="btn btn-danger hidden">Delete character</button>
@@ -549,9 +593,28 @@
           <input type="text" id="se-desc" placeholder="A one-line teaser or summary of the situation">
         </div>
         <div class="field">
-          <label>Scenario prompt / Opening scene</label>
-          <textarea id="se-content" rows="6" placeholder="*The rain hammers against the window...*&#10;&#10;Describe the setting, situation, and opening dialogue."></textarea>
-          <p class="m-note">{{char}} and {{user}} work in the prompt and are replaced with the character&rsquo;s and your personality&rsquo;s names.</p>
+          <div class="field-tab-header">
+            <label>Scenario prompt / Opening scene</label>
+            <div class="se-preview-controls">
+              <div class="se-char-swap-wrap">
+                <span class="se-char-swap-label">Preview as:</span>
+                <select id="se-preview-char-select" class="se-char-select"></select>
+              </div>
+              <div class="field-tabs">
+                <button type="button" class="field-tab-btn active" id="se-tab-edit">Edit</button>
+                <button type="button" class="field-tab-btn" id="se-tab-preview">Preview</button>
+              </div>
+            </div>
+          </div>
+          <div id="se-content-edit-wrap">
+            <div class="var-insert-bar">
+              <span class="var-bar-label">Insert:</span>
+              <div class="var-chips-scroll" id="se-var-chips"></div>
+            </div>
+            <textarea id="se-content" rows="6" placeholder="*The rain hammers against the window...*&#10;&#10;Describe the setting, situation, and opening dialogue."></textarea>
+          </div>
+          <div id="se-content-prev-wrap" class="field-preview-box hidden"></div>
+          <p class="m-note">{{char}}, {{user}}, and any variable (e.g. {{hair}}, {{clothing}}) are replaced dynamically based on the character.</p>
         </div>
 
         <div class="field" style="margin-top:14px">

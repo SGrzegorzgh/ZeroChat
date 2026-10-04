@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS characters (
   scenario TEXT DEFAULT '',
   emoji TEXT DEFAULT '🎭',
   avatar TEXT,
+  variables TEXT DEFAULT '{}',
   responses TEXT DEFAULT '[]',
   created_at INTEGER NOT NULL
 );
@@ -131,6 +132,7 @@ ensureColumn('personalities', 'avatar', 'TEXT');
 ensureColumn('personalities', 'note', "TEXT DEFAULT ''");
 ensureColumn('characters', 'image', 'TEXT');
 ensureColumn('characters', 'note', "TEXT DEFAULT ''");
+ensureColumn('characters', 'variables', "TEXT DEFAULT '{}'");
 ensureColumn('characters', 'poses_enabled', 'INTEGER DEFAULT 0');
 ensureColumn('personalities', 'image', 'TEXT');
 ensureColumn('chats', 'tree', 'TEXT');
@@ -461,6 +463,69 @@ function seedScenariosIfEmpty() {
 seedIfEmpty();
 seedScenariosIfEmpty();
 
+const VARS_SEED_FLAG = 'vars.seeded.v1';
+
+function seedVariablesIfEmpty() {
+  const seeded = db.prepare('SELECT value FROM settings WHERE key = ?').get(VARS_SEED_FLAG);
+  if (!seeded) {
+    const demoVars = {
+      'c-luna': {
+        hair: 'Long, loose silver hair',
+        eyes: 'Faintly violet, observant and deep',
+        clothing: 'Dark velvet scholar robes with silver celestial stitching',
+        voice: 'Quiet, calm, faintly melodic',
+        species: 'Human mage',
+      },
+      'c-rex': {
+        hair: 'Close-cropped dark gray',
+        eyes: 'Steel gray, squinting against reactor glare',
+        clothing: 'Weathered flight jacket, rolled sleeves, and combat boots',
+        voice: 'Gruff, low, economical with words',
+        quirk: 'Drinks bitter black coffee from a dented metal mug',
+      },
+      'c-ellie': {
+        hair: 'Silver synthetic bob with soft fiber strands',
+        eyes: 'Gentle glowing cyan optical sensors',
+        clothing: 'Clean white and slate-gray technician uniform',
+        voice: 'Earnest, melodic, with immaculate literal cadence',
+        species: 'Prototype Android',
+      },
+      'c-ember': {
+        hair: 'Crest of obsidian horns and fiery spines',
+        eyes: 'Molten gold with slit pupils',
+        clothing: 'Shimmering crimson and coal dragon scales',
+        voice: 'Deep, reverberant, like grinding tectonic plates',
+        species: 'Ancient dragon',
+      },
+      'c-sakura': {
+        hair: 'Dark chestnut tied in a loose messy bun',
+        eyes: 'Warm hazel, expressive and friendly',
+        clothing: 'Embroidered linen apron over a pastel cardigan',
+        voice: 'Bright, cheerful, enthusiastic',
+        species: 'Human',
+      },
+      'c-marlowe': {
+        hair: 'Dark brown, thinning at the temples',
+        eyes: 'Tired blue beneath heavy brows',
+        clothing: 'Crumpled trench coat, loosened striped tie, fedora',
+        voice: 'Raspy from Chesterfield cigarettes, dry and sarcastic',
+        species: 'Human',
+      },
+    };
+    for (const [cid, vars] of Object.entries(demoVars)) {
+      const char = db.prepare('SELECT variables FROM characters WHERE id = ?').get(cid);
+      if (char) {
+        const existing = safeParse(char.variables, {});
+        if (!existing || Object.keys(existing).length === 0) {
+          db.prepare('UPDATE characters SET variables = ? WHERE id = ?').run(JSON.stringify(vars), cid);
+        }
+      }
+    }
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(VARS_SEED_FLAG, JSON.stringify(true));
+  }
+}
+seedVariablesIfEmpty();
+
 const SETTINGS_DEFAULTS = {
   provider: 'openrouter',
   baseUrl: 'https://openrouter.ai/api/v1',
@@ -578,6 +643,7 @@ function shapeCharacter(row, withChats) {
     avatar: row.avatar,
     image: row.image,
     posesEnabled: !!row.poses_enabled,
+    variables: safeParse(row.variables, {}),
     responses: safeParse(row.responses, []),
   };
   if (withChats) {
@@ -698,11 +764,12 @@ function getCharacters() {
   return db.prepare('SELECT * FROM characters ORDER BY created_at').all().map((r) => shapeCharacter(r, true));
 }
 
-function createCharacter({ name, description, note, scenario, emoji, avatar, image, posesEnabled }) {
+function createCharacter({ name, description, note, scenario, emoji, avatar, image, posesEnabled, variables }) {
   const id = uid();
   const pe = posesEnabled ? 1 : 0;
-  db.prepare('INSERT INTO characters (id, name, description, note, scenario, emoji, avatar, image, poses_enabled, responses, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-    .run(id, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, pe, '[]', Date.now());
+  const vars = (variables && typeof variables === 'object') ? JSON.stringify(variables) : (typeof variables === 'string' ? variables : '{}');
+  db.prepare('INSERT INTO characters (id, name, description, note, scenario, emoji, avatar, image, poses_enabled, variables, responses, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, pe, vars, '[]', Date.now());
   ensureDefaultPoses(id);
   const allowed = getScenarios({ characterId: id });
   createChatInternal(id, allowed.length > 0 ? allowed[0].id : null);
@@ -716,6 +783,10 @@ function updateCharacter(id, fields) {
   const vals = [];
   for (const k of ['name', 'description', 'note', 'scenario', 'emoji']) {
     if (fields[k] !== undefined) { sets.push(`${k} = ?`); vals.push(String(fields[k])); }
+  }
+  if ('variables' in fields) {
+    sets.push('variables = ?');
+    vals.push(typeof fields.variables === 'string' ? fields.variables : JSON.stringify(fields.variables || {}));
   }
   if ('avatar' in fields) { sets.push('avatar = ?'); vals.push(fields.avatar || null); }
   if ('image' in fields) { sets.push('image = ?'); vals.push(fields.image || null); }
