@@ -18,6 +18,8 @@ const I = {
   sparkles: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>',
   chevl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
   chevr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+  starFilled: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
 };
 
 const EMOJIS = ['🧙','🧝','🧛','🧜','🐉','🦊','🐺','🦉','🤖','👾','🕵️','🚀','🌸','🌙','⭐','✨','👑','⚔️','🛡️','🎭','👻','💀','🌌','🔥'];
@@ -243,8 +245,12 @@ function poseBackdrop(p) {
 
 function currentPose(chat) {
   const c = activeChar();
+  if (!c || !c.posesEnabled) return null;
   const ch = chat === undefined ? (c && activeChat(c)) : chat;
-  return ch ? poseById(ch.characterId, ch.poseId) : null;
+  if (!ch) return null;
+  if (ch.poseId) return poseById(ch.characterId, ch.poseId);
+  const list = poseList(ch.characterId);
+  return list.find((p) => p.isDefault) || list[0] || null;
 }
 
 function poseTagHtml(p) {
@@ -300,7 +306,7 @@ function renderWelcomeGrid() {
 function renderHeader() {
   const c = activeChar();
   if (!c) return;
-  const pose = currentPose();
+  const pose = c.posesEnabled ? currentPose() : null;
   $('#char-info').innerHTML = `${avatarHtml(c, '', true, pose && pose.thumb)}
     <div class="ch-text">
       <div class="ch-name">${esc(c.name)}</div>
@@ -332,7 +338,7 @@ function applyChatBg() {
     layers = bg.querySelectorAll('.chat-bg-layer');
   }
 
-  const src = (c && op > 0) ? (poseBackdrop(currentPose()) || fullImageSrc(c)) : null;
+  const src = (c && op > 0) ? ((c.posesEnabled && poseBackdrop(currentPose())) || fullImageSrc(c)) : null;
 
   if (!src) {
     currentBgSrc = null;
@@ -418,7 +424,8 @@ function expandTags(s, characterId) {
 }
 
 function msgHtml(c, p, n, chat) {
-  const msgPose = n.role === 'char' ? poseById(chat.characterId, n.poseId) : null;
+  const cObj = state.characters.find((x) => x.id === chat.characterId);
+  const msgPose = (n.role === 'char' && cObj && cObj.posesEnabled) ? poseById(chat.characterId, n.poseId) : null;
   const meta = msgMetaHtml(n, chat, { regen: n.role === 'char' }, poseTagHtml(msgPose));
   let body;
   if (editingId === n.id) {
@@ -918,12 +925,14 @@ function openCharModal(char) {
   ceAvatar = char ? char.avatar : null;
   ceImage = char ? char.image : null;
   $('#ce-title').textContent = char ? 'Edit character' : 'New character';
+  $('#ce-poses-enabled').checked = !!(char && char.posesEnabled);
   $('#ce-name').value = char ? char.name : '';
   $('#ce-desc').value = char ? char.description : '';
   $('#ce-note').value = char ? char.note || '' : '';
   $('#ce-scenario').value = char ? char.scenario : '';
   renderCeEmojiGrid();
   updateCeAvatarUI();
+  updateCePosesToggleUI();
   const del = $('#ce-delete');
   del.classList.toggle('hidden', ceMode !== 'edit');
   disarmDelete();
@@ -931,6 +940,14 @@ function openCharModal(char) {
   setTimeout(() => $('#ce-name').focus(), 60);
   if (ceId) loadPoses(ceId);
   updateCePosesNote();
+}
+
+function updateCePosesToggleUI() {
+  const enabled = $('#ce-poses-enabled').checked;
+  $('#ce-poses').classList.toggle('hidden', !enabled);
+  $('#ce-poses-note').classList.toggle('hidden', !enabled);
+  const lbl = $('#ce-avatar-label');
+  if (lbl) lbl.textContent = enabled ? 'Default profile picture' : 'Profile picture';
 }
 
 function renderCeEmojiGrid() {
@@ -975,6 +992,7 @@ async function charFormSave() {
     emoji: ceEmoji,
     avatar: ceAvatar,
     image: ceImage,
+    posesEnabled: $('#ce-poses-enabled').checked,
   };
   try {
     let saved;
@@ -1029,7 +1047,8 @@ function updateCePosesNote() {
   const list = charId ? poseList(charId) : [];
   if (!list.length) { note.textContent = 'Default poses · no images yet'; return; }
   const withImg = list.filter((p) => p.hasImage || p.image).length;
-  note.textContent = `${list.length} poses · ${withImg} with images`;
+  const def = list.find((p) => p.isDefault);
+  note.textContent = `${list.length} poses · ${withImg} with images${def ? ` · Default: ${def.name}` : ''}`;
 }
 
 /* Swap the on-screen pose without re-rendering the feed: a full re-render here
@@ -1106,6 +1125,7 @@ function renderPosesGrid() {
   const list = poseList(poseCharId);
   grid.innerHTML = list.map((p) => {
     const active = !!chat && chat.poseId === p.id;
+    const isDef = !!p.isDefault;
     const src = p.thumb || p.image;
     const has = !!(p.hasThumb || p.hasImage || src);
     // A square-only pose can never fill the backdrop and the director skips it,
@@ -1113,19 +1133,20 @@ function renderPosesGrid() {
     const full = !!(p.hasImage || p.image);
     const thumbOnly = has && !full;
     return `
-    <div class="pose-card ${active ? 'active' : ''}" data-id="${p.id}">
+    <div class="pose-card ${active ? 'active' : ''} ${isDef ? 'is-default' : ''}" data-id="${p.id}">
       <div class="pose-thumb ${has ? '' : 'none'}">${has ? `<img src="${esc(src)}" alt="${esc(p.name)}">` : esc((p.name || '?').trim().charAt(0))}</div>
       <div class="pose-body">
         <div class="pose-name">${esc(p.name)}</div>
         <div class="pose-desc">${esc(p.description || '')}</div>
         <div class="pose-badges">
-          <span class="pose-badge">${p.isDefault ? 'Default' : 'Custom'}</span>
+          ${isDef ? '<span class="pose-badge def">★ Default</span>' : ''}
           ${active ? '<span class="pose-badge act">On screen</span>' : ''}
           ${thumbOnly ? '<span class="pose-badge" title="Only the square crop was saved — the full image is missing">Thumb only</span>' : ''}
         </div>
         <div class="pose-acts">
           <button type="button" class="pose-act ${has ? 'on' : ''}" data-pose-act="img" title="${has ? 'Replace image' : 'Choose image'}">${I.image}</button>
           <button type="button" class="pose-act" data-pose-act="edit" title="Rename / describe">${I.pencil}</button>
+          ${!isDef ? `<button type="button" class="pose-act" data-pose-act="default" title="Make this the default pose">${I.star}</button>` : ''}
           <button type="button" class="pose-act" data-pose-act="use" title="Show this pose now">${I.check}</button>
           <button type="button" class="pose-act danger" data-pose-act="del" title="Delete">${I.trash}</button>
         </div>
@@ -1212,6 +1233,29 @@ async function usePose(p) {
   applyPoseLive(chat.poseId, p.name);
   renderPosesGrid();
   toast('Showing: ' + p.name);
+}
+
+async function poseSetDefault(p) {
+  const charId = poseCharId;
+  try {
+    await api(`/characters/${charId}/poses/${p.id}/default`, { method: 'POST' });
+  } catch (e) {
+    try {
+      await api('/poses/' + p.id, { method: 'PUT', body: JSON.stringify({ isDefault: true }) });
+    } catch (err) { toast(err.message); return; }
+  }
+  await loadPoses(charId);
+  const c = state.characters.find((x) => x.id === charId);
+  if (c) {
+    try {
+      const fresh = await api('/characters/' + charId);
+      Object.assign(c, fresh);
+      renderSidebar();
+      renderHeader();
+    } catch {}
+  }
+  renderPosesGrid();
+  toast(`Default pose set to "${p.name}"`);
 }
 
 function clearPoseDelArm() {
@@ -2241,6 +2285,7 @@ function wireEvents() {
   });
 
   $('#ce-poses').addEventListener('click', openPosesModal);
+  $('#ce-poses-enabled').addEventListener('change', updateCePosesToggleUI);
   $('#pose-add').addEventListener('click', poseAdd);
   $('#pose-save').addEventListener('click', poseFormSave);
   $('#pose-cancel').addEventListener('click', closePoseForm);
@@ -2258,6 +2303,8 @@ function wireEvents() {
     } else if (kind === 'edit') {
       clearPoseDelArm();
       openPoseForm(p);
+    } else if (kind === 'default') {
+      poseSetDefault(p);
     } else if (kind === 'use') {
       usePose(p);
     } else if (kind === 'del') {

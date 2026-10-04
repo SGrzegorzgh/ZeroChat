@@ -468,19 +468,19 @@ async function runPoseAgent({ char, persona, chat, poses, currentPoseId, replyTe
   try {
     const cfg = poseCfg(settings || {});
     if (!cfg.enabled) return null;
+    if (char && char.posesEnabled === false) return null;
     const candidates = (poses || []).filter((p) => p.hasImage || p.image);
     if (candidates.length === 0) return null;
     if (!cfg.recheck && currentPoseId) return null;
     if (!cfg.apiKey && cfg.provider !== 'ollama' && cfg.provider !== 'custom') return null;
     if (signal && signal.aborted) return null;
 
-    const currentPose = currentPoseId ? candidates.find((p) => p.id === currentPoseId) : null;
+    const defaultPose = candidates.find((p) => p.isDefault) || candidates[0];
+    const currentPose = (currentPoseId ? candidates.find((p) => p.id === currentPoseId) : null) || defaultPose;
 
     // Criteria: provide an option to stay on the current pose/scene, plus each candidate pose
     const criteria = {};
-    criteria['keep_current'] = currentPose
-      ? `Keep current pose ("${currentPose.name}"). Character maintains current posture/activity, no visual change is needed, or action is only announced/intended.`
-      : 'Keep default appearance. No specific pose matches or scene continues without a specific visual pose.';
+    criteria['keep_current'] = `Keep current pose ("${currentPose.name}"). Character maintains current posture/activity, no visual change is needed, or action is only announced/intended.`;
 
     for (const p of candidates) {
       const desc = (p.description || '').trim();
@@ -489,7 +489,9 @@ async function runPoseAgent({ char, persona, chat, poses, currentPoseId, replyTe
 
     const state = {
       character: char.name,
-      current_pose: currentPose ? currentPose.name : 'default',
+      current_pose: currentPose.description
+        ? `${currentPose.name} (${currentPose.description})`
+        : currentPose.name,
       latest_reply: truncTitle(replyText || '', 1200),
     };
 
@@ -594,22 +596,21 @@ async function runPoseAgent({ char, persona, chat, poses, currentPoseId, replyTe
       return null;
     }
 
-    return decidePose({ poseId: chosenKey, confidence }, candidates, currentPoseId, cfg);
+    return decidePose({ poseId: chosenKey, confidence }, candidates, currentPose, cfg);
   } catch (e) {
     console.error('[pose/jev] director failed:', e.message);
     return null;
   }
 }
 
-function decidePose(arg, candidates, currentPoseId, cfg) {
+function decidePose(arg, candidates, currentPose, cfg) {
   const confidence = Number(arg.confidence);
   const conf = Number.isFinite(confidence) ? clamp(confidence, 0, 1, 1) : 1;
   const reason = String(arg.reason || 'jev decision').slice(0, 120);
-  const current = currentPoseId ? candidates.find((p) => p.id === currentPoseId) : null;
 
   if (arg.poseId === 'keep_current' || arg.poseId === 'none') {
     console.log(`[pose/jev] held current shot (${arg.poseId}, conf ${conf.toFixed(2)})`);
-    return { poseId: currentPoseId || null, poseName: current ? current.name : null, confidence: conf, reason: 'keep_current', changed: false };
+    return { poseId: currentPose.id, poseName: currentPose.name, confidence: conf, reason: 'keep_current', changed: false };
   }
 
   let pose = candidates.find((p) => p.id === arg.poseId);
@@ -621,7 +622,7 @@ function decidePose(arg, candidates, currentPoseId, cfg) {
     return null;
   }
 
-  if (pose.id === currentPoseId) {
+  if (pose.id === currentPose.id) {
     console.log(`[pose/jev] held ${pose.name} (unchanged, conf ${conf.toFixed(2)})`);
     return { poseId: pose.id, poseName: pose.name, confidence: conf, reason: 'unchanged', changed: false };
   }
@@ -631,7 +632,7 @@ function decidePose(arg, candidates, currentPoseId, cfg) {
     return { poseId: pose.id, poseName: pose.name, confidence: conf, reason: 'below threshold', changed: false };
   }
 
-  console.log(`[pose/jev] pose: ${current ? current.name : 'none'} → ${pose.name} (conf ${conf.toFixed(2)})`);
+  console.log(`[pose/jev] pose: ${currentPose.name} → ${pose.name} (conf ${conf.toFixed(2)})`);
   return { poseId: pose.id, poseName: pose.name, confidence: conf, reason, changed: true };
 }
 
@@ -665,6 +666,11 @@ async function route(req, res, u) {
 
   if ((m = p.match(/^\/api\/characters\/([\w-]+)$/))) {
     const id = m[1];
+    if (req.method === 'GET') {
+      const c = db.getCharacter(id);
+      if (!c) return send(res, 404, { error: 'Character not found' });
+      return send(res, 200, c);
+    }
     if (req.method === 'PUT') {
       const c = db.updateCharacter(id, body);
       if (!c) return send(res, 404, { error: 'Character not found' });
@@ -688,6 +694,14 @@ async function route(req, res, u) {
       if (!db.getCharacter(charId)) return send(res, 404, { error: 'Character not found' });
       return send(res, 201, { pose: db.createPose(charId, body) });
     }
+  }
+
+  if ((m = p.match(/^\/api\/characters\/([\w-]+)\/poses\/([\w-]+)\/default$/)) && req.method === 'POST') {
+    const charId = m[1];
+    const poseId = m[2];
+    const pose = db.setDefaultPose(charId, poseId);
+    if (!pose) return send(res, 404, { error: 'Pose not found' });
+    return send(res, 200, { pose });
   }
 
   if ((m = p.match(/^\/api\/poses\/([\w-]+)$/))) {
@@ -748,6 +762,7 @@ async function route(req, res, u) {
       : null;
     const poses = db.getPoses(chat.characterId, { withImages: false });
     const pcfg = poseCfg(settings);
+    const poseEnabled = pcfg.enabled && char.posesEnabled !== false;
     const aiCfg = resolveAiConfig(settings);
     const simulated = !aiCfg.apiKey && aiCfg.provider !== 'ollama';
     const fresh = db.getChat(chat.id);
@@ -758,13 +773,13 @@ async function route(req, res, u) {
         const text = await generateReplyStream(char, db.pathNodes(fresh.tree, node.id), persona, settings, (d) => {
           streamed += d;
           emit({ type: 'delta', text: d });
-          if (!posePromise && pcfg.enabled && streamed.length >= 120) {
+          if (!posePromise && poseEnabled && streamed.length >= 120) {
             try {
               posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: streamed, settings, signal: ctrl.signal });
             } catch (e) { console.error('[pose/jev] director failed:', e.message); }
           }
         }, ctrl.signal);
-        if (!posePromise && pcfg.enabled && text && text.trim().length > 0) {
+        if (!posePromise && poseEnabled && text && text.trim().length > 0) {
           try {
             posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: text, settings, signal: ctrl.signal });
           } catch (e) { console.error('[pose/jev] director failed:', e.message); }
@@ -807,6 +822,7 @@ async function route(req, res, u) {
     const path = db.pathNodes(chat.tree, parentId);
     const poses = db.getPoses(chat.characterId, { withImages: false });
     const pcfg = poseCfg(settings);
+    const poseEnabled = pcfg.enabled && char.posesEnabled !== false;
     const aiCfg = resolveAiConfig(settings);
     const simulated = !aiCfg.apiKey && aiCfg.provider !== 'ollama';
     // Re-generating from an earlier point throws away the reply that is on
@@ -835,13 +851,13 @@ async function route(req, res, u) {
         const text = await generateReplyStream(char, path, persona, settings, (d) => {
           streamed += d;
           emit({ type: 'delta', text: d });
-          if (!posePromise && pcfg.enabled && streamed.length >= 120) {
+          if (!posePromise && poseEnabled && streamed.length >= 120) {
             try {
               posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: streamed, settings, signal: ctrl.signal });
             } catch (e) { console.error('[pose/jev] director failed:', e.message); }
           }
         }, ctrl.signal);
-        if (!posePromise && pcfg.enabled && text && text.trim().length > 0) {
+        if (!posePromise && poseEnabled && text && text.trim().length > 0) {
           try {
             posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: text, settings, signal: ctrl.signal });
           } catch (e) { console.error('[pose/jev] director failed:', e.message); }

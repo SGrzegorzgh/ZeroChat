@@ -299,7 +299,15 @@
       </div>
       <div class="m-body">
         <div class="field">
-          <label>Avatar</label>
+          <div class="set-check">
+            <label for="ce-poses-enabled">Enable custom pose switching</label>
+            <input type="checkbox" id="ce-poses-enabled">
+          </div>
+          <p class="m-note" style="margin-top:6px">When enabled, Jev switches between the character&rsquo;s poses during chat. When disabled, the single profile picture below is used and Jev is off.</p>
+        </div>
+
+        <div class="field" id="ce-avatar-field">
+          <label id="ce-avatar-label">Profile picture</label>
           <div class="avatar-row">
             <span id="ce-preview" class="avatar xl"></span>
             <span id="ce-preview-full" class="preview-full hidden" title="Full image"></span>
@@ -352,7 +360,7 @@
         </button>
       </div>
       <div class="m-body">
-        <p class="m-note">Default poses ship with every character. Add images to them, or add your own. The director model picks one per reply; click a pose to set it manually.</p>
+        <p class="m-note">Poses define the visual states of this character. Set any pose as <strong>Default</strong> to use it as the baseline appearance. The Jev decision model chooses between your poses based on the conversation.</p>
         <div id="poses-grid" class="pose-grid"></div>
         <button id="pose-add" class="pose-add" type="button">+ Add pose</button>
         <input type="file" id="pose-file" accept="image/*" hidden>

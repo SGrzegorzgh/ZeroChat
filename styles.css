@@ -2029,6 +2029,14 @@ input[type="range"] {
   background: rgba(217, 164, 65, 0.1);
   border-color: rgba(217, 164, 65, 0.4);
 }
+.pose-badge.def {
+  color: var(--pose-accent);
+  background: rgba(217, 164, 65, 0.18);
+  border-color: rgba(217, 164, 65, 0.55);
+}
+.pose-card.is-default {
+  border-color: rgba(217, 164, 65, 0.35);
+}
 
 .pose-acts {
   display: flex;

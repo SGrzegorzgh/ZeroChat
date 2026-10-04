@@ -121,6 +121,7 @@ ensureColumn('personalities', 'avatar', 'TEXT');
 ensureColumn('personalities', 'note', "TEXT DEFAULT ''");
 ensureColumn('characters', 'image', 'TEXT');
 ensureColumn('characters', 'note', "TEXT DEFAULT ''");
+ensureColumn('characters', 'poses_enabled', 'INTEGER DEFAULT 0');
 ensureColumn('personalities', 'image', 'TEXT');
 ensureColumn('chats', 'tree', 'TEXT');
 ensureColumn('chats', 'pose_id', 'TEXT');
@@ -178,7 +179,7 @@ function ensureDefaultPoses(characterId) {
   if (n > 0) return;
   const now = Date.now();
   const ins = db.prepare('INSERT INTO poses (id, character_id, name, description, image, crop, width, height, is_default, position, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
-  DEFAULT_POSES.forEach((p, i) => ins.run(uid(), characterId, p.name, p.description, null, 'free', 0, 0, 1, i, now));
+  DEFAULT_POSES.forEach((p, i) => ins.run(uid(), characterId, p.name, p.description, null, 'free', 0, 0, i === 0 ? 1 : 0, i, now + i));
 }
 
 const GENERIC_RESPONSES = [
@@ -514,6 +515,7 @@ function shapeCharacter(row, withChats) {
     emoji: row.emoji,
     avatar: row.avatar,
     image: row.image,
+    posesEnabled: !!row.poses_enabled,
     responses: safeParse(row.responses, []),
   };
   if (withChats) {
@@ -540,10 +542,11 @@ function getCharacters() {
   return db.prepare('SELECT * FROM characters ORDER BY created_at').all().map((r) => shapeCharacter(r, true));
 }
 
-function createCharacter({ name, description, note, scenario, emoji, avatar, image }) {
+function createCharacter({ name, description, note, scenario, emoji, avatar, image, posesEnabled }) {
   const id = uid();
-  db.prepare('INSERT INTO characters (id, name, description, note, scenario, emoji, avatar, image, responses, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .run(id, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, '[]', Date.now());
+  const pe = posesEnabled ? 1 : 0;
+  db.prepare('INSERT INTO characters (id, name, description, note, scenario, emoji, avatar, image, poses_enabled, responses, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, pe, '[]', Date.now());
   createChatInternal(id);
   ensureDefaultPoses(id);
   return getCharacter(id);
@@ -559,6 +562,7 @@ function updateCharacter(id, fields) {
   }
   if ('avatar' in fields) { sets.push('avatar = ?'); vals.push(fields.avatar || null); }
   if ('image' in fields) { sets.push('image = ?'); vals.push(fields.image || null); }
+  if ('posesEnabled' in fields) { sets.push('poses_enabled = ?'); vals.push(fields.posesEnabled ? 1 : 0); }
   if (sets.length) {
     vals.push(id);
     db.prepare(`UPDATE characters SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
@@ -581,8 +585,10 @@ function createChatInternal(characterId) {
   const sid = 's' + uid();
   tree.nodes[sid] = { id: sid, role: 'scenario', content: c.scenario, parent: 'root', children: [], active: 0, createdAt: t };
   tree.nodes.root.children.push(sid);
-  db.prepare('INSERT INTO chats (id, character_id, title, tree, created_at, updated_at) VALUES (?,?,?,?,?,?)')
-    .run(id, characterId, 'New chat', JSON.stringify(tree), t, t);
+  const defPose = c.poses_enabled ? getDefaultPose(characterId) : null;
+  const initialPoseId = defPose ? defPose.id : null;
+  db.prepare('INSERT INTO chats (id, character_id, title, pose_id, tree, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
+    .run(id, characterId, 'New chat', initialPoseId, JSON.stringify(tree), t, t);
   return shapeChat(db.prepare('SELECT * FROM chats WHERE id = ?').get(id));
 }
 
@@ -915,8 +921,32 @@ function createPose(characterId, fields = {}) {
   return getPose(p.id);
 }
 
+function getDefaultPose(characterId) {
+  const poses = getPoses(characterId, { withImages: true });
+  if (!poses.length) return null;
+  const defWithImg = poses.find((p) => p.isDefault && (p.hasImage || p.image));
+  if (defWithImg) return defWithImg;
+  const def = poses.find((p) => p.isDefault);
+  if (def) return def;
+  const withImg = poses.find((p) => p.hasImage || p.image);
+  if (withImg) return withImg;
+  return poses[0];
+}
+
+function setDefaultPose(characterId, poseId) {
+  const row = db.prepare('SELECT id, character_id, name, image, thumb FROM poses WHERE id = ? AND character_id = ?').get(poseId, characterId);
+  if (!row) return null;
+  db.prepare('UPDATE poses SET is_default = 0 WHERE character_id = ?').run(characterId);
+  db.prepare('UPDATE poses SET is_default = 1 WHERE character_id = ? AND id = ?').run(characterId, poseId);
+  if (row.thumb || row.image) {
+    db.prepare('UPDATE characters SET avatar = COALESCE(?, avatar), image = COALESCE(?, image) WHERE id = ?')
+      .run(row.thumb || row.image, row.image || row.thumb, characterId);
+  }
+  return getPose(poseId);
+}
+
 function updatePose(id, fields = {}) {
-  const row = db.prepare('SELECT id FROM poses WHERE id = ?').get(id);
+  const row = db.prepare('SELECT id, character_id FROM poses WHERE id = ?').get(id);
   if (!row) return null;
   const sets = [];
   const vals = [];
@@ -930,7 +960,22 @@ function updatePose(id, fields = {}) {
   if ('thumb' in fields) push('thumb', typeof fields.thumb === 'string' ? fields.thumb : null);
   if ('width' in fields && Number.isFinite(Number(fields.width))) push('width', Math.round(Number(fields.width)));
   if ('height' in fields && Number.isFinite(Number(fields.height))) push('height', Math.round(Number(fields.height)));
-  if ('isDefault' in fields) push('is_default', fields.isDefault ? 1 : 0);
+  if ('isDefault' in fields) {
+    if (fields.isDefault) {
+      const charId = row.character_id;
+      db.prepare('UPDATE poses SET is_default = 0 WHERE character_id = ?').run(charId);
+      push('is_default', 1);
+      const curPose = db.prepare('SELECT image, thumb FROM poses WHERE id = ?').get(id);
+      const img = ('image' in fields ? fields.image : curPose?.image) || null;
+      const th = ('thumb' in fields ? fields.thumb : curPose?.thumb) || null;
+      if (th || img) {
+        db.prepare('UPDATE characters SET avatar = COALESCE(?, avatar), image = COALESCE(?, image) WHERE id = ?')
+          .run(th || img, img || th, charId);
+      }
+    } else {
+      push('is_default', 0);
+    }
+  }
   if (sets.length) {
     vals.push(id);
     db.prepare(`UPDATE poses SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
@@ -939,11 +984,17 @@ function updatePose(id, fields = {}) {
 }
 
 function deletePose(id) {
-  const row = db.prepare('SELECT id FROM poses WHERE id = ?').get(id);
+  const row = db.prepare('SELECT id, character_id, is_default FROM poses WHERE id = ?').get(id);
   if (!row) return false;
   snapshotBeforeDestructive();
   db.prepare('DELETE FROM poses WHERE id = ?').run(id);
   db.prepare('UPDATE chats SET pose_id = NULL WHERE pose_id = ?').run(id);
+  if (row.is_default) {
+    const next = db.prepare('SELECT id FROM poses WHERE character_id = ? ORDER BY (CASE WHEN image IS NOT NULL THEN 0 ELSE 1 END), position ASC LIMIT 1').get(row.character_id);
+    if (next) {
+      db.prepare('UPDATE poses SET is_default = 1 WHERE id = ?').run(next.id);
+    }
+  }
   return true;
 }
 
@@ -994,6 +1045,6 @@ module.exports = {
   getTree, treeTip, pathNodes, addNode, addReply, editNode, deleteNode, switchNode, poseBefore, poseAtTip, activeChildId,
   getPersonalities, getPersona, createPersona, updatePersona, deletePersona,
   getPresets, getPreset, createPreset, updatePreset, deletePreset,
-  getPoses, getPose, createPose, updatePose, deletePose, setChatPose, ensureDefaultPoses,
+  getPoses, getPose, createPose, updatePose, deletePose, setChatPose, ensureDefaultPoses, getDefaultPose, setDefaultPose,
   getSettings, updateSettings,
 };
