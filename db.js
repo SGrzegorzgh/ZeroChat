@@ -411,10 +411,10 @@ const SETTINGS_DEFAULTS = {
   actionDim: 0.72,
   activePresetId: null,
   poseAgent: false,
-  poseProvider: 'custom',
+  poseProvider: 'openrouter',
   poseBaseUrl: '',
   poseApiKey: '',
-  poseModel: 'gpt-5.6-luna-load-balanced',
+  poseModel: 'typesafe/jev-1.13',
   poseLikelihood: 0.6,
   poseRecheck: true,
 };
@@ -435,6 +435,9 @@ function getSettings() {
     if (r.key === POSES_SEED_FLAG) continue;
     try { out[r.key] = JSON.parse(r.value); } catch { out[r.key] = r.value; }
   }
+  if (out.poseModel === 'gpt-5.6-luna-load-balanced') {
+    out.poseModel = 'typesafe/jev-1.13';
+  }
   return out;
 }
 
@@ -450,7 +453,7 @@ function updateSettings(patch) {
     if (k === 'temperature') v = clamp(v, 0, 2, 0.8);
     if (k === 'poseLikelihood') v = clamp(v, 0, 1, 0.6);
     if (k === 'poseAgent' || k === 'poseRecheck') v = !!v;
-    if (k === 'poseProvider') v = PROVIDER_IDS.includes(String(v)) ? String(v) : 'custom';
+    if (k === 'poseProvider') v = PROVIDER_IDS.includes(String(v)) ? String(v) : 'openrouter';
     if (k === 'poseBaseUrl' || k === 'poseApiKey' || k === 'poseModel') v = String(v ?? '');
     if (k === 'activePresetId' || k === 'activePersonalityId') v = v || null;
     up.run(k, JSON.stringify(v));
@@ -641,16 +644,20 @@ function childOnActivePath(node) {
 }
 
 function treeTip(tree) {
-  let cur = tree.nodes.root;
-  while (cur.children.length) cur = tree.nodes[childOnActivePath(cur)];
-  return cur.id;
+  let cur = tree?.nodes?.root;
+  while (cur && cur.children && cur.children.length) {
+    const next = tree.nodes[childOnActivePath(cur)];
+    if (!next) break;
+    cur = next;
+  }
+  return cur ? cur.id : null;
 }
 
 function pathNodes(tree, uptoId) {
   const out = [];
-  let cur = tree.nodes.root;
+  let cur = tree?.nodes?.root;
   let guard = 0;
-  while (cur.children.length && guard++ < 1000) {
+  while (cur && cur.children && cur.children.length && guard++ < 1000) {
     const n = tree.nodes[childOnActivePath(cur)];
     if (!n) break;
     out.push(n);

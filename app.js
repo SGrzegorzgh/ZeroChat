@@ -1277,15 +1277,32 @@ function openSettings() {
   $('#actdim-val').textContent = dimPct + '%';
   $('#pose-agent').checked = !!s.poseAgent;
   $('#pose-recheck').checked = s.poseRecheck !== false;
-  $('#pose-provider').value = s.poseProvider || 'custom';
+  $('#pose-provider').value = s.poseProvider || 'openrouter';
   $('#pose-url').value = s.poseBaseUrl || '';
   $('#pose-key').value = s.poseApiKey || '';
-  $('#pose-model').value = s.poseModel || '';
+  $('#pose-model').value = s.poseModel || 'typesafe/jev-1.13';
+  updatePoseProviderHints();
   const posePct = Math.round((Number.isFinite(+s.poseLikelihood) ? +s.poseLikelihood : 0.6) * 100);
   $('#set-poselike').value = posePct;
   $('#poselike-val').textContent = posePct + '%';
   renderPresetList();
   openModal('modal-settings');
+}
+
+function updatePoseProviderHints() {
+  const prov = $('#pose-provider').value;
+  const urlEl = $('#pose-url');
+  const modelEl = $('#pose-model');
+  if (prov === 'openrouter') {
+    urlEl.placeholder = 'Leave blank for OpenRouter (https://openrouter.ai/api/alpha/decisions)';
+    modelEl.placeholder = 'typesafe/jev-1.13 (default)';
+  } else if (prov === 'custom') {
+    urlEl.placeholder = 'e.g. http://localhost:8000/v1 (calls /v1/decisions)';
+    modelEl.placeholder = 'e.g. jev';
+  } else {
+    urlEl.placeholder = 'e.g. https://api.openai.com/v1';
+    modelEl.placeholder = 'e.g. jev or gpt-6-luna';
+  }
 }
 
 /* --- model picker ---------------------------------------------------------
@@ -2114,6 +2131,7 @@ function wireEvents() {
     $('#temp-val').textContent = (+e.target.value).toFixed(1);
   });
   $('#settings-save').addEventListener('click', settingsSave);
+  $('#pose-provider').addEventListener('change', updatePoseProviderHints);
 
   $('#persona-list').addEventListener('click', async (e) => {
     const use = e.target.closest('[data-use]');

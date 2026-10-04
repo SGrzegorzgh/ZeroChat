@@ -57,7 +57,7 @@ Instructions, architecture guide, and operational conventions for AI agents and 
   - REST API endpoints for characters, chats, tree nodes, poses, personalities, presets, and settings.
   - Server-Sent Events (SSE) streaming endpoints (`/api/chats/:id/messages`, `/api/chats/:id/generate`).
   - LLM client integrations for OpenAI-compatible APIs (`/v1/chat/completions`) and Anthropic (`/v1/messages`).
-  - Dynamic Pose Director Agent (`runPoseAgent`) executing structured LLM calls during streaming to select matching character poses.
+  - Dynamic Pose Director Agent (`runPoseAgent`) using Jev (a fast, low-cost decision model via OpenRouter Decisions API or custom OpenAI-compatible provider) to select matching character poses.
 - **`db.js` (~985 lines)**:
   - `DatabaseSync` initialization, WAL configuration, and graceful checkpointing on shutdown.
   - Database snapshot backup engine: automated backups to `backups/` on startup and prior to destructive actions.
@@ -108,10 +108,12 @@ Chats are not flat message lists; each chat contains a tree represented as JSON 
   - **Delete**: Prunes the target node and its entire subtree, re-adjusting parent active bounds.
   - **Switch**: Changes `parent.active` index between alternative variants.
 
-### 4.2 Dynamic Pose Director Agent
+### 4.2 Dynamic Pose Director Agent (Jev Decision Model)
 Characters have multiple poses (`poses` table) containing an image and descriptive guidance (e.g., *Sitting*, *Close-up*, *Leaning in*).
-- **Trigger**: During reply streaming, once 120 characters are received, `server.js` triggers `runPoseAgent(...)` asynchronously.
-- **Decision Engine**: The agent runs a structured tool call (`switch_pose`) against the active LLM or a dedicated Pose LLM configured in settings.
+- **Trigger**: During reply streaming, `runPoseAgent(...)` runs asynchronously to select the matching shot.
+- **Decision Engine**: Instead of an expensive, slow full-blown LLM with tool calling, the agent uses **Jev**, a fast, low-cost System One decision model specializing in choosing an option based on text input.
+  - **OpenRouter**: Calls `POST https://openrouter.ai/api/alpha/decisions` with model `typesafe/jev-1.13`.
+  - **Custom OpenAI-compatible provider**: Calls `POST <baseUrl>/decisions` with model `jev` (with automatic fallback if native `/decisions` is unavailable).
 - **Pose Stamps on Nodes**: When a pose changes, `node.poseId` is saved on the character's reply node.
 - **Branch-Accurate Reverts**:
   - When re-generating, deleting, or switching message branches, the pose reverts to `poseBefore(chatId, nodeId)` or `poseAtTip(chatId)`.

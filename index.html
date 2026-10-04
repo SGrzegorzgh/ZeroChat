@@ -192,8 +192,8 @@
         <div class="pf-sep"></div>
 
         <div class="field">
-          <label>Pose agent</label>
-          <p class="m-note">A small tool-calling model reads every reply and swaps the character&rsquo;s image to the best-matching pose.</p>
+          <label>Pose director (Jev)</label>
+          <p class="m-note">A fast decision model (Jev) chooses the best-matching character pose based on the reply text, without slow or costly tool calling.</p>
         </div>
         <div class="field">
           <div class="set-check">
@@ -211,24 +211,22 @@
         <div class="field">
           <label>Provider</label>
           <select id="pose-provider">
-            <option value="openrouter">OpenRouter</option>
+            <option value="openrouter">OpenRouter (Jev)</option>
+            <option value="custom">Custom (OpenAI-compatible)</option>
             <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="ollama">Ollama</option>
-            <option value="custom">Custom</option>
           </select>
         </div>
         <div class="field">
           <label>Base URL</label>
-          <input type="text" id="pose-url" placeholder="Leave blank to use the main model&rsquo;s URL">
+          <input type="text" id="pose-url" placeholder="Leave blank for OpenRouter (or e.g. http://localhost:8000/v1)">
         </div>
         <div class="field">
           <label>API key</label>
           <input type="text" id="pose-key" placeholder="Leave blank to use the main model&rsquo;s key">
         </div>
         <div class="field">
-          <label>Director model</label>
-          <input type="text" id="pose-model" placeholder="e.g. gpt-5.6-luna-load-balanced or openrouter/qwen/qwen3.7-flash">
+          <label>Decision model (Jev)</label>
+          <input type="text" id="pose-model" placeholder="typesafe/jev-1.13 (OpenRouter) or jev (Custom)">
         </div>
         <div class="field">
           <label>Change threshold <span class="val" id="poselike-val"></span></label>

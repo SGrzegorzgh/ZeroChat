@@ -110,13 +110,20 @@ function resolveAiConfig(settings) {
 }
 
 function poseCfg(settings) {
+  const provider = settings.poseProvider || 'openrouter';
+  const defaultModel = provider === 'openrouter' ? 'typesafe/jev-1.13' : 'jev';
+  let model = (settings.poseModel || '').trim();
+  if (!model || model === 'gpt-5.6-luna-load-balanced') {
+    model = defaultModel;
+  }
+  const baseUrl = (settings.poseBaseUrl || (provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : settings.baseUrl) || '').replace(/\/+$/, '');
   return {
     enabled: !!settings.poseAgent,
-    provider: settings.poseProvider || 'custom',
-    baseUrl: (settings.poseBaseUrl || settings.baseUrl || '').replace(/\/+$/, ''),
-    apiKey: settings.poseApiKey || settings.apiKey || '',
-    model: settings.poseModel || 'gpt-5.6-luna-load-balanced',
-    likelihood: clamp(typeof settings.poseLikelihood === 'number' ? settings.poseLikelihood : 0.6, 0, 1),
+    provider,
+    baseUrl,
+    apiKey: (settings.poseApiKey || settings.apiKey || '').trim(),
+    model,
+    likelihood: clamp(typeof settings.poseLikelihood === 'number' ? settings.poseLikelihood : 0.6, 0, 1, 0.6),
     recheck: settings.poseRecheck !== false,
   };
 }
@@ -400,55 +407,21 @@ async function retryOnce(call, onDelta, signal) {
   }
 }
 
-const POSE_SYSTEM_PROMPT = [
-  'You direct the camera for a visual novel. You are given the available shots and the most recent character reply. Pick the single shot that best matches what the character is doing right now.',
-  'Rules:',
-  '- TIMING IS THE MOST IMPORTANT RULE. Change the shot only when the reply shows the character is ALREADY doing the thing: the action has started, is under way, or has just happened. Never switch for something that is only announced, intended, considered or about to happen. Plans, intentions and predictions keep the current shot.',
-  '- Change the shot only when the reply clearly shows the character changed position, posture, framing, or the location matters more than the face.',
-  '- If the reply continues the same situation with no visual change, DO NOT call any tool. Staying on the current shot is always a valid and common answer.',
-  '- Never invent a pose id. Only use ids from the shot list.',
-  '- confidence is your honest probability that this is the right shot (0-1). A small change is rarely worth more than 0.5. For an announced-but-not-started action, do not call the tool at all.',
-].join('\n');
-
-const POSE_TIMING_EXAMPLES = [
-  'Reply: "She glances at the door, then sets down her cup." — nothing has moved to a new place yet. DO NOT call set_pose; keep the current shot. Only a glance is not a change of shot.',
-  'Reply: "She says she might head out after dessert." — that is an intention, not an event. DO NOT call set_pose.',
-  'Reply: "She pushes back from the booth, grabs her jacket and heads for the door." — the movement is already happening. DO call set_pose, and pick the shot that shows her standing or leaving.',
-  'Reply: "She drops into the seat across from you and exhales." — the sitting has already started. DO call set_pose and pick the shot that shows her seated.',
-  'Reply: "She is about to sit down." — the sitting has not begun. DO NOT call set_pose. The switch belongs to the later reply that shows her actually sitting.',
-];
-
-function poseToolProps(candidates) {
-  return {
-    poseId: { type: 'string', enum: candidates.map((p) => p.id) },
-    confidence: { type: 'number', description: '0 to 1 — how strongly the reply calls for this pose' },
-    reason: { type: 'string', description: 'Max 12 words.' },
-  };
-}
-
-function buildPoseBrief({ char, persona, chat, candidates, currentPoseId, replyText }) {
-  const userName = persona ? persona.name : 'the user';
-  const current = currentPoseId ? candidates.find((p) => p.id === currentPoseId) : null;
-  const lines = [`Character: ${char.name}`];
-  lines.push('Shots:');
-  for (const p of candidates) lines.push(`${p.id} | ${p.name} — ${p.description || 'no description'}`);
-  lines.push(`Current shot: ${current ? current.name : 'none'}`);
-  if (chat && chat.tree) {
-    const tip = db.treeTip(chat.tree);
-    if (tip) {
-      const { turns } = buildTurns(db.pathNodes(chat.tree, tip), char, persona);
-      const recent = turns.slice(-3);
-      if (recent.length) {
-        lines.push('Recent turns:');
-        for (const t of recent) lines.push(`${t.role === 'assistant' ? char.name : userName}: ${truncTitle(t.content, 400)}`);
-      }
-    }
+// Resolves the Decisions API endpoint URL for Jev.
+// Supports OpenRouter (/api/alpha/decisions) and custom OpenAI-compatible providers (/v1/decisions).
+function resolveDecisionsUrl(cfg) {
+  if (cfg.provider === 'openrouter' && (!cfg.baseUrl || /openrouter\.ai/i.test(cfg.baseUrl))) {
+    return 'https://openrouter.ai/api/alpha/decisions';
   }
-  lines.push(`Reply to direct: ${truncTitle(replyText || '', 1200)}`);
-  lines.push('');
-  lines.push('Timing examples (these replies are illustrative, not real):');
-  for (const ex of POSE_TIMING_EXAMPLES) lines.push(ex);
-  return lines.join('\n');
+  const base = (cfg.baseUrl || '').replace(/\/+$/, '');
+  if (!base) return 'https://openrouter.ai/api/alpha/decisions';
+  if (base.endsWith('/decisions') || base.endsWith('/systemone')) {
+    return base;
+  }
+  if (base.endsWith('/v1')) {
+    return `${base}/decisions`;
+  }
+  return `${base}/v1/decisions`;
 }
 
 // fetchJson buries the HTTP status inside the error message, which is useless
@@ -489,8 +462,8 @@ async function postAgentJson(url, headers, body, signal) {
   }
 }
 
-// A cheap tool-calling model reads the reply and picks the pose image to show.
-// It must never break the chat, so every failure degrades to "no pose".
+// Fast Jev decision model chooses the best character pose based on reply text.
+// Instead of a full-blown tool-calling LLM, Jev evaluates typed choices with calibrated probabilities.
 async function runPoseAgent({ char, persona, chat, poses, currentPoseId, replyText, settings, signal }) {
   try {
     const cfg = poseCfg(settings || {});
@@ -498,105 +471,167 @@ async function runPoseAgent({ char, persona, chat, poses, currentPoseId, replyTe
     const candidates = (poses || []).filter((p) => p.hasImage || p.image);
     if (candidates.length === 0) return null;
     if (!cfg.recheck && currentPoseId) return null;
-    if (!cfg.model || !cfg.baseUrl) return null;
-    if (!cfg.apiKey && cfg.provider !== 'ollama') return null;
+    if (!cfg.apiKey && cfg.provider !== 'ollama' && cfg.provider !== 'custom') return null;
     if (signal && signal.aborted) return null;
 
-    const userText = buildPoseBrief({ char, persona, chat, candidates, currentPoseId, replyText });
-    const tool = {
-      name: 'set_pose',
-      description: 'Show a different shot of the character. Call only once the described action is already happening or has just happened on screen — never for an action that is only announced, intended or about to happen.',
-    };
-    const props = poseToolProps(candidates);
+    const currentPose = currentPoseId ? candidates.find((p) => p.id === currentPoseId) : null;
 
-    // Providers disagree on sampling params: OpenAI-style reasoning models
-    // (gpt-5 / o-series) reject `temperature` entirely and want
-    // `max_completion_tokens` instead. Try the preferred body first, then retry
-    // exactly once with a minimal one if the provider 400/422s.
-    const request = async (url, headers, bodyFor) => {
-      let res = await postAgentJson(url, headers, bodyFor(false), signal);
-      if (res.status === 400 || res.status === 422) {
-        console.log('[pose] retrying with compatibility body (status ' + res.status + ')');
-        res = await postAgentJson(url, headers, bodyFor(true), signal);
-      }
-      if (res.aborted) return null;
-      if (!res.json) {
-        const detail = String(res.text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
-        console.error(`[pose] director request failed (status ${res.status}): ${detail || 'empty response'}`);
-        return null;
-      }
-      return res.json;
+    // Criteria: provide an option to stay on the current pose/scene, plus each candidate pose
+    const criteria = {};
+    criteria['keep_current'] = currentPose
+      ? `Keep current pose ("${currentPose.name}"). Character maintains current posture/activity, no visual change is needed, or action is only announced/intended.`
+      : 'Keep default appearance. No specific pose matches or scene continues without a specific visual pose.';
+
+    for (const p of candidates) {
+      const desc = (p.description || '').trim();
+      criteria[p.id] = desc ? `${p.name} — ${desc}` : `Character in ${p.name} pose`;
+    }
+
+    const state = {
+      character: char.name,
+      current_pose: currentPose ? currentPose.name : 'default',
+      latest_reply: truncTitle(replyText || '', 1200),
     };
 
-    let j;
-    if (cfg.provider === 'anthropic') {
-      const bodyFor = (compat) => ({
-        model: cfg.model,
-        system: POSE_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userText }],
-        tools: [{ ...tool, input_schema: { type: 'object', properties: props, required: ['poseId', 'confidence'] } }],
-        max_tokens: 1024,
-        ...(compat ? {} : { temperature: 0.2 }),
+    if (chat && chat.tree) {
+      const tip = db.treeTip(chat.tree);
+      if (tip) {
+        const { turns } = buildTurns(db.pathNodes(chat.tree, tip), char, persona);
+        const recent = turns.slice(-2);
+        if (recent.length) {
+          state.recent_dialogue = recent
+            .map((t) => `${t.role === 'assistant' ? char.name : (persona ? persona.name : 'user')}: ${truncTitle(t.content, 250)}`)
+            .join('\n');
+        }
+      }
+    }
+
+    const instructions = `Select the pose that best depicts what ${char.name} is physically doing, expressing, or experiencing right now in the latest reply. Only pick a new pose if the action is already happening on screen. Otherwise select keep_current.`;
+
+    const model = cfg.model || (cfg.provider === 'openrouter' ? 'typesafe/jev-1.13' : 'jev');
+    const url = resolveDecisionsUrl(cfg);
+
+    const headers = { 'content-type': 'application/json' };
+    if (cfg.apiKey) {
+      headers['authorization'] = `Bearer ${cfg.apiKey}`;
+    }
+    if (cfg.provider === 'openrouter' || /openrouter\.ai/i.test(url)) {
+      headers['http-referer'] = 'http://localhost:3000';
+      headers['x-title'] = 'aichat';
+    }
+
+    const body = {
+      model,
+      state,
+      questions: {
+        pose: {
+          type: 'choice',
+          instructions,
+          criteria,
+        },
+      },
+    };
+
+    let res = await postAgentJson(url, headers, body, signal);
+
+    // If custom OpenAI-compatible provider 404s/405s on /decisions, fall back to /chat/completions with structured output
+    if ((res.status === 404 || res.status === 405) && cfg.provider !== 'openrouter' && !res.aborted) {
+      const chatBase = (cfg.baseUrl || '').replace(/\/+$/, '').replace(/\/decisions$/, '');
+      const chatUrl = chatBase.endsWith('/v1') ? `${chatBase}/chat/completions` : `${chatBase}/v1/chat/completions`;
+      console.log(`[pose/jev] /decisions returned ${res.status}, falling back to chat completions at ${chatUrl}`);
+      const fallbackBody = {
+        model,
         stream: false,
-      });
-      j = await request(
-        cfg.baseUrl + '/messages',
-        { 'content-type': 'application/json', 'x-api-key': cfg.apiKey, 'anthropic-version': '2023-06-01' },
-        bodyFor,
-      );
-      if (!j) return null;
-      const arg = j.content?.find((b) => b.type === 'tool_use' && b.name === 'set_pose')?.input;
-      if (!arg) return null;
-      return decidePose(arg, candidates, currentPoseId, cfg);
+        temperature: 0.1,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a decision model (Jev). Select the single best option key based on the state. Return JSON: {"choice": "<key>", "confidence": <0.0 to 1.0>}',
+          },
+          {
+            role: 'user',
+            content: `Question: ${instructions}\n\nState: ${JSON.stringify(state, null, 2)}\n\nOptions:\n${Object.entries(criteria).map(([k, v]) => `- ${k}: ${v}`).join('\n')}`,
+          },
+        ],
+        response_format: { type: 'json_object' },
+      };
+      res = await postAgentJson(chatUrl, headers, fallbackBody, signal);
     }
 
-    const bodyFor = (compat) => ({
-      model: cfg.model,
-      stream: false,
-      ...(compat ? { max_completion_tokens: 1024 } : { max_tokens: 1024, temperature: 0.2 }),
-      tools: [{ type: 'function', function: { ...tool, parameters: { type: 'object', properties: props, required: ['poseId', 'confidence'] } } }],
-      tool_choice: 'auto',
-      messages: [{ role: 'system', content: POSE_SYSTEM_PROMPT }, { role: 'user', content: userText }],
-    });
-    j = await request(
-      cfg.baseUrl + '/chat/completions',
-      { 'content-type': 'application/json', ...(cfg.apiKey ? { authorization: `Bearer ${cfg.apiKey}` } : {}) },
-      bodyFor,
-    );
-    if (!j) return null;
-    const call = j.choices?.[0]?.message?.tool_calls?.[0];
-    let arg = null;
-    if (call && call.function?.name === 'set_pose') {
-      try { arg = JSON.parse(call.function?.arguments || '{}'); } catch { arg = null; }
-    } else {
-      const content = j.choices?.[0]?.message?.content;
-      if (typeof content === 'string' && content.includes('poseId')) {
-        try { arg = JSON.parse(content); } catch { arg = null; }
-      }
+    if (res.aborted) return null;
+    if (!res.json) {
+      const detail = String(res.text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      console.error(`[pose/jev] request failed (status ${res.status}): ${detail || 'empty response'}`);
+      return null;
     }
-    if (!arg) return null;
-    return decidePose(arg, candidates, currentPoseId, cfg);
+
+    let chosenKey = null;
+    let confidence = null;
+
+    const j = res.json;
+    const ans =
+      j.answers?.pose ||
+      j.data?.result?.answers?.pose ||
+      j.result?.answers?.pose ||
+      (j.answers ? Object.values(j.answers)[0] : null);
+
+    if (ans && typeof ans === 'object') {
+      chosenKey = ans.choice ?? ans.value ?? ans.selected ?? null;
+      if (typeof ans.confidence === 'number') confidence = ans.confidence;
+      else if (ans.probabilities && chosenKey && typeof ans.probabilities[chosenKey] === 'number') {
+        confidence = ans.probabilities[chosenKey];
+      }
+    } else if (j.choices?.[0]?.message?.content) {
+      try {
+        const parsed = JSON.parse(j.choices[0].message.content);
+        chosenKey = parsed.choice || parsed.poseId || parsed.selected || null;
+        if (typeof parsed.confidence === 'number') confidence = parsed.confidence;
+      } catch {}
+    }
+
+    if (!chosenKey) {
+      console.error('[pose/jev] could not extract choice from response:', JSON.stringify(j).slice(0, 200));
+      return null;
+    }
+
+    return decidePose({ poseId: chosenKey, confidence }, candidates, currentPoseId, cfg);
   } catch (e) {
-    console.error('[pose] director failed:', e.message);
+    console.error('[pose/jev] director failed:', e.message);
     return null;
   }
 }
 
 function decidePose(arg, candidates, currentPoseId, cfg) {
-  const pose = candidates.find((p) => p.id === arg.poseId);
-  if (!pose) return null;
   const confidence = Number(arg.confidence);
-  const conf = Number.isFinite(confidence) ? clamp(confidence, 0, 1) : 0;
-  const reason = String(arg.reason || '').slice(0, 120);
-  if (pose.id === currentPoseId) {
-    console.log(`[pose] held ${pose.name} (unchanged)`);
-    return { poseId: pose.id, poseName: pose.name, confidence: conf, reason, changed: false };
+  const conf = Number.isFinite(confidence) ? clamp(confidence, 0, 1, 1) : 1;
+  const reason = String(arg.reason || 'jev decision').slice(0, 120);
+  const current = currentPoseId ? candidates.find((p) => p.id === currentPoseId) : null;
+
+  if (arg.poseId === 'keep_current' || arg.poseId === 'none') {
+    console.log(`[pose/jev] held current shot (${arg.poseId}, conf ${conf.toFixed(2)})`);
+    return { poseId: currentPoseId || null, poseName: current ? current.name : null, confidence: conf, reason: 'keep_current', changed: false };
   }
+
+  let pose = candidates.find((p) => p.id === arg.poseId);
+  if (!pose) {
+    pose = candidates.find((p) => p.name.toLowerCase() === String(arg.poseId).toLowerCase());
+  }
+  if (!pose) {
+    console.log(`[pose/jev] unrecognized choice: ${arg.poseId}`);
+    return null;
+  }
+
+  if (pose.id === currentPoseId) {
+    console.log(`[pose/jev] held ${pose.name} (unchanged, conf ${conf.toFixed(2)})`);
+    return { poseId: pose.id, poseName: pose.name, confidence: conf, reason: 'unchanged', changed: false };
+  }
+
   if (conf < cfg.likelihood) {
-    console.log(`[pose] skipped ${pose.name} (conf ${conf} below threshold)`);
+    console.log(`[pose/jev] skipped ${pose.name} (conf ${conf.toFixed(2)} below threshold ${cfg.likelihood})`);
     return { poseId: pose.id, poseName: pose.name, confidence: conf, reason: 'below threshold', changed: false };
   }
-  console.log(`[pose] pose: ${currentPoseId || 'none'} → ${pose.name} (conf ${conf})`);
+
+  console.log(`[pose/jev] pose: ${current ? current.name : 'none'} → ${pose.name} (conf ${conf.toFixed(2)})`);
   return { poseId: pose.id, poseName: pose.name, confidence: conf, reason, changed: true };
 }
 
@@ -712,6 +747,7 @@ async function route(req, res, u) {
       ? db.getPersona(settings.activePersonalityId)
       : null;
     const poses = db.getPoses(chat.characterId, { withImages: false });
+    const pcfg = poseCfg(settings);
     const aiCfg = resolveAiConfig(settings);
     const simulated = !aiCfg.apiKey && aiCfg.provider !== 'ollama';
     const fresh = db.getChat(chat.id);
@@ -722,12 +758,17 @@ async function route(req, res, u) {
         const text = await generateReplyStream(char, db.pathNodes(fresh.tree, node.id), persona, settings, (d) => {
           streamed += d;
           emit({ type: 'delta', text: d });
-          if (!simulated && !posePromise && streamed.length >= 120) {
+          if (!posePromise && pcfg.enabled && streamed.length >= 120) {
             try {
               posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: streamed, settings, signal: ctrl.signal });
-            } catch (e) { console.error('[pose] director failed:', e.message); }
+            } catch (e) { console.error('[pose/jev] director failed:', e.message); }
           }
         }, ctrl.signal);
+        if (!posePromise && pcfg.enabled && text && text.trim().length > 0) {
+          try {
+            posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: text, settings, signal: ctrl.signal });
+          } catch (e) { console.error('[pose/jev] director failed:', e.message); }
+        }
         let pose = null;
         if (posePromise) pose = await Promise.race([posePromise, new Promise((r) => setTimeout(() => r(null), 6000))]);
         const chosen = pose && pose.changed ? pose : null;
@@ -765,6 +806,7 @@ async function route(req, res, u) {
       : null;
     const path = db.pathNodes(chat.tree, parentId);
     const poses = db.getPoses(chat.characterId, { withImages: false });
+    const pcfg = poseCfg(settings);
     const aiCfg = resolveAiConfig(settings);
     const simulated = !aiCfg.apiKey && aiCfg.provider !== 'ollama';
     // Re-generating from an earlier point throws away the reply that is on
@@ -793,12 +835,17 @@ async function route(req, res, u) {
         const text = await generateReplyStream(char, path, persona, settings, (d) => {
           streamed += d;
           emit({ type: 'delta', text: d });
-          if (!simulated && !posePromise && streamed.length >= 120) {
+          if (!posePromise && pcfg.enabled && streamed.length >= 120) {
             try {
               posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: streamed, settings, signal: ctrl.signal });
-            } catch (e) { console.error('[pose] director failed:', e.message); }
+            } catch (e) { console.error('[pose/jev] director failed:', e.message); }
           }
         }, ctrl.signal);
+        if (!posePromise && pcfg.enabled && text && text.trim().length > 0) {
+          try {
+            posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: text, settings, signal: ctrl.signal });
+          } catch (e) { console.error('[pose/jev] director failed:', e.message); }
+        }
         let pose = null;
         if (posePromise) pose = await Promise.race([posePromise, new Promise((r) => setTimeout(() => r(null), 6000))]);
         const chosen = pose && pose.changed ? pose : null;
@@ -944,13 +991,23 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, HOST, () => {
-  const bound = HOST || '0.0.0.0';
-  /* Only advertise addresses when actually listening on the network. */
-  const open = !HOST || HOST === '0.0.0.0' || HOST === '::';
-  const nets = open
-    ? Object.values(os.networkInterfaces()).flat().filter((n) => n && n.family === 'IPv4' && !n.internal)
-    : [];
-  const where = nets.length ? ` → also try ${nets.map((n) => `http://${n.address}:${PORT}`).join(', ')}` : '';
-  console.log(`aichat running → ${bound}:${PORT}${where}`);
-});
+if (require.main === module) {
+  server.listen(PORT, HOST, () => {
+    const bound = HOST || '0.0.0.0';
+    /* Only advertise addresses when actually listening on the network. */
+    const open = !HOST || HOST === '0.0.0.0' || HOST === '::';
+    const nets = open
+      ? Object.values(os.networkInterfaces()).flat().filter((n) => n && n.family === 'IPv4' && !n.internal)
+      : [];
+    const where = nets.length ? ` → also try ${nets.map((n) => `http://${n.address}:${PORT}`).join(', ')}` : '';
+    console.log(`aichat running → ${bound}:${PORT}${where}`);
+  });
+}
+
+module.exports = {
+  server,
+  poseCfg,
+  resolveDecisionsUrl,
+  runPoseAgent,
+  decidePose,
+};
