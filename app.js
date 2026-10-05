@@ -1018,13 +1018,6 @@ const modalSnapshots = {};
 
 function getModalSnapshot(id) {
   if (id === 'modal-char') {
-    if (typeof syncCeVariablesFromInputs === 'function') syncCeVariablesFromInputs();
-    const sortedVars = {};
-    if (ceVariables && typeof ceVariables === 'object') {
-      Object.keys(ceVariables).sort().forEach((k) => {
-        sortedVars[k] = ceVariables[k];
-      });
-    }
     return JSON.stringify({
       name: ($('#ce-name')?.value || '').trim(),
       desc: ($('#ce-desc')?.value || '').trim(),
@@ -1032,8 +1025,7 @@ function getModalSnapshot(id) {
       posesEnabled: Boolean($('#ce-poses-enabled')?.checked),
       emoji: ceEmoji || null,
       avatar: ceAvatar || null,
-      image: ceImage || null,
-      variables: sortedVars
+      image: ceImage || null
     });
   }
   if (id === 'modal-scenario') {
@@ -1244,84 +1236,10 @@ function switchCeDescTab(tab) {
   if (!isEdit) renderCeDescPreview();
 }
 
-function syncCeVariablesFromInputs() {
-  $$('#ce-vars-list .ce-var-row').forEach((row) => {
-    const key = row.dataset.key;
-    const inp = $('.ce-var-val-input', row);
-    if (key && inp) ceVariables[key] = inp.value.trim();
-  });
-}
-
 function renderCeDescPreview() {
   const raw = $('#ce-desc').value;
   const charName = $('#ce-name').value.trim() || 'Character';
-  syncCeVariablesFromInputs();
-  $('#ce-desc-prev-wrap').innerHTML = renderPreviewMarkdown(raw, null, ceVariables, charName);
-}
-
-function renderCeVarsList() {
-  const list = $('#ce-vars-list');
-  if (!list) return;
-  const entries = Object.entries(ceVariables);
-  if (entries.length === 0) {
-    list.innerHTML = `<div class="prow-desc" style="padding:10px;text-align:center">No variables set. Click &ldquo;+ Add variable&rdquo; to create one.</div>`;
-    return;
-  }
-  list.innerHTML = entries.map(([key, val]) => `
-    <div class="ce-var-row" data-key="${esc(key)}">
-      <div class="ce-var-key-col">
-        <span class="ce-var-key-tag" title="{{${esc(key)}}}">{{${esc(key)}}}</span>
-      </div>
-      <div class="ce-var-val-col">
-        <input type="text" class="ce-var-val-input" data-key="${esc(key)}" value="${esc(val)}" placeholder="Value for {{${esc(key)}}}">
-      </div>
-      <button type="button" class="icon-btn tiny danger ce-var-del-btn" data-del-var="${esc(key)}" title="Remove variable">${I.trash}</button>
-    </div>
-  `).join('');
-}
-
-function openCeVarPicker() {
-  $('#ce-var-picker').classList.remove('hidden');
-  $('#ce-var-picker-input').value = '';
-  renderCeVarPickerList('');
-  setTimeout(() => $('#ce-var-picker-input').focus(), 60);
-}
-
-function closeCeVarPicker() {
-  $('#ce-var-picker').classList.add('hidden');
-}
-
-function renderCeVarPickerList(q = '') {
-  const list = $('#ce-var-picker-list');
-  if (!list) return;
-  const normQ = q.trim().toLowerCase();
-  const existingKeys = new Set(Object.keys(ceVariables).map((k) => k.toLowerCase()));
-  const all = getAllVariables().filter((v) => !existingKeys.has(v.key.toLowerCase()));
-  let filtered = all;
-  if (normQ) {
-    filtered = all.filter((v) => v.key.toLowerCase().includes(normQ));
-  }
-  const canCreate = normQ && !all.some((v) => v.key.toLowerCase() === normQ) && !existingKeys.has(normQ);
-  let html = '';
-  if (canCreate) {
-    html += `
-      <div class="var-picker-item" data-add-key="${esc(normQ)}">
-        <span class="var-picker-item-name">➕ Create "{{${esc(normQ)}}}"</span>
-        <span class="var-picker-item-sub">New custom variable</span>
-      </div>
-    `;
-  }
-  if (filtered.length) {
-    html += filtered.map((v) => `
-      <div class="var-picker-item" data-add-key="${esc(v.key)}">
-        <span class="var-picker-item-name">{{${esc(v.key)}}}</span>
-        <span class="var-picker-item-sub">Used in ${v.usedBy.length} char${v.usedBy.length === 1 ? '' : 's'}</span>
-      </div>
-    `).join('');
-  } else if (!canCreate) {
-    html += `<div class="prow-desc" style="padding:10px;text-align:center">${normQ ? 'No matching variables' : 'All available variables already added'}</div>`;
-  }
-  list.innerHTML = html;
+  $('#ce-desc-prev-wrap').innerHTML = renderPreviewMarkdown(raw, ceId, null, charName);
 }
 
 /* Insert Variable Dropdown Popups for Character and Scenario editors */
@@ -1511,7 +1429,6 @@ function openCeScenPanel() {
   panel.classList.remove('hidden');
   card.classList.add('with-scen-panel');
   $('#ce-scen-panel-toggle')?.classList.add('active');
-  $('#ce-scen-bar-toggle')?.classList.add('active');
   renderCeScenActiveCard();
   if (!ceScenSelectedId) {
     openCeScenDropdown();
@@ -1528,7 +1445,6 @@ function closeCeScenPanel() {
   panel.classList.add('hidden');
   card.classList.remove('with-scen-panel');
   $('#ce-scen-panel-toggle')?.classList.remove('active');
-  $('#ce-scen-bar-toggle')?.classList.remove('active');
   closeCeScenDropdown();
 }
 
@@ -1741,12 +1657,10 @@ function openCharModal(char) {
   $('#ce-note').value = char ? char.note || '' : '';
 
   switchCeDescTab('edit');
-  closeCeVarPicker();
   closeInsertVarPopups();
   closeCeScenPanel();
   renderCeScenActiveCard();
   switchCeScenTab('preview');
-  renderCeVarsList();
   renderCeEmojiGrid();
   updateCeAvatarUI();
   updateCePosesToggleUI();
@@ -1802,17 +1716,6 @@ function disarmDelete() {
 async function charFormSave() {
   const name = $('#ce-name').value.trim();
   if (!name) { toast('Give your character a name'); return; }
-  syncCeVariablesFromInputs();
-  // Prune any empty/blank variables so unused variables are automatically deleted
-  const cleanVars = {};
-  for (const [k, v] of Object.entries(ceVariables)) {
-    const norm = k.trim().toLowerCase();
-    const val = (v || '').trim();
-    if (norm && val) {
-      cleanVars[norm] = val;
-    }
-  }
-  ceVariables = cleanVars;
   const body = {
     name,
     description: $('#ce-desc').value.trim(),
@@ -1821,7 +1724,6 @@ async function charFormSave() {
     avatar: ceAvatar,
     image: ceImage,
     posesEnabled: $('#ce-poses-enabled').checked,
-    variables: ceVariables,
   };
   try {
     let saved;
@@ -2641,7 +2543,7 @@ function renderSidebarVars(query = '') {
   if (badge) badge.textContent = all.length;
 
   if (all.length === 0) {
-    list.innerHTML = `<div class="prow-desc" style="padding:24px 14px;text-align:center">${q ? `No variables matching "${esc(query)}"` : 'No variables created yet.<br>Add variables to any character (under Character Editor &rarr; Character Variables) and they will appear here.'}</div>`;
+    list.innerHTML = `<div class="prow-desc" style="padding:24px 14px;text-align:center">${q ? `No variables matching "${esc(query)}"` : 'No variables created yet.<br>Add variables to any scenario (e.g. <code>{{outfit}}</code>) and configure values for characters.'}</div>`;
     return;
   }
 
@@ -2688,6 +2590,8 @@ function switchSeTab(tab) {
   $('#se-content-prev-wrap').classList.toggle('hidden', isEdit);
   const wrap = $('#se-insert-var-wrap');
   if (wrap) wrap.classList.toggle('hidden', !isEdit);
+  const pill = $('#se-char-swap-wrap');
+  if (pill) pill.classList.toggle('hidden', isEdit);
   if (!isEdit) renderSePreview();
 }
 
@@ -4128,49 +4032,9 @@ function wireEvents() {
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
     updateCeScenPanelUI();
   });
-  $('#ce-add-var-btn').addEventListener('click', openCeVarPicker);
-  $('#ce-var-picker-cancel').addEventListener('click', closeCeVarPicker);
-  $('#ce-var-picker-input').addEventListener('input', (e) => {
-    renderCeVarPickerList(e.target.value);
-  });
-  $('#ce-var-picker-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const first = $('#ce-var-picker-list [data-add-key]');
-      if (first) first.click();
-    }
-  });
-  $('#ce-var-picker-list').addEventListener('click', (e) => {
-    const item = e.target.closest('[data-add-key]');
-    if (!item) return;
-    const key = item.dataset.addKey;
-    ceVariables[key] = '';
-    renderCeVarsList();
-    closeCeVarPicker();
-    const row = $(`#ce-vars-list [data-key="${key}"] input`);
-    if (row) row.focus();
-    if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
-    updateCeScenPanelUI();
-  });
-  $('#ce-vars-list').addEventListener('click', (e) => {
-    const del = e.target.closest('[data-del-var]');
-    if (!del) return;
-    delete ceVariables[del.dataset.delVar];
-    renderCeVarsList();
-    if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
-    updateCeScenPanelUI();
-  });
-  $('#ce-vars-list').addEventListener('input', (e) => {
-    const inp = e.target.closest('.ce-var-val-input');
-    if (!inp) return;
-    ceVariables[inp.dataset.key] = inp.value.trim();
-    if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
-    updateCeScenPanelUI();
-  });
 
   // Character Modal Scenario Inspector Side Panel events
   $('#ce-scen-panel-toggle')?.addEventListener('click', toggleCeScenPanel);
-  $('#ce-scen-bar-toggle')?.addEventListener('click', toggleCeScenPanel);
   $('#ce-scen-panel-close')?.addEventListener('click', closeCeScenPanel);
   $('#ce-scen-active-card')?.addEventListener('click', () => {
     toggleCeScenDropdown();
