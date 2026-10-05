@@ -132,15 +132,50 @@ function poseCfg(settings) {
 /* Template tags usable in anything the user writes for the model. Expanded when
    the prompt is built, never stored expanded, so renaming the character or the
    persona updates every field at once. Unrecognised tags are left as typed. */
-function expandPromptMacros(s, char, persona) {
+function expandPromptMacros(s, char, persona, chatOrScenario = null) {
   if (s == null) return '';
   const userName = persona ? persona.name : 'the user';
   const charName = (char && char.name) || 'the character';
-  const vars = (char && char.variables && typeof char.variables === 'object') ? char.variables : {};
+  const charId = (char && char.id) || (chatOrScenario && (chatOrScenario.characterId || chatOrScenario.character_id));
+
+  let scenarioId = null;
+  let scenarioObj = null;
+
+  if (typeof chatOrScenario === 'string') {
+    scenarioId = chatOrScenario;
+  } else if (chatOrScenario && typeof chatOrScenario === 'object') {
+    if (chatOrScenario.characterVariables || chatOrScenario.character_variables) {
+      scenarioObj = chatOrScenario;
+    } else if (chatOrScenario.scenarioId || chatOrScenario.scenario_id) {
+      scenarioId = chatOrScenario.scenarioId || chatOrScenario.scenario_id;
+    }
+  }
+
+  if (!scenarioObj && scenarioId) {
+    try {
+      scenarioObj = db.getScenario(scenarioId);
+    } catch {}
+  }
+
+  let vars = {};
+  if (scenarioObj && charId) {
+    const rawCv = scenarioObj.characterVariables || scenarioObj.character_variables;
+    const cvars = typeof rawCv === 'string' ? JSON.parse(rawCv) : rawCv;
+    if (cvars && typeof cvars === 'object' && cvars[charId]) {
+      vars = cvars[charId];
+    }
+  }
+
+  // Fallback to char.variables if scenario doesn't provide them
+  if ((!vars || Object.keys(vars).length === 0) && char && char.variables && typeof char.variables === 'object') {
+    vars = char.variables;
+  }
+
   const varMap = new Map();
-  for (const [k, v] of Object.entries(vars)) {
+  for (const [k, v] of Object.entries(vars || {})) {
     if (k) varMap.set(k.trim().toLowerCase(), String(v == null ? '' : v));
   }
+
   return String(s).replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
     const lower = key.toLowerCase();
     if (lower === 'char') return charName;
@@ -150,12 +185,12 @@ function expandPromptMacros(s, char, persona) {
   });
 }
 
-function buildTurns(pathNodes, char, persona) {
+function buildTurns(pathNodes, char, persona, chatOrScenario = null) {
   const turns = [];
   let hasInjection = false;
   for (const n of pathNodes) {
     if (n.role === 'scenario' || n.role === 'root') continue;
-    let content = expandPromptMacros(n.content, char, persona);
+    let content = expandPromptMacros(n.content, char, persona, chatOrScenario);
     if (n.role === 'injection') {
       hasInjection = true;
       content = `((OOC directive: ${content}))`;
@@ -190,9 +225,9 @@ const SIMULATED_FALLBACKS = [
    defines who is in the scene — the character's persona, the user's persona, the
    scenario and the example replies — is appended either way, so a custom prompt
    can steer the format without stripping the model of who it is writing about. */
-function buildSystemText(char, persona, hasInjection, cfg, scenarioText) {
+function buildSystemText(char, persona, hasInjection, cfg, scenarioText, chatOrScenario = null) {
   const userName = persona ? persona.name : 'the user';
-  const ex = (s) => expandPromptMacros(s, char, persona);
+  const ex = (s) => expandPromptMacros(s, char, persona, chatOrScenario);
   const custom = cfg.systemPrompt.trim();
   const parts = [
     custom ? ex(custom) : `Write "${char.name}'s" next reply in a fictional roleplay chat between "${userName}" and "${char.name}".`,
@@ -344,19 +379,19 @@ async function streamAnthropic(base, body, apiKey, onDelta, ctrl) {
   return full;
 }
 
-async function generateReplyStream(char, nodes, persona, settings, onDelta, signal) {
-  const built = buildTurns(nodes, char, persona);
+async function generateReplyStream(char, nodes, persona, settings, onDelta, signal, chatOrScenario = null) {
+  const built = buildTurns(nodes, char, persona, chatOrScenario);
   const history = built.turns.slice(-40);
   const cfg = resolveAiConfig(settings);
   const scenarioNode = (nodes || []).find((n) => n.role === 'scenario');
   const scenarioText = scenarioNode ? scenarioNode.content : (char.scenario || '');
-  const systemText = buildSystemText(char, persona, built.hasInjection, cfg, scenarioText);
+  const systemText = buildSystemText(char, persona, built.hasInjection, cfg, scenarioText, chatOrScenario);
 
   if (!cfg.apiKey && cfg.provider !== 'ollama') {
     const pool = (char.responses || []).filter((r) => r && !GENERIC_RESPONSE_SET.has(String(r).trim()));
     const candidates = pool.length ? pool : SIMULATED_FALLBACKS;
     const picked = candidates[Math.floor(Math.random() * candidates.length)];
-    const text = expandPromptMacros(picked, char, persona) || '*They listen carefully, then nod.* Go on — I am curious where this goes.';
+    const text = expandPromptMacros(picked, char, persona, chatOrScenario) || '*They listen carefully, then nod.* Go on — I am curious where this goes.';
     for (const chunk of text.match(/[\s\S]{1,8}/g) || [text]) {
       if (signal && signal.aborted) throw new Error('Aborted');
       onDelta(chunk);
@@ -511,7 +546,7 @@ async function runPoseAgent({ char, persona, chat, poses, currentPoseId, replyTe
     if (chat && chat.tree && contextCount > 0) {
       const tip = db.treeTip(chat.tree);
       if (tip) {
-        const { turns } = buildTurns(db.pathNodes(chat.tree, tip), char, persona);
+        const { turns } = buildTurns(db.pathNodes(chat.tree, tip), char, persona, chat);
         const recent = turns.slice(-contextCount);
         if (recent.length) {
           state.recent_dialogue = recent
@@ -701,6 +736,7 @@ async function route(req, res, u) {
         content,
         accessMode: body.accessMode || 'all',
         characterIds: body.characterIds || [],
+        characterVariables: body.characterVariables || body.character_variables || {},
       });
       return send(res, 201, sc);
     } catch (e) {
@@ -829,7 +865,7 @@ async function route(req, res, u) {
         const text = await generateReplyStream(char, db.pathNodes(fresh.tree, node.id), persona, settings, (d) => {
           streamed += d;
           emit({ type: 'delta', text: d });
-        }, ctrl.signal);
+        }, ctrl.signal, chat);
         if (poseEnabled && text && text.trim().length > 0) {
           try {
             posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: text, settings, signal: ctrl.signal });
@@ -902,7 +938,7 @@ async function route(req, res, u) {
         const text = await generateReplyStream(char, path, persona, settings, (d) => {
           streamed += d;
           emit({ type: 'delta', text: d });
-        }, ctrl.signal);
+        }, ctrl.signal, chat);
         if (poseEnabled && text && text.trim().length > 0) {
           try {
             posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: text, settings, signal: ctrl.signal });

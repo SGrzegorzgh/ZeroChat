@@ -121,6 +121,7 @@ function migrate() {
       content TEXT NOT NULL,
       access_mode TEXT DEFAULT 'all',
       character_ids TEXT DEFAULT '[]',
+      character_variables TEXT DEFAULT '{}',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );

@@ -649,83 +649,104 @@
   </div>
 
   <div class="modal" id="modal-scenario">
-    <div class="modal-card">
+    <div class="modal-card" id="se-modal-card">
       <div class="m-head">
         <h3 id="se-title-text">New scenario</h3>
         <button class="icon-btn tiny" data-close aria-label="Close">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
-      <div class="m-body">
-        <div class="field">
-          <label>Title</label>
-          <input type="text" id="se-title" placeholder="e.g. Silvermoon Academy Library, Space Station Airlock">
-        </div>
-        <div class="field">
-          <label>Short description</label>
-          <input type="text" id="se-desc" placeholder="A one-line teaser or summary of the situation">
-        </div>
-        <div class="field">
-          <div class="field-tab-header">
-            <label>Scenario prompt / Opening scene</label>
-            <div class="se-preview-controls">
-              <div class="se-char-swap-wrap">
-                <span class="se-char-swap-label">Preview as:</span>
-                <select id="se-preview-char-select" class="se-char-select"></select>
-              </div>
-              <div class="insert-var-wrap" id="se-insert-var-wrap">
-                <button type="button" class="btn btn-ghost sm insert-var-trigger" id="se-insert-var-btn">
-                  <span class="icon-curly">{ }</span> Insert variable ▾
-                </button>
-                <div id="se-insert-var-popup" class="insert-var-popup hidden">
-                  <input type="text" id="se-insert-var-search" class="search-input sm insert-var-search" placeholder="Search variable..." autocomplete="off">
-                  <div id="se-insert-var-list" class="insert-var-list"></div>
+      <div class="se-modal-layout">
+        <div class="se-modal-main">
+          <div class="m-body">
+            <div class="field">
+              <label>Title</label>
+              <input type="text" id="se-title" placeholder="e.g. Silvermoon Academy Library, Space Station Airlock">
+            </div>
+            <div class="field">
+              <label>Short description</label>
+              <input type="text" id="se-desc" placeholder="A one-line teaser or summary of the situation">
+            </div>
+            <div class="field">
+              <div class="field-tab-header">
+                <label>Scenario prompt / Opening scene</label>
+                <div class="se-preview-controls">
+                  <div class="se-char-swap-wrap">
+                    <span class="se-char-swap-label">Preview as:</span>
+                    <select id="se-preview-char-select" class="se-char-select"></select>
+                  </div>
+                  <div class="insert-var-wrap" id="se-insert-var-wrap">
+                    <button type="button" class="btn btn-ghost sm insert-var-trigger" id="se-insert-var-btn">
+                      <span class="icon-curly">{ }</span> Insert variable ▾
+                    </button>
+                    <div id="se-insert-var-popup" class="insert-var-popup hidden">
+                      <input type="text" id="se-insert-var-search" class="search-input sm insert-var-search" placeholder="Search variable..." autocomplete="off">
+                      <div id="se-insert-var-list" class="insert-var-list"></div>
+                    </div>
+                  </div>
+                  <div class="field-tabs">
+                    <button type="button" class="field-tab-btn active" id="se-tab-edit">Edit</button>
+                    <button type="button" class="field-tab-btn" id="se-tab-preview">Preview</button>
+                  </div>
                 </div>
               </div>
-              <div class="field-tabs">
-                <button type="button" class="field-tab-btn active" id="se-tab-edit">Edit</button>
-                <button type="button" class="field-tab-btn" id="se-tab-preview">Preview</button>
+              <div id="se-content-edit-wrap">
+                <textarea id="se-content" rows="6" placeholder="*The rain hammers against the window...*&#10;&#10;Describe the setting, situation, and opening dialogue."></textarea>
+              </div>
+              <div id="se-content-prev-wrap" class="field-preview-box hidden"></div>
+              <p class="m-note">{{char}}, {{user}}, and any variable (e.g. {{hair}}, {{clothing}}) are replaced dynamically based on the character.</p>
+            </div>
+
+            <div class="field" style="margin-top:14px">
+              <label>Character access</label>
+              <p class="m-note" style="margin-bottom:8px">Control whether any character can enter this scenario or restrict it using an access list.</p>
+              <div class="scen-access-modes">
+                <label class="scen-radio-opt">
+                  <input type="radio" name="se-access-mode" value="all" checked>
+                  <span><strong>Open to all</strong> · Any character can use this scenario</span>
+                </label>
+                <label class="scen-radio-opt">
+                  <input type="radio" name="se-access-mode" value="whitelist">
+                  <span><strong>Whitelist</strong> · ONLY selected characters can access</span>
+                </label>
+                <label class="scen-radio-opt">
+                  <input type="radio" name="se-access-mode" value="blacklist">
+                  <span><strong>Blacklist</strong> · All characters EXCEPT selected can access</span>
+                </label>
               </div>
             </div>
-          </div>
-          <div id="se-content-edit-wrap">
-            <textarea id="se-content" rows="6" placeholder="*The rain hammers against the window...*&#10;&#10;Describe the setting, situation, and opening dialogue."></textarea>
-          </div>
-          <div id="se-content-prev-wrap" class="field-preview-box hidden"></div>
-          <p class="m-note">{{char}}, {{user}}, and any variable (e.g. {{hair}}, {{clothing}}) are replaced dynamically based on the character.</p>
-        </div>
 
-        <div class="field" style="margin-top:14px">
-          <label>Character access</label>
-          <p class="m-note" style="margin-bottom:8px">Control whether any character can enter this scenario or restrict it using an access list.</p>
-          <div class="scen-access-modes">
-            <label class="scen-radio-opt">
-              <input type="radio" name="se-access-mode" value="all" checked>
-              <span><strong>Open to all</strong> · Any character can use this scenario</span>
-            </label>
-            <label class="scen-radio-opt">
-              <input type="radio" name="se-access-mode" value="whitelist">
-              <span><strong>Whitelist</strong> · ONLY selected characters can access</span>
-            </label>
-            <label class="scen-radio-opt">
-              <input type="radio" name="se-access-mode" value="blacklist">
-              <span><strong>Blacklist</strong> · All characters EXCEPT selected can access</span>
-            </label>
-          </div>
-        </div>
-
-        <div id="se-chars-block" class="field hidden">
-          <div class="scen-chars-bar">
-            <span class="scen-chars-label" id="se-chars-label">Characters:</span>
-            <div class="scen-chars-actions">
-              <button type="button" class="btn btn-ghost sm" id="se-chars-select-all">Select all</button>
-              <button type="button" class="btn btn-ghost sm" id="se-chars-clear-all">Clear</button>
+            <div id="se-chars-block" class="field hidden">
+              <div class="scen-chars-bar">
+                <span class="scen-chars-label" id="se-chars-label">Characters:</span>
+                <div class="scen-chars-actions">
+                  <button type="button" class="btn btn-ghost sm" id="se-chars-select-all">Select all</button>
+                  <button type="button" class="btn btn-ghost sm" id="se-chars-clear-all">Clear</button>
+                </div>
+              </div>
+              <div style="margin-bottom:8px">
+                <input type="text" id="se-chars-search" class="search-input" placeholder="Search characters by name or description…" autocomplete="off">
+              </div>
+              <div id="se-chars-list" class="scen-chars-list"></div>
             </div>
           </div>
-          <div style="margin-bottom:8px">
-            <input type="text" id="se-chars-search" class="search-input" placeholder="Search characters by name or description…" autocomplete="off">
+        </div>
+
+        <div class="se-vars-panel" id="se-vars-panel">
+          <div class="se-vars-panel-head">
+            <div class="se-vars-panel-title">
+              <span class="icon-scen">⚙</span>
+              <span>Character Variables</span>
+            </div>
+            <div class="se-vars-char-select-wrap">
+              <span class="se-vars-char-label">Character:</span>
+              <select id="se-vars-char-select" class="se-char-select"></select>
+            </div>
           </div>
-          <div id="se-chars-list" class="scen-chars-list"></div>
+          <div class="se-vars-panel-body">
+            <div id="se-vars-status-banner" class="ce-scen-status-banner all-good"></div>
+            <div id="se-vars-form" class="se-vars-form"></div>
+          </div>
         </div>
       </div>
       <div class="m-foot">
@@ -793,6 +814,53 @@
       <div class="m-foot">
         <span class="spacer"></span>
         <button class="btn btn-ghost" data-close type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-scenario-vars">
+    <div class="modal-card" id="msv-modal-card">
+      <div class="m-head">
+        <div>
+          <h3 id="msv-header-title">Missing variables</h3>
+          <p class="m-sub" id="msv-header-sub">Configure required variables for this character before starting the scene.</p>
+        </div>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="msv-modal-layout">
+        <!-- Left: Missing variables inputs -->
+        <div class="msv-col-left">
+          <div class="msv-char-banner" id="msv-char-banner"></div>
+          <h4 id="msv-count-header" class="msv-count-header"></h4>
+          <div class="msv-inputs-list" id="msv-inputs-list"></div>
+        </div>
+
+        <!-- Right: Live raw/preview split -->
+        <div class="msv-col-right">
+          <div class="msv-split-container">
+            <!-- Raw view pane -->
+            <div class="msv-pane msv-pane-raw">
+              <div class="msv-pane-head">
+                <span class="msv-pane-title">Raw Scenario Prompt</span>
+              </div>
+              <div class="msv-pane-content" id="msv-raw-text"></div>
+            </div>
+            <!-- Live Preview pane -->
+            <div class="msv-pane msv-pane-preview">
+              <div class="msv-pane-head">
+                <span class="msv-pane-title">Live Preview</span>
+              </div>
+              <div class="msv-pane-content" id="msv-prev-content"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="m-foot">
+        <button id="msv-cancel" class="btn btn-ghost" type="button">Cancel</button>
+        <span class="spacer"></span>
+        <button id="msv-start-chat" class="btn btn-primary" type="button">Start Chat</button>
       </div>
     </div>
   </div>

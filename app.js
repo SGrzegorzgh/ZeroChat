@@ -422,25 +422,57 @@ function editBoxHtml(n) {
 
 function getAllVariables() {
   const varsMap = new Map();
+  // Collect from scenarios
+  for (const sc of (state.scenarios || [])) {
+    if (sc.characterVariables && typeof sc.characterVariables === 'object') {
+      for (const [charId, charVars] of Object.entries(sc.characterVariables)) {
+        if (!charVars || typeof charVars !== 'object') continue;
+        const c = (state.characters || []).find((x) => x.id === charId);
+        for (const [k, v] of Object.entries(charVars)) {
+          if (!k) continue;
+          const norm = k.trim().toLowerCase();
+          const valStr = String(v == null ? '' : v).trim();
+          if (!valStr) continue;
+          if (!varsMap.has(norm)) {
+            varsMap.set(norm, { key: norm, usedBy: [] });
+          }
+          varsMap.get(norm).usedBy.push({
+            characterId: charId,
+            characterName: c ? c.name : charId,
+            scenarioTitle: sc.title,
+            value: valStr,
+          });
+        }
+      }
+    }
+    // Also detect tags from scenario content
+    const tagMatches = (sc.content || '').matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g);
+    for (const m of tagMatches) {
+      const norm = m[1].trim().toLowerCase();
+      if (norm === 'char' || norm === 'user') continue;
+      if (!varsMap.has(norm)) {
+        varsMap.set(norm, { key: norm, usedBy: [] });
+      }
+    }
+  }
+  // Collect from characters
   for (const c of (state.characters || [])) {
     if (c.variables && typeof c.variables === 'object') {
       for (const [k, v] of Object.entries(c.variables)) {
         if (!k) continue;
         const norm = k.trim().toLowerCase();
         const valStr = String(v == null ? '' : v).trim();
-        if (!valStr) continue; // If empty or removed, does not exist!
-
+        if (!valStr) continue;
         if (!varsMap.has(norm)) {
-          varsMap.set(norm, {
-            key: norm,
-            usedBy: [],
+          varsMap.set(norm, { key: norm, usedBy: [] });
+        }
+        if (!varsMap.get(norm).usedBy.some((u) => u.characterId === c.id)) {
+          varsMap.get(norm).usedBy.push({
+            characterId: c.id,
+            characterName: c.name,
+            value: valStr,
           });
         }
-        varsMap.get(norm).usedBy.push({
-          characterId: c.id,
-          characterName: c.name,
-          value: valStr,
-        });
       }
     }
   }
@@ -459,7 +491,25 @@ function insertAtCaret(ta, text) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-function expandTags(s, characterId, customVars = null, customCharName = null) {
+function resolveScenarioCharacterVariables(characterId, scenarioOrId) {
+  if (!characterId || !scenarioOrId) return null;
+  let sc = null;
+  if (typeof scenarioOrId === 'string') {
+    sc = (state.scenarios || []).find((x) => x.id === scenarioOrId);
+  } else if (typeof scenarioOrId === 'object' && scenarioOrId !== null) {
+    if (scenarioOrId.characterVariables) sc = scenarioOrId;
+    else if (scenarioOrId.scenarioId || scenarioOrId.scenario_id) {
+      const sId = scenarioOrId.scenarioId || scenarioOrId.scenario_id;
+      sc = (state.scenarios || []).find((x) => x.id === sId);
+    }
+  }
+  if (sc && sc.characterVariables && sc.characterVariables[characterId]) {
+    return sc.characterVariables[characterId];
+  }
+  return null;
+}
+
+function expandTags(s, characterId, customVarsOrScenario = null, customCharName = null, maybeScenarioId = null) {
   if (s == null) return '';
   const str = String(s);
   if (str.indexOf('{{') === -1) return str;
@@ -467,9 +517,32 @@ function expandTags(s, characterId, customVars = null, customCharName = null) {
   const c = state.characters.find((x) => x.id === characterId);
   const charName = customCharName || (c && c.name) || 'the character';
   const userName = (persona && persona.name) || 'the user';
-  const vars = customVars || ((c && c.variables && typeof c.variables === 'object') ? c.variables : {});
+
+  let vars = {};
+  let scenarioParam = maybeScenarioId;
+
+  if (typeof customVarsOrScenario === 'string') {
+    scenarioParam = customVarsOrScenario;
+  } else if (customVarsOrScenario && typeof customVarsOrScenario === 'object') {
+    if (customVarsOrScenario.characterVariables || customVarsOrScenario.scenarioId || customVarsOrScenario.scenario_id) {
+      scenarioParam = customVarsOrScenario;
+    } else {
+      vars = customVarsOrScenario;
+    }
+  }
+
+  if ((!vars || Object.keys(vars).length === 0) && scenarioParam) {
+    const scVars = resolveScenarioCharacterVariables(characterId, scenarioParam);
+    if (scVars) vars = scVars;
+  }
+
+  // Fallback to character's own variables if any
+  if ((!vars || Object.keys(vars).length === 0) && c && c.variables && typeof c.variables === 'object') {
+    vars = c.variables;
+  }
+
   const varMap = new Map();
-  for (const [k, v] of Object.entries(vars)) {
+  for (const [k, v] of Object.entries(vars || {})) {
     if (k) varMap.set(k.trim().toLowerCase(), String(v == null ? '' : v));
   }
 
@@ -485,7 +558,7 @@ function expandTags(s, characterId, customVars = null, customCharName = null) {
   });
 }
 
-function renderPreviewMarkdown(raw, characterId, customVars = null, customCharName = null) {
+function renderPreviewMarkdown(raw, characterId, customVars = null, customCharName = null, scenarioOrId = null) {
   if (!raw || !raw.trim()) {
     return `<div class="prow-desc" style="padding:16px;text-align:center">Nothing to preview. Switch to Edit to write.</div>`;
   }
@@ -493,9 +566,17 @@ function renderPreviewMarkdown(raw, characterId, customVars = null, customCharNa
   const c = state.characters.find((x) => x.id === characterId);
   const charName = customCharName || (c && c.name) || 'the character';
   const userName = (persona && persona.name) || 'the user';
-  const vars = customVars || ((c && c.variables && typeof c.variables === 'object') ? c.variables : {});
+
+  let vars = customVars;
+  if (!vars && scenarioOrId) {
+    vars = resolveScenarioCharacterVariables(characterId, scenarioOrId);
+  }
+  if (!vars) {
+    vars = (c && c.variables && typeof c.variables === 'object') ? c.variables : {};
+  }
+
   const varMap = new Map();
-  for (const [k, v] of Object.entries(vars)) {
+  for (const [k, v] of Object.entries(vars || {})) {
     if (k) varMap.set(k.trim().toLowerCase(), String(v == null ? '' : v));
   }
 
@@ -535,10 +616,10 @@ function msgHtml(c, p, n, chat) {
     const dot = n.state === 'pending' ? '<span class="inj-dot" title="Will be sent with the next reply"></span>' : '';
     body = `<div class="bubble"><span class="inj-tag">${I.zap}<span>Directive</span>${dot}</span>${md(n.content)}</div>`;
   } else if (n.role === 'scenario') {
-    body = `<div class="ms-body">${md(expandTags(n.content, chat.characterId))}</div>`;
+    body = `<div class="ms-body">${md(expandTags(n.content, chat.characterId, chat.scenarioId || chat))}</div>`;
   } else {
     /* Character lines render their tags; the user's own text is left alone. */
-    const text = n.role === 'char' ? expandTags(n.content, chat.characterId) : n.content;
+    const text = n.role === 'char' ? expandTags(n.content, chat.characterId, chat.scenarioId || chat) : n.content;
     body = `<div class="bubble">${md(text)}</div>`;
   }
   if (n.role === 'scenario') {
@@ -961,8 +1042,12 @@ function getModalSnapshot(id) {
       desc: ($('#se-desc')?.value || '').trim(),
       content: ($('#se-content')?.value || '').trim(),
       accessMode: seAccessMode || 'all',
-      characterIds: Array.from(seCharacterIds || []).sort()
+      characterIds: Array.from(seCharacterIds || []).sort(),
+      characterVariables: seCharacterVariables || {}
     });
+  }
+  if (id === 'modal-scenario-vars') {
+    return JSON.stringify(msvLiveVars || {});
   }
   if (id === 'modal-settings') {
     const selected = $('#prov-grid .prov.selected');
@@ -1476,7 +1561,7 @@ function switchCeScenTab(tab) {
   $('#ce-scen-view-vars')?.classList.toggle('hidden', isPrev);
 }
 
-function renderCeScenPreviewMarkdown(raw, charName, customVars) {
+function renderCeScenPreviewMarkdown(raw, charName, customVars, scen = null) {
   if (!raw || !raw.trim()) return '';
   const persona = activePersona();
   const userName = (persona && persona.name) || 'the user';
@@ -1497,7 +1582,10 @@ function renderCeScenPreviewMarkdown(raw, charName, customVars) {
     if (lower === 'user') {
       return `<mark class="scen-hl configured" title="{{user}}: Personality Name (${esc(userName)})">${esc(userName)}</mark>`;
     }
-    const val = customVars && customVars[lower];
+    let val = customVars && customVars[lower];
+    if ((!val || !String(val).trim()) && scen && scen.characterVariables && scen.characterVariables[ceId]) {
+      val = scen.characterVariables[ceId][lower];
+    }
     if (val && String(val).trim()) {
       return `<mark class="scen-hl configured" title="{{${esc(lower)}}}: Configured (${esc(String(val).trim())})">${esc(String(val).trim())}</mark>`;
     }
@@ -1570,7 +1658,8 @@ function updateCeScenPanelUI() {
         isSystem: true,
       });
     } else {
-      const val = ceVariables[tag];
+      const scCharVars = (scen.characterVariables && scen.characterVariables[ceId]) || {};
+      const val = (ceVariables && ceVariables[tag] !== undefined) ? ceVariables[tag] : scCharVars[tag];
       const isSet = Boolean(val && String(val).trim());
       if (isSet) configuredCount++; else missingCount++;
       varStatusList.push({
@@ -1640,7 +1729,7 @@ function updateCeScenPanelUI() {
   // Update Preview view for this specific character
   const previewBox = $('#ce-scen-preview-text');
   if (previewBox) {
-    previewBox.innerHTML = renderCeScenPreviewMarkdown(scen.content, charName, ceVariables);
+    previewBox.innerHTML = renderCeScenPreviewMarkdown(scen.content, charName, ceVariables, scen);
   }
 }
 
@@ -2600,6 +2689,8 @@ let seMode = 'new';
 let seId = null;
 let seAccessMode = 'all';
 let seCharacterIds = new Set();
+let seCharacterVariables = {};
+let seVarsSelectedCharId = null;
 let seDelArmed = null;
 
 function switchSeTab(tab) {
@@ -2615,9 +2706,10 @@ function switchSeTab(tab) {
 
 function renderSePreview() {
   const raw = $('#se-content').value;
-  const sel = $('#se-preview-char-select');
-  const charId = sel ? sel.value : null;
-  $('#se-content-prev-wrap').innerHTML = renderPreviewMarkdown(raw, charId, null);
+  const sel = $('#se-vars-char-select') || $('#se-preview-char-select');
+  const charId = sel ? sel.value : seVarsSelectedCharId;
+  const charVars = (seCharacterVariables && charId && seCharacterVariables[charId]) ? seCharacterVariables[charId] : null;
+  $('#se-content-prev-wrap').innerHTML = renderPreviewMarkdown(raw, charId, charVars);
 }
 
 function populateSeCharSelect(selectedCharId = null) {
@@ -2632,6 +2724,8 @@ function populateSeCharSelect(selectedCharId = null) {
   `).join('');
   if (selectedCharId && state.characters.some((c) => c.id === selectedCharId)) {
     sel.value = selectedCharId;
+  } else if (seVarsSelectedCharId && state.characters.some((c) => c.id === seVarsSelectedCharId)) {
+    sel.value = seVarsSelectedCharId;
   } else if (ui.activeCharacterId && state.characters.some((c) => c.id === ui.activeCharacterId)) {
     sel.value = ui.activeCharacterId;
   } else {
@@ -2639,18 +2733,158 @@ function populateSeCharSelect(selectedCharId = null) {
   }
 }
 
+function populateSeVarsCharSelect(selectedCharId = null) {
+  const sel = $('#se-vars-char-select');
+  if (!sel) return;
+  if (!state.characters || state.characters.length === 0) {
+    sel.innerHTML = '<option value="">No characters</option>';
+    return;
+  }
+  sel.innerHTML = state.characters.map((c) => `
+    <option value="${c.id}">${esc(c.name)}</option>
+  `).join('');
+  if (selectedCharId && state.characters.some((c) => c.id === selectedCharId)) {
+    sel.value = selectedCharId;
+  } else if (seVarsSelectedCharId && state.characters.some((c) => c.id === seVarsSelectedCharId)) {
+    sel.value = seVarsSelectedCharId;
+  } else if (ui.activeCharacterId && state.characters.some((c) => c.id === ui.activeCharacterId)) {
+    sel.value = ui.activeCharacterId;
+  } else {
+    sel.value = state.characters[0].id;
+  }
+  seVarsSelectedCharId = sel.value;
+}
+
+function renderSeVarsForm() {
+  const form = $('#se-vars-form');
+  const banner = $('#se-vars-status-banner');
+  if (!form) return;
+
+  const char = state.characters.find((x) => x.id === seVarsSelectedCharId) || state.characters[0];
+  if (!char) {
+    form.innerHTML = `<div class="prow-desc" style="padding:16px;text-align:center">No characters found. Create a character first.</div>`;
+    if (banner) banner.className = 'ce-scen-status-banner hidden';
+    return;
+  }
+
+  const rawContent = $('#se-content')?.value || '';
+  const tagRegex = /\{\{\s*([\w.-]+)\s*\}\}/g;
+  const foundTags = new Set();
+  let m;
+  while ((m = tagRegex.exec(rawContent)) !== null) {
+    foundTags.add(m[1].trim().toLowerCase());
+  }
+
+  if (!seCharacterVariables[char.id]) seCharacterVariables[char.id] = {};
+  const charVars = seCharacterVariables[char.id];
+  const customTags = [];
+  let hasCharTag = false;
+  let hasUserTag = false;
+
+  for (const tag of foundTags) {
+    if (tag === 'char') { hasCharTag = true; continue; }
+    if (tag === 'user') { hasUserTag = true; continue; }
+    customTags.push(tag);
+  }
+
+  customTags.sort((a, b) => a.localeCompare(b));
+
+  let configuredCount = 0;
+  let missingCount = 0;
+  for (const tag of customTags) {
+    const val = charVars[tag];
+    if (val && String(val).trim().length > 0) configuredCount++;
+    else missingCount++;
+  }
+
+  if (banner) {
+    banner.classList.remove('hidden');
+    if (customTags.length === 0) {
+      banner.className = 'ce-scen-status-banner all-good';
+      banner.innerHTML = `<span>ℹ No template variables in scenario prompt</span>`;
+    } else if (missingCount === 0) {
+      banner.className = 'ce-scen-status-banner all-good';
+      banner.innerHTML = `
+        <span>✓ All scenario variables configured for ${esc(char.name)}</span>
+        <span class="ce-scen-stat-pill green">${configuredCount} of ${customTags.length}</span>
+      `;
+    } else {
+      banner.className = 'ce-scen-status-banner has-missing';
+      banner.innerHTML = `
+        <span>⚠ ${missingCount} variable${missingCount === 1 ? '' : 's'} missing for ${esc(char.name)}</span>
+        <span class="ce-scen-stat-pill red">${missingCount} missing</span>
+      `;
+    }
+  }
+
+  if (customTags.length === 0 && !hasCharTag && !hasUserTag) {
+    form.innerHTML = `
+      <div class="prow-desc" style="padding:24px 16px;text-align:center;line-height:1.6">
+        No template variables detected in the prompt.<br>
+        Add variables like <code>{{outfit}}</code>, <code>{{hair}}</code>, or <code>{{weapon}}</code> on the left to customize the scene for ${esc(char.name)}.
+      </div>
+    `;
+    return;
+  }
+
+  let html = '';
+  if (customTags.length > 0) {
+    html += customTags.map((tag) => {
+      const val = charVars[tag] != null ? String(charVars[tag]) : '';
+      const isSet = Boolean(val && val.trim().length > 0);
+      return `
+        <div class="se-var-field ${isSet ? 'configured' : 'missing'}" data-var-card="${esc(tag)}">
+          <div class="se-var-head">
+            <span class="se-var-label">
+              <code>{{${esc(tag)}}}</code>
+            </span>
+            <span class="ce-scen-var-badge ${isSet ? 'configured' : 'missing'}">
+              ${isSet ? 'Configured' : 'Missing'}
+            </span>
+          </div>
+          <input type="text"
+            class="search-input se-var-input"
+            data-var="${esc(tag)}"
+            value="${esc(val)}"
+            placeholder="Value for ${esc(char.name)}…"
+            autocomplete="off">
+        </div>
+      `;
+    }).join('');
+  }
+
+  if (hasCharTag || hasUserTag) {
+    const persona = activePersona();
+    html += `
+      <div class="se-system-tags-card">
+        <span style="font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)">Built-in macros</span>
+        ${hasCharTag ? `<div class="se-system-tag-row"><code>{{char}}</code><span>&rarr; ${esc(char.name)}</span></div>` : ''}
+        ${hasUserTag ? `<div class="se-system-tag-row"><code>{{user}}</code><span>&rarr; ${esc(persona ? persona.name : 'the user')}</span></div>` : ''}
+      </div>
+    `;
+  }
+
+  form.innerHTML = html;
+}
+
 function openScenarioModal(sc = null) {
   seMode = sc ? 'edit' : 'new';
   seId = sc ? sc.id : null;
   seAccessMode = sc ? (sc.accessMode || 'all') : 'all';
   seCharacterIds = new Set(sc && Array.isArray(sc.characterIds) ? sc.characterIds : []);
+  seCharacterVariables = sc && sc.characterVariables ? JSON.parse(JSON.stringify(sc.characterVariables)) : {};
 
   $('#se-title-text').textContent = sc ? 'Edit scenario' : 'New scenario';
   $('#se-title').value = sc ? sc.title : '';
   $('#se-desc').value = sc ? sc.description : '';
   $('#se-content').value = sc ? sc.content : '';
 
-  populateSeCharSelect(pickScenarioChar ? pickScenarioChar.id : null);
+  const initialCharId = pickScenarioChar ? pickScenarioChar.id : (ui.activeCharacterId || (state.characters[0] ? state.characters[0].id : null));
+  seVarsSelectedCharId = initialCharId;
+
+  populateSeCharSelect(initialCharId);
+  populateSeVarsCharSelect(initialCharId);
+  renderSeVarsForm();
   switchSeTab('edit');
   closeInsertVarPopups();
 
@@ -2735,6 +2969,7 @@ async function scenarioFormSave() {
     content,
     accessMode: seAccessMode,
     characterIds: Array.from(seCharacterIds),
+    characterVariables: seCharacterVariables,
   };
 
   try {
@@ -2755,6 +2990,146 @@ async function scenarioFormSave() {
   } catch (e) {
     toast(e.message);
   }
+}
+
+// Missing Variables Modal State & Functions
+let msvChar = null;
+let msvScenario = null;
+let msvRequiredVars = [];
+let msvMissingVars = [];
+let msvLiveVars = {};
+
+function getScenarioRequiredVariables(content) {
+  if (!content) return [];
+  const tagRegex = /\{\{\s*([\w.-]+)\s*\}\}/g;
+  const tags = new Set();
+  let m;
+  while ((m = tagRegex.exec(content)) !== null) {
+    const tag = m[1].trim().toLowerCase();
+    if (tag !== 'char' && tag !== 'user') {
+      tags.add(tag);
+    }
+  }
+  return Array.from(tags).sort();
+}
+
+function openMissingVarsModal(character, scenario, requiredVars, missingVars) {
+  msvChar = character;
+  msvScenario = scenario;
+  msvRequiredVars = requiredVars;
+  msvMissingVars = missingVars;
+
+  const existing = (scenario.characterVariables && scenario.characterVariables[character.id]) || {};
+  msvLiveVars = { ...existing };
+
+  $('#msv-header-title').textContent = `${missingVars.length} variable${missingVars.length === 1 ? '' : 's'} missing!`;
+  $('#msv-header-sub').textContent = `Configure required variables for ${character.name} before starting "${scenario.title}".`;
+
+  const banner = $('#msv-char-banner');
+  if (banner) {
+    banner.innerHTML = `
+      ${avatarHtml(character, 'md')}
+      <div class="msv-char-info">
+        <span class="msv-char-name">${esc(character.name)}</span>
+        <span class="msv-scen-title">🎬 ${esc(scenario.title)}</span>
+      </div>
+    `;
+  }
+
+  updateMsvCountHeader();
+
+  const list = $('#msv-inputs-list');
+  if (list) {
+    list.innerHTML = missingVars.map((v) => {
+      const curVal = msvLiveVars[v] || '';
+      return `
+        <div class="msv-input-card ${curVal.trim() ? 'filled' : 'missing'}" data-msv-card="${esc(v)}">
+          <div class="msv-input-head">
+            <span class="msv-input-label"><code>{{${esc(v)}}}</code></span>
+            <span class="ce-scen-var-badge ${curVal.trim() ? 'configured' : 'missing'}" data-msv-badge="${esc(v)}">
+              ${curVal.trim() ? 'Configured' : 'Missing'}
+            </span>
+          </div>
+          <input type="text"
+            class="search-input msv-var-input"
+            data-var="${esc(v)}"
+            value="${esc(curVal)}"
+            placeholder="Enter value for {{${esc(v)}}}…"
+            autocomplete="off">
+        </div>
+      `;
+    }).join('');
+  }
+
+  const rawBox = $('#msv-raw-text');
+  if (rawBox) {
+    rawBox.innerHTML = `<pre class="msv-raw-box">${esc(scenario.content)}</pre>`;
+  }
+
+  updateMsvLivePreview();
+
+  openModal('modal-scenario-vars');
+  setTimeout(() => {
+    const firstInput = $('#msv-inputs-list input');
+    if (firstInput) firstInput.focus();
+  }, 60);
+}
+
+function updateMsvCountHeader() {
+  const header = $('#msv-count-header');
+  if (!header) return;
+  const remaining = msvMissingVars.filter((v) => !msvLiveVars[v] || !String(msvLiveVars[v]).trim()).length;
+  if (remaining === 0) {
+    header.className = 'msv-count-header all-set';
+    header.innerHTML = `<span>✓ All variables configured! Ready to start.</span>`;
+  } else {
+    header.className = 'msv-count-header';
+    header.innerHTML = `<span>⚠ ${remaining} variable${remaining === 1 ? '' : 's'} missing!</span>`;
+  }
+}
+
+function updateMsvLivePreview() {
+  const prevBox = $('#msv-prev-content');
+  if (!prevBox || !msvScenario || !msvChar) return;
+  prevBox.innerHTML = renderPreviewMarkdown(msvScenario.content, msvChar.id, msvLiveVars, msvChar.name);
+}
+
+async function startChatWithScenario(character, scenario) {
+  if (!scenario) {
+    try {
+      ui.activeCharacterId = character.id;
+      const ch = await createChatFor(character, null);
+      saveUi();
+      closeSidebar();
+      renderSidebar();
+      renderChat();
+      loadPoses(character.id);
+    } catch (e) { toast(e.message); }
+    return;
+  }
+
+  const reqVars = getScenarioRequiredVariables(scenario.content);
+  const charVars = (scenario.characterVariables && scenario.characterVariables[character.id]) || {};
+  const missing = reqVars.filter((v) => {
+    const val = charVars[v];
+    return !val || !String(val).trim();
+  });
+
+  if (missing.length > 0) {
+    openMissingVarsModal(character, scenario, reqVars, missing);
+    return;
+  }
+
+  // All variables set! Start chat immediately without blocking.
+  try {
+    ui.activeCharacterId = character.id;
+    const ch = await createChatFor(character, scenario.id);
+    saveUi();
+    closeSidebar();
+    renderSidebar();
+    renderChat();
+    loadPoses(character.id);
+  } catch (e) { toast(e.message); }
 }
 
 async function scenarioDelete() {
@@ -2798,20 +3173,34 @@ function renderPsGrid(query = '') {
       ? `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No scenarios matching "${esc(query)}".</div>`
       : `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No accessible scenarios for ${esc(pickScenarioChar.name)}. Create one or start freeform.</div>`;
   } else {
-    grid.innerHTML = allowed.map((s) => `
-      <div class="ps-item-card" data-scen-id="${s.id}">
-        <div class="ps-item-top">
-          <div class="ps-item-header">
-            <span class="ps-item-title">${esc(s.title)}</span>
-            <span class="scen-badge ${s.accessMode}">${accessBadgeLabel(s)}</span>
+    grid.innerHTML = allowed.map((s) => {
+      const reqVars = getScenarioRequiredVariables(s.content);
+      const charVars = (s.characterVariables && s.characterVariables[pickScenarioChar.id]) || {};
+      const missing = reqVars.filter((v) => !charVars[v] || !String(charVars[v]).trim());
+      let varBadge = '';
+      if (missing.length > 0) {
+        varBadge = `<span class="ce-scen-stat-pill red sm" style="font-size:11px;padding:2px 7px">${missing.length} missing</span>`;
+      } else if (reqVars.length > 0) {
+        varBadge = `<span class="ce-scen-stat-pill green sm" style="font-size:11px;padding:2px 7px">✓ Ready</span>`;
+      }
+      return `
+        <div class="ps-item-card" data-scen-id="${s.id}">
+          <div class="ps-item-top">
+            <div class="ps-item-header">
+              <span class="ps-item-title">${esc(s.title)}</span>
+              <div style="display:flex;align-items:center;gap:6px">
+                ${varBadge}
+                <span class="scen-badge ${s.accessMode}">${accessBadgeLabel(s)}</span>
+              </div>
+            </div>
+            <div class="ps-item-desc">${esc(s.description || s.content.slice(0, 110))}</div>
           </div>
-          <div class="ps-item-desc">${esc(s.description || s.content.slice(0, 110))}</div>
+          <div class="ps-item-foot">
+            <button type="button" class="btn btn-ghost sm">Start chat</button>
+          </div>
         </div>
-        <div class="ps-item-foot">
-          <button type="button" class="btn btn-ghost sm">Start chat</button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 }
 
@@ -3180,7 +3569,66 @@ function wireEvents() {
   // Scenario Modal events
   $('#se-tab-edit').addEventListener('click', () => switchSeTab('edit'));
   $('#se-tab-preview').addEventListener('click', () => switchSeTab('preview'));
-  $('#se-preview-char-select').addEventListener('change', () => {
+  $('#se-preview-char-select')?.addEventListener('change', () => {
+    seVarsSelectedCharId = $('#se-preview-char-select').value;
+    const vSel = $('#se-vars-char-select');
+    if (vSel) vSel.value = seVarsSelectedCharId;
+    renderSeVarsForm();
+    if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
+  });
+  $('#se-vars-char-select')?.addEventListener('change', (e) => {
+    seVarsSelectedCharId = e.target.value;
+    const pSel = $('#se-preview-char-select');
+    if (pSel) pSel.value = seVarsSelectedCharId;
+    renderSeVarsForm();
+    if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
+  });
+  $('#se-vars-form')?.addEventListener('input', (e) => {
+    const inp = e.target.closest('.se-var-input');
+    if (!inp) return;
+    const varName = inp.dataset.var;
+    if (!varName || !seVarsSelectedCharId) return;
+    if (!seCharacterVariables[seVarsSelectedCharId]) seCharacterVariables[seVarsSelectedCharId] = {};
+    seCharacterVariables[seVarsSelectedCharId][varName] = inp.value;
+
+    const isSet = Boolean(inp.value && inp.value.trim().length > 0);
+    const card = inp.closest('.se-var-field');
+    if (card) {
+      card.className = `se-var-field ${isSet ? 'configured' : 'missing'}`;
+      const badge = card.querySelector('.ce-scen-var-badge');
+      if (badge) {
+        badge.className = `ce-scen-var-badge ${isSet ? 'configured' : 'missing'}`;
+        badge.textContent = isSet ? 'Configured' : 'Missing';
+      }
+    }
+
+    const banner = $('#se-vars-status-banner');
+    if (banner) {
+      const inputs = $$('#se-vars-form .se-var-input');
+      const total = inputs.length;
+      let missing = 0;
+      inputs.forEach((i) => { if (!i.value || !i.value.trim()) missing++; });
+      const configured = total - missing;
+      const char = state.characters.find((x) => x.id === seVarsSelectedCharId);
+      const charName = char ? char.name : 'this character';
+      if (total === 0) {
+        banner.className = 'ce-scen-status-banner all-good';
+        banner.innerHTML = `<span>ℹ No template variables in scenario prompt</span>`;
+      } else if (missing === 0) {
+        banner.className = 'ce-scen-status-banner all-good';
+        banner.innerHTML = `
+          <span>✓ All scenario variables configured for ${esc(charName)}</span>
+          <span class="ce-scen-stat-pill green">${configured} of ${total}</span>
+        `;
+      } else {
+        banner.className = 'ce-scen-status-banner has-missing';
+        banner.innerHTML = `
+          <span>⚠ ${missing} variable${missing === 1 ? '' : 's'} missing for ${esc(charName)}</span>
+          <span class="ce-scen-stat-pill red">${missing} missing</span>
+        `;
+      }
+    }
+
     if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
   });
   $('#se-insert-var-btn').addEventListener('click', (e) => {
@@ -3203,10 +3651,12 @@ function wireEvents() {
     const key = item.dataset.insertKey;
     insertAtCaret($('#se-content'), `{{${key}}}`);
     closeInsertVarPopups();
+    renderSeVarsForm();
     if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
   });
   $('#se-content').addEventListener('input', () => {
     if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
+    renderSeVarsForm();
   });
   $$('input[name="se-access-mode"]').forEach((r) => {
     r.addEventListener('change', (e) => {
@@ -3266,13 +3716,10 @@ function wireEvents() {
     const card = e.target.closest('.ps-item-card');
     if (!card || !pickScenarioChar) return;
     const scId = card.dataset.scenId;
+    const sc = state.scenarios.find((s) => s.id === scId);
+    if (!sc) return;
     closeModal('modal-pick-scenario');
-    try {
-      await createChatFor(pickScenarioChar, scId);
-      saveUi();
-      renderSidebar();
-      renderChat();
-    } catch (e) { toast(e.message); }
+    startChatWithScenario(pickScenarioChar, sc);
   });
   $('#ps-new-btn').addEventListener('click', () => {
     closeModal('modal-pick-scenario');
@@ -3290,15 +3737,68 @@ function wireEvents() {
     const c = state.characters.find((x) => x.id === charId);
     if (!c) return;
     closeModal('modal-pick-char');
+    startChatWithScenario(c, pickCharScenario);
+  });
+
+  // Missing Variables Modal (#modal-scenario-vars) events
+  $('#msv-inputs-list')?.addEventListener('input', (e) => {
+    const inp = e.target.closest('.msv-var-input');
+    if (!inp) return;
+    const varName = inp.dataset.var;
+    if (!varName) return;
+    msvLiveVars[varName] = inp.value;
+
+    const isSet = Boolean(inp.value && inp.value.trim().length > 0);
+    const card = inp.closest('.msv-input-card');
+    if (card) {
+      card.className = `msv-input-card ${isSet ? 'filled' : 'missing'}`;
+      const badge = card.querySelector('[data-msv-badge]');
+      if (badge) {
+        badge.className = `ce-scen-var-badge ${isSet ? 'configured' : 'missing'}`;
+        badge.textContent = isSet ? 'Configured' : 'Missing';
+      }
+    }
+
+    updateMsvCountHeader();
+    updateMsvLivePreview();
+  });
+
+  $('#msv-start-chat')?.addEventListener('click', async () => {
+    if (!msvChar || !msvScenario) return;
     try {
-      ui.activeCharacterId = c.id;
-      const ch = await createChatFor(c, pickCharScenario.id);
+      if (!msvScenario.characterVariables) msvScenario.characterVariables = {};
+      if (!msvScenario.characterVariables[msvChar.id]) msvScenario.characterVariables[msvChar.id] = {};
+      for (const [k, v] of Object.entries(msvLiveVars)) {
+        if (k && String(v).trim()) {
+          msvScenario.characterVariables[msvChar.id][k] = String(v).trim();
+        }
+      }
+
+      await api('/scenarios/' + msvScenario.id, {
+        method: 'PUT',
+        body: JSON.stringify({ characterVariables: msvScenario.characterVariables }),
+      });
+
+      const idx = state.scenarios.findIndex((x) => x.id === msvScenario.id);
+      if (idx !== -1) state.scenarios[idx] = msvScenario;
+
+      closeModal('modal-scenario-vars');
+
+      ui.activeCharacterId = msvChar.id;
+      const ch = await createChatFor(msvChar, msvScenario.id);
       saveUi();
       closeSidebar();
       renderSidebar();
       renderChat();
-      loadPoses(c.id);
-    } catch (err) { toast(err.message); }
+      loadPoses(msvChar.id);
+      toast('Chat started');
+    } catch (e) {
+      toast(e.message);
+    }
+  });
+
+  $('#msv-cancel')?.addEventListener('click', () => {
+    closeModal('modal-scenario-vars');
   });
 
   $('#persona-btn').addEventListener('click', () => toggleMenu('persona-wrap'));

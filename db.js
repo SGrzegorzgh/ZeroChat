@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS scenarios (
   content TEXT NOT NULL,
   access_mode TEXT DEFAULT 'all',
   character_ids TEXT DEFAULT '[]',
+  character_variables TEXT DEFAULT '{}',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -138,6 +139,7 @@ ensureColumn('personalities', 'image', 'TEXT');
 ensureColumn('chats', 'tree', 'TEXT');
 ensureColumn('chats', 'pose_id', 'TEXT');
 ensureColumn('chats', 'scenario_id', 'TEXT');
+ensureColumn('scenarios', 'character_variables', "TEXT DEFAULT '{}'");
 ensureColumn('poses', 'thumb', 'TEXT');
 
 db.exec(`
@@ -415,7 +417,7 @@ function seedIfEmpty() {
 function seedScenariosIfEmpty() {
   const count = db.prepare('SELECT COUNT(*) AS n FROM scenarios').get().n;
   if (count > 0) return;
-  const insScen = db.prepare('INSERT OR IGNORE INTO scenarios (id, title, description, content, access_mode, character_ids, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  const insScen = db.prepare('INSERT OR IGNORE INTO scenarios (id, title, description, content, access_mode, character_ids, character_variables, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
   const defaultScenarios = [
     {
       id: 'sc-c-luna',
@@ -456,12 +458,69 @@ function seedScenariosIfEmpty() {
   ];
   const now = Date.now();
   for (const s of defaultScenarios) {
-    insScen.run(s.id, s.title, s.description, s.content, 'all', '[]', now, now);
+    insScen.run(s.id, s.title, s.description, s.content, 'all', '[]', '{}', now, now);
+  }
+}
+
+function findPrimaryScenarioForCharacter(charId) {
+  if (!charId) return null;
+  const candidates = [
+    'sc-c-' + charId.replace(/^c-/, ''),
+    'sc-' + charId,
+    'sc-c-' + charId,
+  ];
+  for (const cid of candidates) {
+    const row = db.prepare('SELECT * FROM scenarios WHERE id = ?').get(cid);
+    if (row) return row;
+  }
+  return null;
+}
+
+function migrateCharacterVariables() {
+  const chars = db.prepare('SELECT id, name, variables FROM characters').all();
+  const charsToMigrate = [];
+  for (const c of chars) {
+    const vars = safeParse(c.variables, {});
+    if (vars && typeof vars === 'object' && Object.keys(vars).length > 0) {
+      const hasAny = Object.values(vars).some((v) => v != null && String(v).trim().length > 0);
+      if (hasAny) {
+        charsToMigrate.push({ id: c.id, name: c.name, vars });
+      }
+    }
+  }
+
+  if (charsToMigrate.length === 0) return;
+
+  const pending = [];
+  for (const c of charsToMigrate) {
+    const sc = findPrimaryScenarioForCharacter(c.id);
+    if (sc) {
+      const scCv = safeParse(sc.character_variables, {});
+      const existing = scCv[c.id] || {};
+      const needsCopy = Object.entries(c.vars).some(([k, v]) => String(v || '').trim() && (!existing[k] || !String(existing[k]).trim()));
+      if (needsCopy) {
+        pending.push({ char: c, scenario: sc });
+      }
+    }
+  }
+
+  if (pending.length === 0) return;
+
+  snapshotBeforeDestructive();
+
+  for (const item of pending) {
+    const c = item.char;
+    const sc = item.scenario;
+    const scCv = safeParse(sc.character_variables, {});
+    scCv[c.id] = { ...(scCv[c.id] || {}), ...c.vars };
+    db.prepare('UPDATE scenarios SET character_variables = ?, updated_at = ? WHERE id = ?')
+      .run(JSON.stringify(scCv), Date.now(), sc.id);
   }
 }
 
 seedIfEmpty();
 seedScenariosIfEmpty();
+migrateCharacterVariables();
 
 const SETTINGS_DEFAULTS = {
   provider: 'openrouter',
@@ -635,6 +694,7 @@ function shapeScenario(row) {
     content: row.content,
     accessMode: row.access_mode || 'all',
     characterIds: safeParse(row.character_ids, []),
+    characterVariables: safeParse(row.character_variables, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -654,15 +714,17 @@ function getScenario(id) {
   return shapeScenario(row);
 }
 
-function createScenario({ title, description, content, accessMode, characterIds }) {
+function createScenario({ title, description, content, accessMode, characterIds, characterVariables, character_variables }) {
   const id = 'sc-' + uid();
   const now = Date.now();
   const mode = ['all', 'whitelist', 'blacklist'].includes(accessMode) ? accessMode : 'all';
   const cids = Array.isArray(characterIds) ? JSON.stringify(characterIds) : (typeof characterIds === 'string' ? characterIds : '[]');
+  const rawVars = characterVariables !== undefined ? characterVariables : character_variables;
+  const cvars = (rawVars && typeof rawVars === 'object') ? JSON.stringify(rawVars) : (typeof rawVars === 'string' ? rawVars : '{}');
   db.prepare(`
-    INSERT INTO scenarios (id, title, description, content, access_mode, character_ids, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, String(title || 'Untitled scenario').slice(0, 120), String(description || ''), String(content || ''), mode, cids, now, now);
+    INSERT INTO scenarios (id, title, description, content, access_mode, character_ids, character_variables, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, String(title || 'Untitled scenario').slice(0, 120), String(description || ''), String(content || ''), mode, cids, cvars, now, now);
   return getScenario(id);
 }
 
@@ -680,6 +742,11 @@ function updateScenario(id, fields) {
   if (fields.characterIds !== undefined) {
     const cids = Array.isArray(fields.characterIds) ? JSON.stringify(fields.characterIds) : String(fields.characterIds);
     sets.push('character_ids = ?'); vals.push(cids);
+  }
+  if (fields.characterVariables !== undefined || fields.character_variables !== undefined) {
+    const rawVars = fields.characterVariables !== undefined ? fields.characterVariables : fields.character_variables;
+    const cvars = (rawVars && typeof rawVars === 'object') ? JSON.stringify(rawVars) : (typeof rawVars === 'string' ? rawVars : '{}');
+    sets.push('character_variables = ?'); vals.push(cvars);
   }
   if (sets.length) {
     sets.push('updated_at = ?');
