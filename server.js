@@ -734,8 +734,8 @@ async function route(req, res, u) {
         title,
         description: (body.description || '').trim(),
         content,
-        accessMode: body.accessMode || 'all',
-        characterIds: body.characterIds || [],
+        accessMode: 'all',
+        characterIds: [],
         characterVariables: body.characterVariables || body.character_variables || {},
       });
       return send(res, 201, sc);

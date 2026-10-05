@@ -670,18 +670,6 @@ function shapeChat(ch) {
 }
 
 function isCharacterAllowedForScenario(sc, characterId) {
-  if (!sc || !characterId) return true;
-  const mode = sc.access_mode || sc.accessMode || 'all';
-  if (mode === 'all') return true;
-  const list = Array.isArray(sc.character_ids)
-    ? sc.character_ids
-    : (Array.isArray(sc.characterIds) ? sc.characterIds : safeParse(sc.character_ids || sc.characterIds, []));
-  if (mode === 'whitelist') {
-    return list.includes(characterId);
-  }
-  if (mode === 'blacklist') {
-    return !list.includes(characterId);
-  }
   return true;
 }
 
@@ -768,16 +756,16 @@ function getCharacters() {
   return db.prepare('SELECT * FROM characters ORDER BY created_at').all().map((r) => shapeCharacter(r, true));
 }
 
-function createCharacter({ name, description, note, scenario, emoji, avatar, image, posesEnabled, variables }) {
-  const id = uid();
+function createCharacter({ id, name, description, note, scenario, emoji, avatar, image, posesEnabled, variables }) {
+  const charId = (id && typeof id === 'string') ? id : uid();
   const pe = posesEnabled ? 1 : 0;
   const vars = (variables && typeof variables === 'object') ? JSON.stringify(variables) : (typeof variables === 'string' ? variables : '{}');
   db.prepare('INSERT INTO characters (id, name, description, note, scenario, emoji, avatar, image, poses_enabled, variables, responses, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(id, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, pe, vars, '[]', Date.now());
-  ensureDefaultPoses(id);
-  const allowed = getScenarios({ characterId: id });
-  createChatInternal(id, allowed.length > 0 ? allowed[0].id : null);
-  return getCharacter(id);
+    .run(charId, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, pe, vars, '[]', Date.now());
+  ensureDefaultPoses(charId);
+  const allowed = getScenarios({ characterId: charId });
+  createChatInternal(charId, allowed.length > 0 ? allowed[0].id : null);
+  return getCharacter(charId);
 }
 
 function updateCharacter(id, fields) {

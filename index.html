@@ -448,7 +448,6 @@
                   <div class="ce-scen-active-title-row">
                     <span class="ce-scen-active-icon">🎬</span>
                     <span class="ce-scen-active-title" id="ce-scen-active-title">Select a scenario to test against…</span>
-                    <span class="scen-badge all hidden" id="ce-scen-active-badge">All chars</span>
                   </div>
                   <button type="button" class="btn btn-ghost sm ce-scen-switch-btn" id="ce-scen-switch-btn">
                     <span id="ce-scen-switch-btn-text">Choose ▾</span>
@@ -671,9 +670,12 @@
               <div class="field-tab-header">
                 <label>Scenario prompt / Opening scene</label>
                 <div class="se-preview-controls">
-                  <div class="se-char-swap-wrap">
+                  <div class="se-char-swap-wrap" id="se-char-swap-wrap" title="Previewing as this character">
                     <span class="se-char-swap-label">Preview as:</span>
-                    <select id="se-preview-char-select" class="se-char-select"></select>
+                    <span class="se-char-preview-pill" id="se-char-preview-pill">
+                      <span class="avatar tiny" id="se-preview-char-avatar"></span>
+                      <strong id="se-preview-char-name">Luna</strong>
+                    </span>
                   </div>
                   <div class="insert-var-wrap" id="se-insert-var-wrap">
                     <button type="button" class="btn btn-ghost sm insert-var-trigger" id="se-insert-var-btn">
@@ -696,39 +698,6 @@
               <div id="se-content-prev-wrap" class="field-preview-box hidden"></div>
               <p class="m-note">{{char}}, {{user}}, and any variable (e.g. {{hair}}, {{clothing}}) are replaced dynamically based on the character.</p>
             </div>
-
-            <div class="field" style="margin-top:14px">
-              <label>Character access</label>
-              <p class="m-note" style="margin-bottom:8px">Control whether any character can enter this scenario or restrict it using an access list.</p>
-              <div class="scen-access-modes">
-                <label class="scen-radio-opt">
-                  <input type="radio" name="se-access-mode" value="all" checked>
-                  <span><strong>Open to all</strong> · Any character can use this scenario</span>
-                </label>
-                <label class="scen-radio-opt">
-                  <input type="radio" name="se-access-mode" value="whitelist">
-                  <span><strong>Whitelist</strong> · ONLY selected characters can access</span>
-                </label>
-                <label class="scen-radio-opt">
-                  <input type="radio" name="se-access-mode" value="blacklist">
-                  <span><strong>Blacklist</strong> · All characters EXCEPT selected can access</span>
-                </label>
-              </div>
-            </div>
-
-            <div id="se-chars-block" class="field hidden">
-              <div class="scen-chars-bar">
-                <span class="scen-chars-label" id="se-chars-label">Characters:</span>
-                <div class="scen-chars-actions">
-                  <button type="button" class="btn btn-ghost sm" id="se-chars-select-all">Select all</button>
-                  <button type="button" class="btn btn-ghost sm" id="se-chars-clear-all">Clear</button>
-                </div>
-              </div>
-              <div style="margin-bottom:8px">
-                <input type="text" id="se-chars-search" class="search-input" placeholder="Search characters by name or description…" autocomplete="off">
-              </div>
-              <div id="se-chars-list" class="scen-chars-list"></div>
-            </div>
           </div>
         </div>
 
@@ -738,12 +707,34 @@
               <span class="icon-scen">⚙</span>
               <span>Character Variables</span>
             </div>
-            <div class="se-vars-char-select-wrap">
-              <span class="se-vars-char-label">Character:</span>
-              <select id="se-vars-char-select" class="se-char-select"></select>
-            </div>
           </div>
           <div class="se-vars-panel-body">
+            <!-- Rich Character Selector matching site design -->
+            <div class="se-char-selector" id="se-char-selector">
+              <div class="se-char-active-card" id="se-char-active-card">
+                <div class="se-char-active-top">
+                  <div class="se-char-active-title-row">
+                    <span class="avatar sm" id="se-char-active-avatar"></span>
+                    <div class="se-char-active-info">
+                      <span class="se-char-active-title" id="se-char-active-title">Select a character…</span>
+                      <span class="se-char-active-desc" id="se-char-active-desc">Click to switch character</span>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-ghost sm se-char-switch-btn" id="se-char-switch-btn">
+                    <span id="se-char-switch-btn-text">Switch ▾</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Collapsible Character Cards Dropdown with Search Filter -->
+              <div class="se-char-dropdown hidden" id="se-char-dropdown">
+                <div class="se-char-search-bar">
+                  <input type="text" id="se-char-search-input" class="search-input sm" placeholder="Search characters by name or description…" autocomplete="off">
+                </div>
+                <div class="se-char-cards-scroll" id="se-char-cards-scroll"></div>
+              </div>
+            </div>
+
             <div id="se-vars-status-banner" class="ce-scen-status-banner all-good"></div>
             <div id="se-vars-form" class="se-vars-form"></div>
           </div>

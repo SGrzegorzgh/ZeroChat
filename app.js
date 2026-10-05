@@ -1041,8 +1041,6 @@ function getModalSnapshot(id) {
       title: ($('#se-title')?.value || '').trim(),
       desc: ($('#se-desc')?.value || '').trim(),
       content: ($('#se-content')?.value || '').trim(),
-      accessMode: seAccessMode || 'all',
-      characterIds: Array.from(seCharacterIds || []).sort(),
       characterVariables: seCharacterVariables || {}
     });
   }
@@ -1412,7 +1410,6 @@ let ceScenDropdownOpen = false;
 function renderCeScenActiveCard() {
   const card = $('#ce-scen-active-card');
   const title = $('#ce-scen-active-title');
-  const badge = $('#ce-scen-active-badge');
   const desc = $('#ce-scen-active-desc');
   const switchBtn = $('#ce-scen-switch-btn-text');
   if (!card || !title || !desc || !switchBtn) return;
@@ -1423,17 +1420,11 @@ function renderCeScenActiveCard() {
     title.textContent = scen.title;
     desc.textContent = scen.description || scen.content.slice(0, 110);
     switchBtn.textContent = 'Switch ▾';
-    if (badge) {
-      badge.className = `scen-badge ${scen.accessMode || 'all'}`;
-      badge.textContent = accessBadgeLabel(scen);
-      badge.classList.remove('hidden');
-    }
   } else {
     card.classList.remove('is-selected');
     title.textContent = 'Select a scenario to test against…';
     desc.textContent = 'Click here or Choose to select from available scenarios.';
     switchBtn.textContent = 'Choose ▾';
-    if (badge) badge.classList.add('hidden');
   }
 }
 
@@ -1472,7 +1463,6 @@ function renderCeScenCards(query = '') {
           <div class="ce-scen-opt-title-group">
             <span>🎬</span>
             <span class="ce-scen-opt-card-title">${esc(s.title)}</span>
-            <span class="scen-badge ${s.accessMode || 'all'}">${accessBadgeLabel(s)}</span>
           </div>
           ${isSelected ? '<span class="ce-scen-opt-sel-tick">✓ Active</span>' : ''}
         </div>
@@ -1570,6 +1560,8 @@ function renderCeScenPreviewMarkdown(raw, charName, customVars, scen = null) {
   // 1. Process markdown safely
   let html = md(raw);
 
+  const vars = (scen && scen.characterVariables && scen.characterVariables[ceId]) || customVars || {};
+
   // 2. Replace {{...}} with highlighted badges (GREEN for configured, RED for unconfigured/missing)
   html = html.replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
     const lower = key.toLowerCase();
@@ -1582,24 +1574,29 @@ function renderCeScenPreviewMarkdown(raw, charName, customVars, scen = null) {
     if (lower === 'user') {
       return `<mark class="scen-hl configured" title="{{user}}: Personality Name (${esc(userName)})">${esc(userName)}</mark>`;
     }
-    let val = customVars && customVars[lower];
-    if ((!val || !String(val).trim()) && scen && scen.characterVariables && scen.characterVariables[ceId]) {
-      val = scen.characterVariables[ceId][lower];
-    }
+    const val = vars[lower];
     if (val && String(val).trim()) {
       return `<mark class="scen-hl configured" title="{{${esc(lower)}}}: Configured (${esc(String(val).trim())})">${esc(String(val).trim())}</mark>`;
     }
-    return `<mark class="scen-hl missing" title="{{${esc(lower)}}}: Not configured on this character">[missing: {{${esc(lower)}}}]</mark>`;
+    return `<mark class="scen-hl missing" title="{{${esc(lower)}}}: Not configured on this character in this scenario">[missing: {{${esc(lower)}}}]</mark>`;
   });
 
   return html;
+}
+
+let ceScenSaveTimeout = null;
+function saveCeScenarioVars(scen) {
+  if (!scen || !scen.id) return;
+  api('/scenarios/' + scen.id, {
+    method: 'PUT',
+    body: JSON.stringify({ characterVariables: scen.characterVariables }),
+  }).catch((e) => console.error('Failed to save scenario character variables:', e));
 }
 
 function updateCeScenPanelUI() {
   const panel = $('#ce-scen-panel');
   if (!panel || panel.classList.contains('hidden')) return;
 
-  syncCeVariablesFromInputs();
   const charName = $('#ce-name')?.value.trim() || '';
 
   renderCeScenActiveCard();
@@ -1623,6 +1620,10 @@ function updateCeScenPanelUI() {
   contentWrap?.classList.remove('hidden');
   emptyHint?.classList.add('hidden');
 
+  if (!scen.characterVariables) scen.characterVariables = {};
+  if (!scen.characterVariables[ceId]) scen.characterVariables[ceId] = {};
+  const scCharVars = scen.characterVariables[ceId];
+
   // Extract all {{tag}} tokens from scenario.content
   const tagsRegex = /\{\{\s*([\w.-]+)\s*\}\}/gi;
   const foundTags = new Set();
@@ -1631,111 +1632,103 @@ function updateCeScenPanelUI() {
     foundTags.add(m[1].toLowerCase());
   }
 
-  // Calculate configuration status for each variable
-  const varStatusList = [];
+  const customTags = [];
+  let hasCharTag = false;
+  let hasUserTag = false;
+
+  for (const tag of foundTags) {
+    if (tag === 'char') { hasCharTag = true; continue; }
+    if (tag === 'user') { hasUserTag = true; continue; }
+    customTags.push(tag);
+  }
+
+  customTags.sort((a, b) => a.localeCompare(b));
+
   let configuredCount = 0;
   let missingCount = 0;
 
-  for (const tag of foundTags) {
-    if (tag === 'char') {
-      const isSet = Boolean(charName);
-      if (isSet) configuredCount++; else missingCount++;
-      varStatusList.push({
-        key: 'char',
-        label: 'Character Name',
-        isConfigured: isSet,
-        value: charName || 'Name is currently empty',
-        isSystem: true,
-      });
-    } else if (tag === 'user') {
-      const persona = activePersona();
-      configuredCount++;
-      varStatusList.push({
-        key: 'user',
-        label: 'Personality Name',
-        isConfigured: true,
-        value: persona ? persona.name : 'the user',
-        isSystem: true,
-      });
-    } else {
-      const scCharVars = (scen.characterVariables && scen.characterVariables[ceId]) || {};
-      const val = (ceVariables && ceVariables[tag] !== undefined) ? ceVariables[tag] : scCharVars[tag];
-      const isSet = Boolean(val && String(val).trim());
-      if (isSet) configuredCount++; else missingCount++;
-      varStatusList.push({
-        key: tag,
-        label: `{{${tag}}}`,
-        isConfigured: isSet,
-        value: isSet ? String(val).trim() : 'Not configured on this character',
-        isSystem: false,
-      });
-    }
+  for (const tag of customTags) {
+    const val = scCharVars[tag];
+    const isSet = Boolean(val && String(val).trim());
+    if (isSet) configuredCount++; else missingCount++;
   }
-
-  // Sort: missing first, then configured
-  varStatusList.sort((a, b) => {
-    if (a.isConfigured !== b.isConfigured) return a.isConfigured ? 1 : -1;
-    return a.key.localeCompare(b.key);
-  });
 
   // Update Status Banner
   const banner = $('#ce-scen-status-banner');
   if (banner) {
-    if (foundTags.size === 0) {
+    if (customTags.length === 0) {
       banner.className = 'ce-scen-status-banner all-good';
       banner.innerHTML = `<span>ℹ This scenario does not use any template variables.</span>`;
     } else if (missingCount === 0) {
       banner.className = 'ce-scen-status-banner all-good';
       banner.innerHTML = `
-        <span>✓ All scenario variables configured</span>
-        <span class="ce-scen-stat-pill green">${configuredCount} of ${foundTags.size}</span>
+        <span>✓ All scenario variables configured for ${esc(charName || 'this character')}</span>
+        <span class="ce-scen-stat-pill green">${configuredCount} of ${customTags.length}</span>
       `;
     } else {
       banner.className = 'ce-scen-status-banner has-missing';
       banner.innerHTML = `
-        <span>⚠ ${missingCount} variable${missingCount === 1 ? '' : 's'} not configured for this character</span>
+        <span>⚠ ${missingCount} variable${missingCount === 1 ? '' : 's'} not configured for ${esc(charName || 'this character')}</span>
         <span class="ce-scen-stat-pill red">${missingCount} missing</span>
       `;
     }
   }
 
-  // Update Variables Checklist view
+  // Update Variables Checklist view with editable inputs for this character in this scenario
   const varsList = $('#ce-scen-vars-list');
   if (varsList) {
-    if (varStatusList.length === 0) {
+    if (customTags.length === 0 && !hasCharTag && !hasUserTag) {
       varsList.innerHTML = `<div class="prow-desc" style="padding:14px;text-align:center">No variables found in this scenario.</div>`;
     } else {
-      varsList.innerHTML = varStatusList.map((v) => `
-        <div class="ce-scen-var-card ${v.isConfigured ? 'configured' : 'missing'}">
-          <div class="ce-scen-var-meta">
-            <span class="ce-scen-var-tag ${v.isConfigured ? 'configured' : 'missing'}">
-              ${v.isConfigured ? '✓' : '✕'} {{${esc(v.key)}}}
-            </span>
-            <span class="ce-scen-var-val">${esc(v.value)}</span>
+      let html = '';
+      if (customTags.length > 0) {
+        html += customTags.map((tag) => {
+          const val = scCharVars[tag] != null ? String(scCharVars[tag]) : '';
+          const isSet = Boolean(val && val.trim().length > 0);
+          return `
+            <div class="ce-scen-var-card ${isSet ? 'configured' : 'missing'}" data-scen-var-card="${esc(tag)}">
+              <div class="ce-scen-var-head">
+                <span class="ce-scen-var-tag ${isSet ? 'configured' : 'missing'}">
+                  <code>{{${esc(tag)}}}</code>
+                </span>
+                <span class="ce-scen-var-badge ${isSet ? 'configured' : 'missing'}">
+                  ${isSet ? 'Configured' : 'Missing'}
+                </span>
+              </div>
+              <input type="text"
+                class="search-input ce-scen-var-input"
+                data-scen-var="${esc(tag)}"
+                value="${esc(val)}"
+                placeholder="Value for ${esc(charName || 'this character')} in ${esc(scen.title)}…"
+                autocomplete="off">
+            </div>
+          `;
+        }).join('');
+      }
+      if (hasCharTag || hasUserTag) {
+        const persona = activePersona();
+        html += `
+          <div class="se-system-tags-card" style="margin-top:6px">
+            <span style="font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)">Built-in macros</span>
+            ${hasCharTag ? `<div class="se-system-tag-row"><code>{{char}}</code><span>&rarr; ${esc(charName || 'Character Name')}</span></div>` : ''}
+            ${hasUserTag ? `<div class="se-system-tag-row"><code>{{user}}</code><span>&rarr; ${esc(persona ? persona.name : 'the user')}</span></div>` : ''}
           </div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span class="ce-scen-var-badge ${v.isConfigured ? 'configured' : 'missing'}">
-              ${v.isConfigured ? 'Configured' : 'Missing'}
-            </span>
-            ${!v.isConfigured && !v.isSystem ? `
-              <button type="button" class="btn btn-ghost sm ce-scen-add-var-btn" data-key="${esc(v.key)}" title="Add {{${esc(v.key)}}} to this character">+ Add</button>
-            ` : ''}
-          </div>
-        </div>
-      `).join('');
+        `;
+      }
+      varsList.innerHTML = html;
     }
   }
 
-  // Update Preview view for this specific character
+  // Update Preview view for this specific character in this scenario
   const previewBox = $('#ce-scen-preview-text');
   if (previewBox) {
-    previewBox.innerHTML = renderCeScenPreviewMarkdown(scen.content, charName, ceVariables, scen);
+    previewBox.innerHTML = renderCeScenPreviewMarkdown(scen.content, charName, scCharVars, scen);
   }
 }
 
 function openCharModal(char) {
   ceMode = char ? 'edit' : 'new';
-  ceId = char ? char.id : null;
+  ceId = char ? char.id : ('c-' + uid());
   ceEmoji = char ? char.emoji : EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
   ceAvatar = char ? char.avatar : null;
   ceImage = char ? char.image : null;
@@ -1833,6 +1826,7 @@ async function charFormSave() {
   try {
     let saved;
     if (ceMode === 'new') {
+      body.id = ceId;
       saved = await api('/characters', { method: 'POST', body: JSON.stringify(body) });
       state.characters.push(saved);
       ui.activeCharacterId = saved.id;
@@ -1843,6 +1837,10 @@ async function charFormSave() {
       const i = state.characters.findIndex((x) => x.id === ceId);
       state.characters[i] = saved;
       toast('Character saved');
+    }
+    if (ceScenSelectedId) {
+      const scen = state.scenarios.find((s) => s.id === ceScenSelectedId);
+      if (scen) saveCeScenarioVars(scen);
     }
   } catch (e) { toast(e.message); return; }
   renderSidebar();
@@ -2581,19 +2579,11 @@ async function presetDelete() {
 /* ---- Scenarios Management & Access List --------------------------------- */
 
 function isScenarioAllowed(s, charId) {
-  if (!s || !charId) return true;
-  const mode = s.accessMode || 'all';
-  if (mode === 'all') return true;
-  const list = Array.isArray(s.characterIds) ? s.characterIds : [];
-  if (mode === 'whitelist') return list.includes(charId);
-  if (mode === 'blacklist') return !list.includes(charId);
   return true;
 }
 
 function accessBadgeLabel(s) {
-  if (s.accessMode === 'whitelist') return `${(s.characterIds || []).length} allowed`;
-  if (s.accessMode === 'blacklist') return `${(s.characterIds || []).length} blocked`;
-  return 'All chars';
+  return '';
 }
 
 function switchSidebarTab(tab) {
@@ -2629,7 +2619,6 @@ function renderSidebarScenarios() {
       <span class="scen-main">
         <span class="scen-row">
           <span class="scen-name">${esc(s.title)}</span>
-          <span class="scen-badge ${s.accessMode}">${accessBadgeLabel(s)}</span>
         </span>
         <span class="scen-desc">${esc(s.description || s.content.slice(0, 85))}</span>
       </span>
@@ -2687,8 +2676,6 @@ function renderSidebarVars(query = '') {
 
 let seMode = 'new';
 let seId = null;
-let seAccessMode = 'all';
-let seCharacterIds = new Set();
 let seCharacterVariables = {};
 let seVarsSelectedCharId = null;
 let seDelArmed = null;
@@ -2704,55 +2691,133 @@ function switchSeTab(tab) {
   if (!isEdit) renderSePreview();
 }
 
+let seCharDropdownOpen = false;
+
+function renderSeCharActiveCard() {
+  const card = $('#se-char-active-card');
+  const title = $('#se-char-active-title');
+  const desc = $('#se-char-active-desc');
+  const avatar = $('#se-char-active-avatar');
+  const prevAvatar = $('#se-preview-char-avatar');
+  const prevName = $('#se-preview-char-name');
+  const switchBtn = $('#se-char-switch-btn-text');
+  if (!card || !title || !desc || !switchBtn) return;
+
+  const char = (state.characters || []).find((c) => c.id === seVarsSelectedCharId) || state.characters[0];
+  if (char) {
+    card.classList.add('is-selected');
+    title.textContent = char.name;
+    desc.textContent = char.description || char.note || 'Configuring variables for ' + char.name;
+    switchBtn.textContent = 'Switch ▾';
+    if (avatar) {
+      avatar.className = 'avatar sm' + (char.avatar ? '' : ' letter');
+      avatar.textContent = char.avatar ? '' : (char.emoji || char.name.charAt(0));
+      avatar.style.backgroundImage = char.avatar ? `url('${char.avatar}')` : '';
+    }
+    if (prevAvatar) {
+      prevAvatar.className = 'avatar tiny' + (char.avatar ? '' : ' letter');
+      prevAvatar.textContent = char.avatar ? '' : (char.emoji || char.name.charAt(0));
+      prevAvatar.style.backgroundImage = char.avatar ? `url('${char.avatar}')` : '';
+    }
+    if (prevName) prevName.textContent = char.name;
+  } else {
+    card.classList.remove('is-selected');
+    title.textContent = 'Select a character…';
+    desc.textContent = 'Click here or Choose to select from available characters.';
+    switchBtn.textContent = 'Choose ▾';
+    if (avatar) {
+      avatar.className = 'avatar sm letter';
+      avatar.textContent = '👤';
+      avatar.style.backgroundImage = '';
+    }
+    if (prevName) prevName.textContent = 'None';
+  }
+}
+
+function renderSeCharCards(query = '') {
+  const container = $('#se-char-cards-scroll');
+  if (!container) return;
+  const q = (query || '').trim().toLowerCase();
+  let characters = state.characters || [];
+  if (q) {
+    characters = characters.filter((c) =>
+      c.name.toLowerCase().includes(q) ||
+      (c.description && c.description.toLowerCase().includes(q)) ||
+      (c.note && c.note.toLowerCase().includes(q))
+    );
+  }
+  if (characters.length === 0) {
+    container.innerHTML = `<div class="prow-desc" style="padding:16px;text-align:center">${q ? `No characters matching "${esc(query)}"` : 'No characters available'}</div>`;
+    return;
+  }
+
+  const rawContent = $('#se-content')?.value || '';
+  const reqVars = getScenarioRequiredVariables(rawContent);
+
+  container.innerHTML = characters.map((c) => {
+    const isSelected = seVarsSelectedCharId === c.id;
+    const charVars = (seCharacterVariables && seCharacterVariables[c.id]) || {};
+    const missingCount = reqVars.filter((v) => !charVars[v] || !String(charVars[v]).trim()).length;
+    const configuredCount = reqVars.length - missingCount;
+
+    let statusPill = '';
+    if (reqVars.length === 0) {
+      statusPill = `<span style="color:var(--muted)">No variables</span>`;
+    } else if (missingCount === 0) {
+      statusPill = `<span style="color:#4ade80">✓ ${configuredCount} of ${reqVars.length} set</span>`;
+    } else {
+      statusPill = `<span style="color:#f87171">⚠ ${missingCount} missing</span>`;
+    }
+
+    return `
+      <div class="se-char-opt-card ${isSelected ? 'selected' : ''}" data-char-id="${c.id}">
+        <div class="se-char-opt-card-top">
+          <div class="se-char-opt-title-group">
+            ${avatarHtml(c, 'sm')}
+            <span class="se-char-opt-card-title">${esc(c.name)}</span>
+          </div>
+          ${isSelected ? '<span class="ce-scen-opt-sel-tick">✓ Active</span>' : ''}
+        </div>
+        <div class="se-char-opt-card-desc">${esc(c.description || c.note || 'No description')}</div>
+        <div class="se-char-opt-card-foot">
+          <span class="ce-scen-opt-vars-pill">${statusPill}</span>
+          <span style="color:var(--muted)">Click to select</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openSeCharDropdown() {
+  const menu = $('#se-char-dropdown');
+  if (!menu) return;
+  menu.classList.remove('hidden');
+  seCharDropdownOpen = true;
+  const input = $('#se-char-search-input');
+  if (input) {
+    input.value = '';
+    setTimeout(() => input.focus(), 40);
+  }
+  renderSeCharCards('');
+}
+
+function closeSeCharDropdown() {
+  const menu = $('#se-char-dropdown');
+  if (!menu) return;
+  menu.classList.add('hidden');
+  seCharDropdownOpen = false;
+}
+
+function toggleSeCharDropdown() {
+  if (seCharDropdownOpen) closeSeCharDropdown();
+  else openSeCharDropdown();
+}
+
 function renderSePreview() {
   const raw = $('#se-content').value;
-  const sel = $('#se-vars-char-select') || $('#se-preview-char-select');
-  const charId = sel ? sel.value : seVarsSelectedCharId;
+  const charId = seVarsSelectedCharId;
   const charVars = (seCharacterVariables && charId && seCharacterVariables[charId]) ? seCharacterVariables[charId] : null;
   $('#se-content-prev-wrap').innerHTML = renderPreviewMarkdown(raw, charId, charVars);
-}
-
-function populateSeCharSelect(selectedCharId = null) {
-  const sel = $('#se-preview-char-select');
-  if (!sel) return;
-  if (!state.characters || state.characters.length === 0) {
-    sel.innerHTML = '<option value="">No characters</option>';
-    return;
-  }
-  sel.innerHTML = state.characters.map((c) => `
-    <option value="${c.id}">${esc(c.name)}</option>
-  `).join('');
-  if (selectedCharId && state.characters.some((c) => c.id === selectedCharId)) {
-    sel.value = selectedCharId;
-  } else if (seVarsSelectedCharId && state.characters.some((c) => c.id === seVarsSelectedCharId)) {
-    sel.value = seVarsSelectedCharId;
-  } else if (ui.activeCharacterId && state.characters.some((c) => c.id === ui.activeCharacterId)) {
-    sel.value = ui.activeCharacterId;
-  } else {
-    sel.value = state.characters[0].id;
-  }
-}
-
-function populateSeVarsCharSelect(selectedCharId = null) {
-  const sel = $('#se-vars-char-select');
-  if (!sel) return;
-  if (!state.characters || state.characters.length === 0) {
-    sel.innerHTML = '<option value="">No characters</option>';
-    return;
-  }
-  sel.innerHTML = state.characters.map((c) => `
-    <option value="${c.id}">${esc(c.name)}</option>
-  `).join('');
-  if (selectedCharId && state.characters.some((c) => c.id === selectedCharId)) {
-    sel.value = selectedCharId;
-  } else if (seVarsSelectedCharId && state.characters.some((c) => c.id === seVarsSelectedCharId)) {
-    sel.value = seVarsSelectedCharId;
-  } else if (ui.activeCharacterId && state.characters.some((c) => c.id === ui.activeCharacterId)) {
-    sel.value = ui.activeCharacterId;
-  } else {
-    sel.value = state.characters[0].id;
-  }
-  seVarsSelectedCharId = sel.value;
 }
 
 function renderSeVarsForm() {
@@ -2870,8 +2935,6 @@ function renderSeVarsForm() {
 function openScenarioModal(sc = null) {
   seMode = sc ? 'edit' : 'new';
   seId = sc ? sc.id : null;
-  seAccessMode = sc ? (sc.accessMode || 'all') : 'all';
-  seCharacterIds = new Set(sc && Array.isArray(sc.characterIds) ? sc.characterIds : []);
   seCharacterVariables = sc && sc.characterVariables ? JSON.parse(JSON.stringify(sc.characterVariables)) : {};
 
   $('#se-title-text').textContent = sc ? 'Edit scenario' : 'New scenario';
@@ -2882,20 +2945,11 @@ function openScenarioModal(sc = null) {
   const initialCharId = pickScenarioChar ? pickScenarioChar.id : (ui.activeCharacterId || (state.characters[0] ? state.characters[0].id : null));
   seVarsSelectedCharId = initialCharId;
 
-  populateSeCharSelect(initialCharId);
-  populateSeVarsCharSelect(initialCharId);
+  renderSeCharActiveCard();
+  closeSeCharDropdown();
   renderSeVarsForm();
   switchSeTab('edit');
   closeInsertVarPopups();
-
-  const radios = $$('input[name="se-access-mode"]');
-  radios.forEach((r) => { r.checked = (r.value === seAccessMode); });
-
-  const sInp = $('#se-chars-search');
-  if (sInp) sInp.value = '';
-
-  updateSeAccessUI();
-  renderSeCharsList();
 
   const del = $('#se-delete');
   del.classList.toggle('hidden', seMode !== 'edit');
@@ -2907,45 +2961,6 @@ function openScenarioModal(sc = null) {
   openModal('modal-scenario');
   setTimeout(() => $('#se-title').focus(), 60);
   takeModalSnapshot('modal-scenario');
-}
-
-function updateSeAccessUI() {
-  const isRestricted = seAccessMode !== 'all';
-  $('#se-chars-block').classList.toggle('hidden', !isRestricted);
-  const lbl = $('#se-chars-label');
-  if (lbl) {
-    lbl.textContent = seAccessMode === 'whitelist'
-      ? 'Whitelisted characters (allowed to enter):'
-      : 'Blacklisted characters (blocked from entering):';
-  }
-}
-
-function renderSeCharsList(query = '') {
-  const list = $('#se-chars-list');
-  if (!list) return;
-  const q = (query || '').trim().toLowerCase();
-  let chars = state.characters;
-  if (q) {
-    chars = chars.filter((c) =>
-      c.name.toLowerCase().includes(q) ||
-      (c.description && c.description.toLowerCase().includes(q)) ||
-      (c.note && c.note.toLowerCase().includes(q))
-    );
-  }
-  if (chars.length === 0) {
-    list.innerHTML = `<div class="prow-desc" style="grid-column:1/-1;padding:14px;text-align:center">No characters matching "${esc(query)}".</div>`;
-    return;
-  }
-  list.innerHTML = chars.map((c) => {
-    const checked = seCharacterIds.has(c.id);
-    return `
-      <label class="scen-char-chk-row">
-        <input type="checkbox" class="scen-char-chk" data-cid="${c.id}" ${checked ? 'checked' : ''}>
-        ${avatarHtml(c, 'sm')}
-        <span class="scen-char-chk-name">${esc(c.name)}</span>
-      </label>
-    `;
-  }).join('');
 }
 
 function disarmSeDelete() {
@@ -2967,8 +2982,8 @@ async function scenarioFormSave() {
     title,
     description: $('#se-desc').value.trim(),
     content,
-    accessMode: seAccessMode,
-    characterIds: Array.from(seCharacterIds),
+    accessMode: 'all',
+    characterIds: [],
     characterVariables: seCharacterVariables,
   };
 
@@ -3190,7 +3205,6 @@ function renderPsGrid(query = '') {
               <span class="ps-item-title">${esc(s.title)}</span>
               <div style="display:flex;align-items:center;gap:6px">
                 ${varBadge}
-                <span class="scen-badge ${s.accessMode}">${accessBadgeLabel(s)}</span>
               </div>
             </div>
             <div class="ps-item-desc">${esc(s.description || s.content.slice(0, 110))}</div>
@@ -3232,7 +3246,7 @@ function renderPcList(query = '') {
   if (allowed.length === 0) {
     list.innerHTML = q
       ? `<div class="prow-desc" style="padding:16px;text-align:center">No characters matching "${esc(query)}".</div>`
-      : `<div class="prow-desc" style="padding:16px;text-align:center">No characters have access to this scenario based on its access list.</div>`;
+      : `<div class="prow-desc" style="padding:16px;text-align:center">No characters found. Create a character first.</div>`;
   } else {
     list.innerHTML = allowed.map((c) => `
       <div class="pc-row" data-char-id="${c.id}">
@@ -3569,17 +3583,27 @@ function wireEvents() {
   // Scenario Modal events
   $('#se-tab-edit').addEventListener('click', () => switchSeTab('edit'));
   $('#se-tab-preview').addEventListener('click', () => switchSeTab('preview'));
-  $('#se-preview-char-select')?.addEventListener('change', () => {
-    seVarsSelectedCharId = $('#se-preview-char-select').value;
-    const vSel = $('#se-vars-char-select');
-    if (vSel) vSel.value = seVarsSelectedCharId;
-    renderSeVarsForm();
-    if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
+  $('#se-char-active-card')?.addEventListener('click', () => {
+    toggleSeCharDropdown();
   });
-  $('#se-vars-char-select')?.addEventListener('change', (e) => {
-    seVarsSelectedCharId = e.target.value;
-    const pSel = $('#se-preview-char-select');
-    if (pSel) pSel.value = seVarsSelectedCharId;
+  $('#se-char-switch-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleSeCharDropdown();
+  });
+  $('#se-char-preview-pill')?.addEventListener('click', () => {
+    toggleSeCharDropdown();
+  });
+  $('#se-char-search-input')?.addEventListener('input', (e) => {
+    renderSeCharCards(e.target.value);
+  });
+  $('#se-char-cards-scroll')?.addEventListener('click', (e) => {
+    const card = e.target.closest('.se-char-opt-card');
+    if (!card) return;
+    const cid = card.dataset.charId;
+    if (!cid) return;
+    seVarsSelectedCharId = cid;
+    closeSeCharDropdown();
+    renderSeCharActiveCard();
     renderSeVarsForm();
     if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
   });
@@ -3629,6 +3653,7 @@ function wireEvents() {
       }
     }
 
+    renderSeCharCards($('#se-char-search-input')?.value || '');
     if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
   });
   $('#se-insert-var-btn').addEventListener('click', (e) => {
@@ -3657,39 +3682,6 @@ function wireEvents() {
   $('#se-content').addEventListener('input', () => {
     if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
     renderSeVarsForm();
-  });
-  $$('input[name="se-access-mode"]').forEach((r) => {
-    r.addEventListener('change', (e) => {
-      seAccessMode = e.target.value;
-      updateSeAccessUI();
-    });
-  });
-  $('#se-chars-search').addEventListener('input', (e) => {
-    renderSeCharsList(e.target.value);
-  });
-  $('#se-chars-list').addEventListener('change', (e) => {
-    const chk = e.target.closest('.scen-char-chk');
-    if (!chk) return;
-    if (chk.checked) seCharacterIds.add(chk.dataset.cid);
-    else seCharacterIds.delete(chk.dataset.cid);
-  });
-  $('#se-chars-select-all').addEventListener('click', () => {
-    const q = ($('#se-chars-search')?.value || '').trim().toLowerCase();
-    const targets = q
-      ? state.characters.filter((c) => c.name.toLowerCase().includes(q) || (c.description && c.description.toLowerCase().includes(q)) || (c.note && c.note.toLowerCase().includes(q)))
-      : state.characters;
-    targets.forEach((c) => seCharacterIds.add(c.id));
-    renderSeCharsList(q);
-  });
-  $('#se-chars-clear-all').addEventListener('click', () => {
-    const q = ($('#se-chars-search')?.value || '').trim().toLowerCase();
-    if (q) {
-      const targets = state.characters.filter((c) => c.name.toLowerCase().includes(q) || (c.description && c.description.toLowerCase().includes(q)) || (c.note && c.note.toLowerCase().includes(q)));
-      targets.forEach((c) => seCharacterIds.delete(c.id));
-    } else {
-      seCharacterIds.clear();
-    }
-    renderSeCharsList(q);
   });
   $('#se-save').addEventListener('click', scenarioFormSave);
   $('#se-delete').addEventListener('click', scenarioDelete);
@@ -3968,6 +3960,7 @@ function wireEvents() {
     if (!e.target.closest('.menu-wrap')) closeMenus();
     if (!e.target.closest('.insert-var-wrap')) closeInsertVarPopups();
     if (!e.target.closest('.ce-scen-selector')) closeCeScenDropdown();
+    if (!e.target.closest('.se-char-selector')) closeSeCharDropdown();
   });
 
   $$('.modal').forEach((m) => {
@@ -4201,20 +4194,69 @@ function wireEvents() {
   });
   $('#ce-scen-tab-preview')?.addEventListener('click', () => switchCeScenTab('preview'));
   $('#ce-scen-tab-vars')?.addEventListener('click', () => switchCeScenTab('vars'));
-  $('#ce-scen-vars-list')?.addEventListener('click', (e) => {
-    const btn = e.target.closest('.ce-scen-add-var-btn');
-    if (!btn) return;
-    const key = btn.dataset.key;
-    if (!key) return;
-    ceVariables[key] = '';
-    renderCeVarsList();
-    closeCeVarPicker();
-    const row = $(`#ce-vars-list [data-key="${key}"] input`);
-    if (row) {
-      row.focus();
-      row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  $('#ce-scen-vars-list')?.addEventListener('input', (e) => {
+    const inp = e.target.closest('.ce-scen-var-input');
+    if (!inp || !ceScenSelectedId || !ceId) return;
+    const varName = inp.dataset.scenVar;
+    if (!varName) return;
+
+    const scen = state.scenarios.find((s) => s.id === ceScenSelectedId);
+    if (!scen) return;
+    if (!scen.characterVariables) scen.characterVariables = {};
+    if (!scen.characterVariables[ceId]) scen.characterVariables[ceId] = {};
+    scen.characterVariables[ceId][varName] = inp.value;
+
+    const isSet = Boolean(inp.value && inp.value.trim().length > 0);
+    const card = inp.closest('.ce-scen-var-card');
+    if (card) {
+      card.className = `ce-scen-var-card ${isSet ? 'configured' : 'missing'}`;
+      const badge = card.querySelector('.ce-scen-var-badge');
+      if (badge) {
+        badge.className = `ce-scen-var-badge ${isSet ? 'configured' : 'missing'}`;
+        badge.textContent = isSet ? 'Configured' : 'Missing';
+      }
+      const tagEl = card.querySelector('.ce-scen-var-tag');
+      if (tagEl) {
+        tagEl.className = `ce-scen-var-tag ${isSet ? 'configured' : 'missing'}`;
+      }
     }
-    updateCeScenPanelUI();
+
+    // Update banner count
+    const banner = $('#ce-scen-status-banner');
+    if (banner) {
+      const inputs = $$('#ce-scen-vars-list .ce-scen-var-input');
+      const total = inputs.length;
+      let missing = 0;
+      inputs.forEach((i) => { if (!i.value || !i.value.trim()) missing++; });
+      const configured = total - missing;
+      const charName = $('#ce-name')?.value.trim() || 'this character';
+      if (total === 0) {
+        banner.className = 'ce-scen-status-banner all-good';
+        banner.innerHTML = `<span>ℹ This scenario does not use any template variables.</span>`;
+      } else if (missing === 0) {
+        banner.className = 'ce-scen-status-banner all-good';
+        banner.innerHTML = `
+          <span>✓ All scenario variables configured for ${esc(charName)}</span>
+          <span class="ce-scen-stat-pill green">${configured} of ${total}</span>
+        `;
+      } else {
+        banner.className = 'ce-scen-status-banner has-missing';
+        banner.innerHTML = `
+          <span>⚠ ${missing} variable${missing === 1 ? '' : 's'} not configured for ${esc(charName)}</span>
+          <span class="ce-scen-stat-pill red">${missing} missing</span>
+        `;
+      }
+    }
+
+    // Update preview
+    const charName = $('#ce-name')?.value.trim() || '';
+    const previewBox = $('#ce-scen-preview-text');
+    if (previewBox) {
+      previewBox.innerHTML = renderCeScenPreviewMarkdown(scen.content, charName, scen.characterVariables[ceId], scen);
+    }
+
+    clearTimeout(ceScenSaveTimeout);
+    ceScenSaveTimeout = setTimeout(() => saveCeScenarioVars(scen), 500);
   });
 
   $('#ce-save').addEventListener('click', charFormSave);
