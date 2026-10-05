@@ -926,10 +926,17 @@ async function switchVariant(dir, nodeId) {
   renderChatsMenu();
 }
 
+let msgInputManualHeight = 0;
+
 function autoGrow() {
   const ta = $('#msg-input');
+  if (!ta) return;
+  if (msgInputManualHeight > 0) {
+    ta.style.height = Math.max(msgInputManualHeight, ta.scrollHeight) + 'px';
+    return;
+  }
   ta.style.height = 'auto';
-  ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+  ta.style.height = Math.max(46, Math.min(ta.scrollHeight, 360)) + 'px';
 }
 
 function closeMenus() {
@@ -1611,12 +1618,12 @@ function updateCeScenPanelUI() {
                   ${isSet ? 'Configured' : 'Missing'}
                 </span>
               </div>
-              <input type="text"
+              <textarea
                 class="search-input ce-scen-var-input"
                 data-scen-var="${esc(tag)}"
-                value="${esc(val)}"
                 placeholder="Value for ${esc(charName || 'this character')} in ${esc(scen.title)}…"
-                autocomplete="off">
+                rows="1"
+                autocomplete="off">${esc(val)}</textarea>
             </div>
           `;
         }).join('');
@@ -2592,7 +2599,14 @@ function switchSeTab(tab) {
   if (wrap) wrap.classList.toggle('hidden', !isEdit);
   const pill = $('#se-char-swap-wrap');
   if (pill) pill.classList.toggle('hidden', isEdit);
-  if (!isEdit) renderSePreview();
+  if (!isEdit) {
+    const editH = $('#se-content')?.style.height;
+    if (editH) $('#se-content-prev-wrap').style.height = editH;
+    renderSePreview();
+  } else {
+    const prevH = $('#se-content-prev-wrap')?.style.height;
+    if (prevH) $('#se-content').style.height = prevH;
+  }
 }
 
 let seCharDropdownOpen = false;
@@ -2811,12 +2825,12 @@ function renderSeVarsForm() {
               ${isSet ? 'Configured' : 'Missing'}
             </span>
           </div>
-          <input type="text"
+          <textarea
             class="search-input se-var-input"
             data-var="${esc(tag)}"
-            value="${esc(val)}"
             placeholder="Value for ${esc(char.name)}…"
-            autocomplete="off">
+            rows="1"
+            autocomplete="off">${esc(val)}</textarea>
         </div>
       `;
     }).join('');
@@ -2848,6 +2862,11 @@ function openScenarioModal(sc = null) {
 
   const initialCharId = pickScenarioChar ? pickScenarioChar.id : (ui.activeCharacterId || (state.characters[0] ? state.characters[0].id : null));
   seVarsSelectedCharId = initialCharId;
+
+  const editBox = $('#se-content');
+  if (editBox) editBox.style.height = '';
+  const prevBox = $('#se-content-prev-wrap');
+  if (prevBox) prevBox.style.height = '';
 
   renderSeCharActiveCard();
   closeSeCharDropdown();
@@ -2969,12 +2988,12 @@ function openMissingVarsModal(character, scenario, requiredVars, missingVars) {
               ${curVal.trim() ? 'Configured' : 'Missing'}
             </span>
           </div>
-          <input type="text"
+          <textarea
             class="search-input msv-var-input"
             data-var="${esc(v)}"
-            value="${esc(curVal)}"
             placeholder="Enter value for {{${esc(v)}}}…"
-            autocomplete="off">
+            rows="1"
+            autocomplete="off">${esc(curVal)}</textarea>
         </div>
       `;
     }).join('');
@@ -3859,6 +3878,12 @@ function wireEvents() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendUser(); }
   });
   $('#msg-input').addEventListener('input', () => { autoGrow(); updateComposerButtons(); });
+  $('#msg-input').addEventListener('pointerup', () => {
+    const ta = $('#msg-input');
+    if (ta && ta.offsetHeight > 50) {
+      msgInputManualHeight = ta.offsetHeight;
+    }
+  });
 
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu-wrap')) closeMenus();
