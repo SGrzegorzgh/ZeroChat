@@ -715,6 +715,41 @@ async function route(req, res, u) {
 
   if (req.method === 'GET' && p === '/api/default-prompt') return send(res, 200, { prompt: DEFAULT_PRESET_PROMPT });
 
+  if (req.method === 'GET' && p === '/api/export') {
+    const type = u.searchParams.get('type') || 'all';
+    const id = u.searchParams.get('id') || null;
+    try {
+      const data = db.exportData({ type, id });
+      return send(res, 200, data);
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+  if ((m = p.match(/^\/api\/characters\/([\w-]+)\/export$/)) && req.method === 'GET') {
+    try {
+      const data = db.exportData({ type: 'characters', id: m[1] });
+      return send(res, 200, data);
+    } catch (e) {
+      return send(res, 404, { error: e.message });
+    }
+  }
+  if ((m = p.match(/^\/api\/scenarios\/([\w-]+)\/export$/)) && req.method === 'GET') {
+    try {
+      const data = db.exportData({ type: 'scenarios', id: m[1] });
+      return send(res, 200, data);
+    } catch (e) {
+      return send(res, 404, { error: e.message });
+    }
+  }
+  if (req.method === 'POST' && p === '/api/import') {
+    try {
+      const result = db.importData(body);
+      return send(res, 200, result);
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+
   if (req.method === 'GET' && p === '/api/scenarios') {
     const characterId = u.searchParams.get('characterId');
     return send(res, 200, db.getScenarios({ characterId }));

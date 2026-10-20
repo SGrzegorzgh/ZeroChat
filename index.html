@@ -32,12 +32,22 @@
         <div class="sidebar-label">Characters</div>
         <div id="char-list"></div>
         <div class="sidebar-foot">
-          <button id="new-char-btn" class="btn btn-ghost" style="width:100%">
+          <button id="new-char-btn" class="btn btn-ghost" style="width:100%;margin-bottom:6px">
             <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px"><path d="M12 5v14M5 12h14"/></svg>
               New character
             </span>
           </button>
+          <div class="sidebar-foot-row">
+            <button id="import-chars-btn" type="button" class="btn btn-ghost sm" title="Import characters from JSON" style="flex:1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Import
+            </button>
+            <button id="export-chars-btn" type="button" class="btn btn-ghost sm" title="Export all characters as JSON" style="flex:1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Export
+            </button>
+          </div>
         </div>
       </div>
 
@@ -45,12 +55,22 @@
         <div class="sidebar-label">Scenarios</div>
         <div id="scenario-list"></div>
         <div class="sidebar-foot">
-          <button id="new-scenario-btn" class="btn btn-ghost" style="width:100%">
+          <button id="new-scenario-btn" class="btn btn-ghost" style="width:100%;margin-bottom:6px">
             <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px"><path d="M12 5v14M5 12h14"/></svg>
               New scenario
             </span>
           </button>
+          <div class="sidebar-foot-row">
+            <button id="import-scenarios-btn" type="button" class="btn btn-ghost sm" title="Import scenarios from JSON" style="flex:1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Import
+            </button>
+            <button id="export-scenarios-btn" type="button" class="btn btn-ghost sm" title="Export all scenarios as JSON" style="flex:1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Export
+            </button>
+          </div>
         </div>
       </div>
 
@@ -63,6 +83,18 @@
           <input type="text" id="vars-search" class="search-input" placeholder="Search variables or values…" autocomplete="off">
         </div>
         <div id="vars-list" class="vars-list"></div>
+        <div class="sidebar-foot">
+          <div class="sidebar-foot-row">
+            <button id="import-vars-btn" type="button" class="btn btn-ghost sm" title="Import variable values from JSON" style="flex:1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Import
+            </button>
+            <button id="export-vars-btn" type="button" class="btn btn-ghost sm" title="Export variable values as JSON" style="flex:1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Export
+            </button>
+          </div>
+        </div>
       </div>
     </aside>
 
@@ -272,6 +304,21 @@
           <p class="m-note" style="margin-top:8px">Number of recent messages sent to Jev alongside the latest reply to understand dialogue and scene changes.</p>
         </div>
 
+        <div class="field">
+          <label>Data management</label>
+          <p class="m-note" style="margin-bottom:10px">Export or import characters, scenarios, and variable values in standard JSON format.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" id="set-export-all-btn" class="btn btn-ghost sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Export all (JSON)
+            </button>
+            <button type="button" id="set-import-btn" class="btn btn-ghost sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Import (JSON)
+            </button>
+          </div>
+        </div>
+
         <p class="m-note">Requests are proxied through the local server, which stores this configuration (including the API key) in its SQLite database. Single-user setup — keys are not encrypted.</p>
       </div>
       <div class="m-foot">
@@ -378,15 +425,6 @@
               <div class="field-tab-header">
                 <label>Description</label>
                 <div class="field-actions-row">
-                  <div class="insert-var-wrap" id="ce-insert-var-wrap">
-                    <button type="button" class="btn btn-ghost sm insert-var-trigger" id="ce-insert-var-btn">
-                      <span class="icon-curly">{ }</span> Insert variable ▾
-                    </button>
-                    <div id="ce-insert-var-popup" class="insert-var-popup hidden">
-                      <input type="text" id="ce-insert-var-search" class="search-input sm insert-var-search" placeholder="Search variable..." autocomplete="off">
-                      <div id="ce-insert-var-list" class="insert-var-list"></div>
-                    </div>
-                  </div>
                   <div class="field-tabs">
                     <button type="button" class="field-tab-btn active" id="ce-tab-edit">Edit</button>
                     <button type="button" class="field-tab-btn" id="ce-tab-preview">Preview</button>
@@ -407,6 +445,7 @@
           </div>
           <div class="m-foot">
             <button id="ce-delete" class="btn btn-danger hidden">Delete character</button>
+            <button id="ce-export" type="button" class="btn btn-ghost sm hidden" title="Export character to JSON">Export</button>
             <span class="spacer"></span>
             <button id="ce-save" class="btn btn-primary">Save character</button>
           </div>
@@ -659,15 +698,6 @@
                       <strong id="se-preview-char-name">Luna</strong>
                     </span>
                   </div>
-                  <div class="insert-var-wrap" id="se-insert-var-wrap">
-                    <button type="button" class="btn btn-ghost sm insert-var-trigger" id="se-insert-var-btn">
-                      <span class="icon-curly">{ }</span> Insert variable ▾
-                    </button>
-                    <div id="se-insert-var-popup" class="insert-var-popup hidden">
-                      <input type="text" id="se-insert-var-search" class="search-input sm insert-var-search" placeholder="Search variable..." autocomplete="off">
-                      <div id="se-insert-var-list" class="insert-var-list"></div>
-                    </div>
-                  </div>
                   <div class="field-tabs">
                     <button type="button" class="field-tab-btn active" id="se-tab-edit">Edit</button>
                     <button type="button" class="field-tab-btn" id="se-tab-preview">Preview</button>
@@ -724,6 +754,7 @@
       </div>
       <div class="m-foot">
         <button id="se-delete" class="btn btn-danger hidden" type="button">Delete scenario</button>
+        <button id="se-export" class="btn btn-ghost sm hidden" type="button" title="Export scenario to JSON">Export</button>
         <button id="se-play" class="btn btn-ghost hidden" type="button">Play with character…</button>
         <span class="spacer"></span>
         <button id="se-save" class="btn btn-primary" type="button">Save scenario</button>
@@ -845,6 +876,7 @@
   <div id="toast"></div>
   <canvas id="crop-canvas" width="256" height="256" class="hidden"></canvas>
 
+  <input type="file" id="global-import-file" accept=".json,application/json" hidden>
   <script src="app.js"></script>
 </body>
 </html>

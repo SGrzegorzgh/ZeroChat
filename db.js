@@ -1277,6 +1277,338 @@ function ensurePosesIntegrity() {
 
 ensurePosesIntegrity();
 
+function exportData({ type = 'all', id = null } = {}) {
+  const result = {
+    $schema: 'https://aichat.local/schema/export-v1.json',
+    version: 1,
+    generator: 'aichat',
+    exportedAt: new Date().toISOString(),
+  };
+
+  if (type === 'characters' && id) {
+    const c = getCharacter(id);
+    if (!c) throw new Error(`Character ${id} not found`);
+    const poses = getPoses(id, { withImages: true });
+    result.character = { ...c, poses };
+    return result;
+  }
+
+  if (type === 'scenarios' && id) {
+    const s = getScenario(id);
+    if (!s) throw new Error(`Scenario ${id} not found`);
+    result.scenario = s;
+    return result;
+  }
+
+  if (type === 'characters' || type === 'all') {
+    const chars = db.prepare('SELECT * FROM characters ORDER BY created_at ASC').all();
+    result.characters = chars.map((row) => {
+      const c = shapeCharacter(row, false);
+      c.poses = getPoses(row.id, { withImages: true });
+      return c;
+    });
+  }
+
+  if (type === 'scenarios' || type === 'all') {
+    result.scenarios = getScenarios();
+  }
+
+  if (type === 'variables' || type === 'all') {
+    const chars = db.prepare('SELECT id, name, variables FROM characters').all();
+    const charVars = {};
+    for (const c of chars) {
+      const v = safeParse(c.variables, {});
+      if (v && typeof v === 'object' && Object.keys(v).length > 0) {
+        charVars[c.id] = v;
+      }
+    }
+    const scens = db.prepare('SELECT id, title, character_variables FROM scenarios').all();
+    const scenVars = {};
+    for (const s of scens) {
+      const cv = safeParse(s.character_variables, {});
+      if (cv && typeof cv === 'object' && Object.keys(cv).length > 0) {
+        scenVars[s.id] = cv;
+      }
+    }
+    result.variables = {
+      characters: charVars,
+      scenarios: scenVars,
+    };
+  }
+
+  return result;
+}
+
+function importData(raw) {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Invalid JSON format: expected an object or array');
+  }
+
+  snapshotBeforeDestructive();
+
+  const counts = { characters: 0, scenarios: 0, variables: 0, poses: 0 };
+
+  let data = raw;
+  if (data.spec === 'chara_card_v2' && data.data) {
+    data = { character: data.data };
+  }
+
+  db.exec('BEGIN');
+  try {
+    // 1. Process characters
+    let charsToImport = [];
+    if (Array.isArray(data.characters)) {
+      charsToImport = data.characters;
+    } else if (data.character && typeof data.character === 'object') {
+      charsToImport = [data.character];
+    } else if (Array.isArray(data) && data.length > 0 && data[0] && (data[0].name || data[0].char_persona)) {
+      charsToImport = data;
+    } else if (data.name && (data.description !== undefined || data.personality || data.scenario || data.poses || data.variables)) {
+      charsToImport = [data];
+    }
+
+    for (const item of charsToImport) {
+      if (!item || typeof item !== 'object') continue;
+      const name = String(item.name || item.char_name || 'Unnamed').trim().slice(0, 120);
+      if (!name) continue;
+
+      let charId = (item.id && typeof item.id === 'string') ? item.id.trim() : null;
+      const desc = String(item.description || item.personality || item.char_persona || '');
+      const note = String(item.note || '');
+      const scenario = String(item.scenario || item.mes_example || '');
+      const emoji = String(item.emoji || '🎭');
+      const avatar = typeof item.avatar === 'string' ? item.avatar : null;
+      const image = typeof item.image === 'string' ? item.image : null;
+      const posesEnabled = item.posesEnabled != null ? (item.posesEnabled ? 1 : 0) : (item.poses_enabled ? 1 : 0);
+      const vars = (item.variables && typeof item.variables === 'object') ? item.variables : safeParse(item.variables, {});
+      const responses = Array.isArray(item.responses) ? item.responses : safeParse(item.responses, []);
+
+      let existing = charId ? characterRow(charId) : null;
+      if (!existing) {
+        const byName = db.prepare('SELECT id FROM characters WHERE LOWER(name) = LOWER(?)').get(name);
+        if (byName && !charId) {
+          charId = byName.id;
+          existing = characterRow(charId);
+        }
+      }
+
+      if (existing) {
+        db.prepare(`
+          UPDATE characters
+          SET name = ?, description = ?, note = ?, scenario = ?, emoji = ?,
+              avatar = COALESCE(?, avatar), image = COALESCE(?, image),
+              poses_enabled = ?, variables = ?, responses = ?
+          WHERE id = ?
+        `).run(
+          name, desc, note, scenario, emoji,
+          avatar, image,
+          posesEnabled, JSON.stringify(vars), JSON.stringify(responses),
+          charId
+        );
+      } else {
+        if (!charId) charId = 'c-' + uid();
+        db.prepare(`
+          INSERT INTO characters (id, name, description, note, scenario, emoji, avatar, image, poses_enabled, variables, responses, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          charId, name, desc, note, scenario, emoji,
+          avatar, image,
+          posesEnabled, JSON.stringify(vars), JSON.stringify(responses),
+          Date.now()
+        );
+        const allowed = getScenarios({ characterId: charId });
+        createChatInternal(charId, allowed.length > 0 ? allowed[0].id : null);
+      }
+
+      counts.characters++;
+      if (vars && typeof vars === 'object') {
+        counts.variables += Object.keys(vars).length;
+      }
+
+      if (Array.isArray(item.poses) && item.poses.length > 0) {
+        for (let i = 0; i < item.poses.length; i++) {
+          const p = item.poses[i];
+          if (!p || typeof p !== 'object') continue;
+          const pName = String(p.name || `Pose ${i + 1}`).trim().slice(0, 80);
+          const pDesc = String(p.description || '').slice(0, 2000);
+          const pImg = typeof p.image === 'string' ? p.image : null;
+          const pThumb = typeof p.thumb === 'string' ? p.thumb : null;
+          const pCrop = String(p.crop || 'square');
+          const pWidth = Number(p.width) || 0;
+          const pHeight = Number(p.height) || 0;
+          const pDef = p.isDefault ? 1 : 0;
+          const pPos = Number.isInteger(p.position) ? p.position : i;
+
+          let poseId = (p.id && typeof p.id === 'string') ? p.id.trim() : null;
+          let existPose = poseId ? db.prepare('SELECT id FROM poses WHERE id = ?').get(poseId) : null;
+          if (!existPose) {
+            existPose = db.prepare('SELECT id FROM poses WHERE character_id = ? AND LOWER(name) = LOWER(?)').get(charId, pName);
+            if (existPose) poseId = existPose.id;
+          }
+
+          if (existPose) {
+            db.prepare(`
+              UPDATE poses
+              SET name = ?, description = ?, image = COALESCE(?, image), thumb = COALESCE(?, thumb),
+                  crop = ?, width = ?, height = ?, is_default = ?, position = ?
+              WHERE id = ?
+            `).run(pName, pDesc, pImg, pThumb, pCrop, pWidth, pHeight, pDef, pPos, poseId);
+          } else {
+            if (!poseId) poseId = uid();
+            db.prepare(`
+              INSERT INTO poses (id, character_id, name, description, image, thumb, crop, width, height, is_default, position, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(poseId, charId, pName, pDesc, pImg, pThumb, pCrop, pWidth, pHeight, pDef, pPos, Date.now());
+          }
+          counts.poses++;
+        }
+      } else {
+        ensureDefaultPoses(charId);
+      }
+    }
+
+    // 2. Process scenarios
+    let scensToImport = [];
+    if (Array.isArray(data.scenarios)) {
+      scensToImport = data.scenarios;
+    } else if (data.scenario && typeof data.scenario === 'object') {
+      scensToImport = [data.scenario];
+    } else if (Array.isArray(data) && data.length > 0 && data[0] && data[0].title && data[0].content) {
+      scensToImport = data;
+    } else if (data.title && data.content) {
+      scensToImport = [data];
+    }
+
+    for (const item of scensToImport) {
+      if (!item || typeof item !== 'object') continue;
+      const title = String(item.title || 'Untitled scenario').trim().slice(0, 120);
+      const desc = String(item.description || '');
+      const content = String(item.content || item.scenario || '');
+      if (!content && !title) continue;
+
+      let scenId = (item.id && typeof item.id === 'string') ? item.id.trim() : null;
+      const mode = ['all', 'whitelist', 'blacklist'].includes(item.accessMode || item.access_mode) ? (item.accessMode || item.access_mode) : 'all';
+      const cids = Array.isArray(item.characterIds || item.character_ids) ? JSON.stringify(item.characterIds || item.character_ids) : '[]';
+      const rawVars = item.characterVariables !== undefined ? item.characterVariables : item.character_variables;
+      const cvars = (rawVars && typeof rawVars === 'object') ? rawVars : safeParse(rawVars, {});
+
+      let existing = scenId ? db.prepare('SELECT id, character_variables FROM scenarios WHERE id = ?').get(scenId) : null;
+      if (!existing) {
+        const byTitle = db.prepare('SELECT id, character_variables FROM scenarios WHERE LOWER(title) = LOWER(?)').get(title);
+        if (byTitle && !scenId) {
+          scenId = byTitle.id;
+          existing = byTitle;
+        }
+      }
+
+      const now = Date.now();
+      if (existing) {
+        const prevCv = safeParse(existing.character_variables, {});
+        const mergedCv = { ...prevCv };
+        if (cvars && typeof cvars === 'object') {
+          for (const [k, v] of Object.entries(cvars)) {
+            mergedCv[k] = { ...(mergedCv[k] || {}), ...v };
+          }
+        }
+        db.prepare(`
+          UPDATE scenarios
+          SET title = ?, description = ?, content = ?, access_mode = ?, character_ids = ?, character_variables = ?, updated_at = ?
+          WHERE id = ?
+        `).run(title, desc, content, mode, cids, JSON.stringify(mergedCv), now, scenId);
+      } else {
+        if (!scenId) scenId = 'sc-' + uid();
+        db.prepare(`
+          INSERT INTO scenarios (id, title, description, content, access_mode, character_ids, character_variables, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(scenId, title, desc, content, mode, cids, JSON.stringify(cvars), now, now);
+      }
+
+      counts.scenarios++;
+      if (cvars && typeof cvars === 'object') {
+        for (const v of Object.values(cvars)) {
+          if (v && typeof v === 'object') counts.variables += Object.keys(v).length;
+        }
+      }
+    }
+
+    // 3. Process standalone variables if provided
+    const varsData = data.variables !== undefined ? data.variables : data.characterVariables;
+    if (varsData && typeof varsData === 'object') {
+      if (Array.isArray(varsData)) {
+        for (const item of varsData) {
+          if (!item || typeof item !== 'object') continue;
+          const cid = item.characterId || item.character_id || item.character;
+          const k = item.key || item.name;
+          const v = item.value;
+          if (!cid || !k) continue;
+          let char = characterRow(cid) || db.prepare('SELECT * FROM characters WHERE LOWER(name) = LOWER(?)').get(cid);
+          if (char) {
+            const current = safeParse(char.variables, {});
+            current[k] = String(v == null ? '' : v);
+            db.prepare('UPDATE characters SET variables = ? WHERE id = ?').run(JSON.stringify(current), char.id);
+            counts.variables++;
+          }
+        }
+      } else {
+        const charVars = varsData.characters || (!varsData.scenarios ? varsData : null);
+        if (charVars && typeof charVars === 'object') {
+          for (const [charIdOrName, vMap] of Object.entries(charVars)) {
+            if (!vMap || typeof vMap !== 'object') continue;
+            let char = characterRow(charIdOrName);
+            if (!char) {
+              char = db.prepare('SELECT * FROM characters WHERE LOWER(name) = LOWER(?)').get(charIdOrName);
+            }
+            if (char) {
+              const current = safeParse(char.variables, {});
+              const merged = { ...current, ...vMap };
+              db.prepare('UPDATE characters SET variables = ? WHERE id = ?').run(JSON.stringify(merged), char.id);
+              counts.variables += Object.keys(vMap).length;
+            }
+          }
+        }
+
+        const scenVars = varsData.scenarios;
+        if (scenVars && typeof scenVars === 'object') {
+          for (const [scenIdOrTitle, charMap] of Object.entries(scenVars)) {
+            if (!charMap || typeof charMap !== 'object') continue;
+            let sc = db.prepare('SELECT id, character_variables FROM scenarios WHERE id = ?').get(scenIdOrTitle);
+            if (!sc) {
+              sc = db.prepare('SELECT id, character_variables FROM scenarios WHERE LOWER(title) = LOWER(?)').get(scenIdOrTitle);
+            }
+            if (sc) {
+              const current = safeParse(sc.character_variables, {});
+              const merged = { ...current };
+              for (const [cid, v] of Object.entries(charMap)) {
+                merged[cid] = { ...(merged[cid] || {}), ...v };
+                if (v && typeof v === 'object') counts.variables += Object.keys(v).length;
+              }
+              db.prepare('UPDATE scenarios SET character_variables = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(merged), Date.now(), sc.id);
+            }
+          }
+        }
+      }
+    } else if (!data.characters && !data.character && !data.scenarios && !data.scenario && typeof data === 'object') {
+      for (const [charIdOrName, vMap] of Object.entries(data)) {
+        if (!vMap || typeof vMap !== 'object') continue;
+        let char = characterRow(charIdOrName) || db.prepare('SELECT * FROM characters WHERE LOWER(name) = LOWER(?)').get(charIdOrName);
+        if (char) {
+          const current = safeParse(char.variables, {});
+          const merged = { ...current, ...vMap };
+          db.prepare('UPDATE characters SET variables = ? WHERE id = ?').run(JSON.stringify(merged), char.id);
+          counts.variables += Object.keys(vMap).length;
+        }
+      }
+    }
+
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+
+  return { ok: true, imported: counts };
+}
+
 module.exports = {
   bootstrap: () => ({ characters: getCharacters(), personalities: getPersonalities(), settings: getSettings(), presets: getPresets(), scenarios: getScenarios() }),
   getCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter,
@@ -1287,4 +1619,5 @@ module.exports = {
   getPresets, getPreset, createPreset, updatePreset, deletePreset,
   getPoses, getPose, createPose, updatePose, deletePose, setChatPose, ensureDefaultPoses, getDefaultPose, setDefaultPose,
   getSettings, updateSettings,
+  exportData, importData,
 };

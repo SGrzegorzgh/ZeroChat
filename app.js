@@ -627,7 +627,7 @@ function msgHtml(c, p, n, chat) {
       <div class="ms-head">${I.book}<span>Scenario</span></div>
       ${body}${meta}</div>`;
   }
-  const main = `<div class="msg-main">${body}${meta}</div>`;
+  const main = `<div class="msg-main${editingId === n.id ? ' editing' : ''}">${body}${meta}</div>`;
   if (n.role === 'injection') {
     return `<div class="msg user injection ${n.state === 'pending' ? 'inj-pending' : ''}" data-id="${n.id}">${main}${personaAvatarHtml(p, 'sm', true)}</div>`;
   }
@@ -1238,8 +1238,6 @@ function switchCeDescTab(tab) {
   $('#ce-tab-preview').classList.toggle('active', !isEdit);
   $('#ce-desc-edit-wrap').classList.toggle('hidden', !isEdit);
   $('#ce-desc-prev-wrap').classList.toggle('hidden', isEdit);
-  const wrap = $('#ce-insert-var-wrap');
-  if (wrap) wrap.classList.toggle('hidden', !isEdit);
   if (!isEdit) renderCeDescPreview();
 }
 
@@ -1247,85 +1245,6 @@ function renderCeDescPreview() {
   const raw = $('#ce-desc').value;
   const charName = $('#ce-name').value.trim() || 'Character';
   $('#ce-desc-prev-wrap').innerHTML = renderPreviewMarkdown(raw, ceId, null, charName);
-}
-
-/* Insert Variable Dropdown Popups for Character and Scenario editors */
-function openInsertVarPopup(mode) {
-  const popup = $(`#${mode}-insert-var-popup`);
-  if (!popup) return;
-  const wasHidden = popup.classList.contains('hidden');
-  closeInsertVarPopups();
-  if (wasHidden) {
-    popup.classList.remove('hidden');
-    const input = $(`#${mode}-insert-var-search`);
-    if (input) {
-      input.value = '';
-      setTimeout(() => input.focus(), 50);
-    }
-    renderInsertVarList(mode, '');
-  }
-}
-
-function closeInsertVarPopups() {
-  $$('.insert-var-popup').forEach((p) => p.classList.add('hidden'));
-}
-
-function renderInsertVarList(mode, q = '') {
-  const list = $(`#${mode}-insert-var-list`);
-  if (!list) return;
-  const normQ = (q || '').trim().toLowerCase();
-
-  const items = [
-    { key: 'char', sub: 'Character name' },
-    { key: 'user', sub: 'Your personality name' },
-  ];
-
-  const seen = new Set(['char', 'user']);
-  if (mode === 'ce') {
-    syncCeVariablesFromInputs();
-    for (const [k, v] of Object.entries(ceVariables)) {
-      const lower = k.toLowerCase();
-      if (!seen.has(lower)) {
-        seen.add(lower);
-        items.push({ key: lower, sub: v ? `"${v.slice(0, 15)}${v.length > 15 ? '…' : ''}"` : 'This character' });
-      }
-    }
-  }
-  for (const v of getAllVariables()) {
-    const lower = v.key.toLowerCase();
-    if (!seen.has(lower)) {
-      seen.add(lower);
-      const count = v.usedBy.length;
-      items.push({ key: lower, sub: count > 0 ? `Used in ${count} char${count === 1 ? '' : 's'}` : '' });
-    }
-  }
-
-  let filtered = items;
-  if (normQ) {
-    filtered = items.filter((it) => it.key.includes(normQ) || (it.sub && it.sub.toLowerCase().includes(normQ)));
-  }
-
-  const canInsertCustom = normQ && !items.some((it) => it.key === normQ);
-  let html = '';
-  if (canInsertCustom) {
-    html += `
-      <button type="button" class="insert-var-item" data-insert-key="${esc(normQ)}">
-        <span class="insert-var-tag">➕ {{${esc(normQ)}}}</span>
-        <span class="insert-var-sub">Insert tag</span>
-      </button>
-    `;
-  }
-  if (filtered.length) {
-    html += filtered.map((it) => `
-      <button type="button" class="insert-var-item" data-insert-key="${esc(it.key)}">
-        <span class="insert-var-tag">{{${esc(it.key)}}}</span>
-        <span class="insert-var-sub">${esc(it.sub)}</span>
-      </button>
-    `).join('');
-  } else if (!canInsertCustom) {
-    html += `<div class="prow-desc" style="padding:10px;text-align:center">No variables found</div>`;
-  }
-  list.innerHTML = html;
 }
 
 let ceScenSelectedId = null;
@@ -1664,7 +1583,6 @@ function openCharModal(char) {
   $('#ce-note').value = char ? char.note || '' : '';
 
   switchCeDescTab('edit');
-  closeInsertVarPopups();
   closeCeScenPanel();
   renderCeScenActiveCard();
   switchCeScenTab('preview');
@@ -1673,6 +1591,8 @@ function openCharModal(char) {
   updateCePosesToggleUI();
   const del = $('#ce-delete');
   del.classList.toggle('hidden', ceMode !== 'edit');
+  const exp = $('#ce-export');
+  if (exp) exp.classList.toggle('hidden', ceMode !== 'edit');
   disarmDelete();
   openModal('modal-char');
   setTimeout(() => $('#ce-name').focus(), 60);
@@ -2595,8 +2515,6 @@ function switchSeTab(tab) {
   $('#se-tab-preview').classList.toggle('active', !isEdit);
   $('#se-content-edit-wrap').classList.toggle('hidden', !isEdit);
   $('#se-content-prev-wrap').classList.toggle('hidden', isEdit);
-  const wrap = $('#se-insert-var-wrap');
-  if (wrap) wrap.classList.toggle('hidden', !isEdit);
   const pill = $('#se-char-swap-wrap');
   if (pill) pill.classList.toggle('hidden', isEdit);
   if (!isEdit) {
@@ -2872,7 +2790,6 @@ function openScenarioModal(sc = null) {
   closeSeCharDropdown();
   renderSeVarsForm();
   switchSeTab('edit');
-  closeInsertVarPopups();
 
   const del = $('#se-delete');
   del.classList.toggle('hidden', seMode !== 'edit');
@@ -2880,6 +2797,9 @@ function openScenarioModal(sc = null) {
 
   const play = $('#se-play');
   play.classList.toggle('hidden', seMode !== 'edit');
+
+  const exp = $('#se-export');
+  if (exp) exp.classList.toggle('hidden', seMode !== 'edit');
 
   openModal('modal-scenario');
   setTimeout(() => $('#se-title').focus(), 60);
@@ -3437,6 +3357,76 @@ function skipFullCrop() {
   done({ square: crop.square, full: null });
 }
 
+function downloadJson(data, filename) {
+  const jsonStr = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function triggerExport(type, id = null, filename = null) {
+  try {
+    let url = `/api/export?type=${encodeURIComponent(type)}`;
+    if (id) url += `&id=${encodeURIComponent(id)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Export failed with status ${res.status}`);
+    }
+    const data = await res.json();
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const fname = filename || `aichat-${type}-${dateStr}.json`;
+    downloadJson(data, fname);
+    toast(`Exported ${type}`);
+  } catch (err) {
+    toast(`Export failed: ${err.message}`);
+  }
+}
+
+async function handleImportFile(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error('Selected file is not valid JSON');
+    }
+    const res = await fetch('/api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok || !result.ok) {
+      throw new Error(result.error || `Import failed with status ${res.status}`);
+    }
+    const imp = result.imported || {};
+    const parts = [];
+    if (imp.characters) parts.push(`${imp.characters} character${imp.characters === 1 ? '' : 's'}`);
+    if (imp.poses) parts.push(`${imp.poses} pose${imp.poses === 1 ? '' : 's'}`);
+    if (imp.scenarios) parts.push(`${imp.scenarios} scenario${imp.scenarios === 1 ? '' : 's'}`);
+    if (imp.variables) parts.push(`${imp.variables} variable value${imp.variables === 1 ? '' : 's'}`);
+    const summary = parts.length > 0 ? parts.join(', ') : 'no items found';
+    toast(`Imported: ${summary}`);
+
+    await bootstrap();
+    renderAll();
+  } catch (err) {
+    toast(`Import failed: ${err.message}`);
+  } finally {
+    const inp = $('#global-import-file');
+    if (inp) inp.value = '';
+  }
+}
+
 function wireEvents() {
   $$('.combo').forEach((c) => setupModelCombo(c));
   $('#tab-chars-btn').addEventListener('click', () => switchSidebarTab('chars'));
@@ -3444,6 +3434,50 @@ function wireEvents() {
   $('#tab-vars-btn').addEventListener('click', () => switchSidebarTab('vars'));
   $('#new-char-btn').addEventListener('click', () => openCharModal(null));
   $('#new-scenario-btn').addEventListener('click', () => openScenarioModal(null));
+
+  // Import & Export buttons
+  const fileInput = $('#global-import-file');
+  if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) handleImportFile(f);
+    });
+  }
+  const triggerImport = () => { if (fileInput) fileInput.click(); };
+
+  $('#import-chars-btn')?.addEventListener('click', triggerImport);
+  $('#import-scenarios-btn')?.addEventListener('click', triggerImport);
+  $('#import-vars-btn')?.addEventListener('click', triggerImport);
+  $('#set-import-btn')?.addEventListener('click', triggerImport);
+
+  $('#export-chars-btn')?.addEventListener('click', () => {
+    triggerExport('characters', null, 'aichat-characters.json');
+  });
+  $('#export-scenarios-btn')?.addEventListener('click', () => {
+    triggerExport('scenarios', null, 'aichat-scenarios.json');
+  });
+  $('#export-vars-btn')?.addEventListener('click', () => {
+    triggerExport('variables', null, 'aichat-variables.json');
+  });
+  $('#set-export-all-btn')?.addEventListener('click', () => {
+    triggerExport('all', null, 'aichat-all.json');
+  });
+
+  $('#ce-export')?.addEventListener('click', () => {
+    if (ceId) {
+      const c = state.characters.find((x) => x.id === ceId);
+      const name = c ? c.name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-') : ceId;
+      triggerExport('characters', ceId, `character-${name}.json`);
+    }
+  });
+
+  $('#se-export')?.addEventListener('click', () => {
+    if (seId) {
+      const s = state.scenarios.find((x) => x.id === seId);
+      const name = s ? s.title.toLowerCase().replace(/[^a-z0-9_-]+/g, '-') : seId;
+      triggerExport('scenarios', seId, `scenario-${name}.json`);
+    }
+  });
   $('#char-list').addEventListener('click', (e) => {
     const item = e.target.closest('.char-item');
     if (item) openCharacter(item.dataset.id);
@@ -3577,29 +3611,6 @@ function wireEvents() {
     }
 
     renderSeCharCards($('#se-char-search-input')?.value || '');
-    if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
-  });
-  $('#se-insert-var-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    openInsertVarPopup('se');
-  });
-  $('#se-insert-var-search').addEventListener('input', (e) => {
-    renderInsertVarList('se', e.target.value);
-  });
-  $('#se-insert-var-search').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const first = $('#se-insert-var-list .insert-var-item');
-      if (first) first.click();
-    }
-  });
-  $('#se-insert-var-list').addEventListener('click', (e) => {
-    const item = e.target.closest('[data-insert-key]');
-    if (!item) return;
-    const key = item.dataset.insertKey;
-    insertAtCaret($('#se-content'), `{{${key}}}`);
-    closeInsertVarPopups();
-    renderSeVarsForm();
     if ($('#se-tab-preview').classList.contains('active')) renderSePreview();
   });
   $('#se-content').addEventListener('input', () => {
@@ -3887,7 +3898,6 @@ function wireEvents() {
 
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu-wrap')) closeMenus();
-    if (!e.target.closest('.insert-var-wrap')) closeInsertVarPopups();
     if (!e.target.closest('.ce-scen-selector')) closeCeScenDropdown();
     if (!e.target.closest('.se-char-selector')) closeSeCharDropdown();
   });
@@ -4027,28 +4037,6 @@ function wireEvents() {
   // Character Modal Tabs & Variables events
   $('#ce-tab-edit').addEventListener('click', () => switchCeDescTab('edit'));
   $('#ce-tab-preview').addEventListener('click', () => switchCeDescTab('preview'));
-  $('#ce-insert-var-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    openInsertVarPopup('ce');
-  });
-  $('#ce-insert-var-search').addEventListener('input', (e) => {
-    renderInsertVarList('ce', e.target.value);
-  });
-  $('#ce-insert-var-search').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const first = $('#ce-insert-var-list .insert-var-item');
-      if (first) first.click();
-    }
-  });
-  $('#ce-insert-var-list').addEventListener('click', (e) => {
-    const item = e.target.closest('[data-insert-key]');
-    if (!item) return;
-    const key = item.dataset.insertKey;
-    insertAtCaret($('#ce-desc'), `{{${key}}}`);
-    closeInsertVarPopups();
-    if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
-  });
   $('#ce-desc').addEventListener('input', () => {
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
     updateCeScenPanelUI();
