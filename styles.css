@@ -868,13 +868,13 @@ body.sidebar-open #scrim {
   background: var(--panel);
   border: 1px solid #4a4f57;
   border-radius: 12px;
-  padding: 10px 13px;
-  font-size: 14px;
-  line-height: 1.5;
+  padding: 12px 14px;
+  font-size: 14.5px;
+  line-height: 1.55;
   font-family: inherit;
   color: #e8eaed;
   resize: vertical;
-  min-height: 64px;
+  min-height: 192px;
   outline: none;
   box-shadow: var(--ring);
 }
@@ -1014,6 +1014,17 @@ body.sidebar-open #scrim {
   display: flex;
   align-items: flex-end;
   gap: 10px;
+}
+
+.msg-input-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.msg-input-wrap #msg-input {
+  flex: none;
+  width: 100%;
 }
 
 .steer-btn {
@@ -1309,9 +1320,12 @@ body.sidebar-open #scrim {
 }
 
 .modal-card {
-  width: min(580px, 100%);
+  width: min(580px, calc(100vw - 24px));
+  max-width: 580px;
   max-height: 88dvh;
   overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
   background: var(--bg2);
   border: 1px solid var(--border2);
   border-radius: 18px;
@@ -2013,7 +2027,6 @@ input[type="range"] {
     height: 42px;
   }
   #msg-input {
-    height: 42px;
     min-height: 42px;
   }
 }
@@ -2272,21 +2285,27 @@ input[type="range"] {
 
 .sidebar-tabs {
   display: flex;
-  padding: 0 12px 10px;
-  gap: 6px;
+  padding: 0 10px 10px;
+  gap: 5px;
+  box-sizing: border-box;
+  width: 100%;
 }
 .sidebar-tab {
   flex: 1;
-  padding: 7px 10px;
+  min-width: 0;
+  padding: 7px 6px;
   border-radius: 9px;
   background: transparent;
   color: var(--muted);
   border: 1px solid transparent;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
   text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sidebar-tab:hover {
   color: var(--fg);
@@ -2388,14 +2407,10 @@ input[type="range"] {
   font-weight: 600;
   color: var(--muted);
 }
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 /* Modal Pick Scenario */
 .modal-lg {
+  width: min(680px, calc(100vw - 28px)) !important;
   max-width: 680px !important;
 }
 .ps-quick-card {
@@ -3792,25 +3807,23 @@ input[type="range"] {
 }
 
 .settings-tabs-nav {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
-  padding: 10px 20px;
+  padding: 12px 18px;
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.settings-tabs-nav::-webkit-scrollbar {
-  display: none;
+  box-sizing: border-box;
+  width: 100%;
 }
 .settings-tab-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 6px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--muted);
   background: transparent;
@@ -3818,6 +3831,9 @@ input[type="range"] {
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .settings-tab-btn:hover {
   color: var(--text);
@@ -3828,6 +3844,44 @@ input[type="range"] {
   background: var(--panel2);
   border-color: var(--border2);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+@media (max-width: 640px) {
+  .settings-tabs-nav {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Touch-friendly resize handle for mobile & desktop */
+.touch-resize-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  width: 100%;
+  cursor: ns-resize;
+  touch-action: none;
+  background: transparent;
+  user-select: none;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  padding: 3px 0;
+  box-sizing: border-box;
+}
+.touch-resize-handle:hover,
+.touch-resize-handle:active {
+  opacity: 1;
+}
+.touch-resize-handle span {
+  width: 42px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border2);
+  transition: background 0.15s, width 0.15s;
+}
+.touch-resize-handle:hover span,
+.touch-resize-handle:active span {
+  background: var(--muted);
+  width: 56px;
 }
 .settings-tab-pane {
   padding-top: 14px;

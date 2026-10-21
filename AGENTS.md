@@ -1,12 +1,12 @@
 # AGENTS.md
 
-Instructions, architecture guide, and operational conventions for AI agents and developers working in `aichat`.
+Instructions, architecture guide, and operational conventions for AI agents and developers working in `ZeroChat`.
 
 ---
 
 ## 1. Project Overview & Philosophy
 
-`aichat` is a lightweight, zero-dependency, self-hosted web application for roleplaying with AI characters. It provides multi-character chat threads, persona switching, branching conversation trees, and an AI-driven dynamic visual pose/expression director.
+`ZeroChat` is a lightweight, zero-dependency, self-hosted web application for roleplaying with AI characters. It provides multi-character chat threads, persona switching, branching conversation trees, an AI-driven dynamic visual pose/expression director, and common JSON backup/export/import.
 
 ### Core Architectural Principles
 1. **Zero External Dependencies**:
@@ -40,41 +40,45 @@ Instructions, architecture guide, and operational conventions for AI agents and 
 ## 3. Repository Structure & File Map
 
 ```text
-~/aichat
+~/ZeroChat
 ├── package.json     # Project metadata and start script (0 dependencies)
 ├── .gitignore       # Ignores aichat.db*, backups/, and node_modules/
+├── README.md        # User documentation, feature overview, and quickstart
 ├── migrate-scenarios.js # Database migration script: backups DB & splits characters and scenarios
 ├── server.js        # Native HTTP server, REST/SSE routing, LLM streaming & pose agent
-├── db.js            # SQLite database schema, tree management, backups, idempotent seed
-├── index.html       # Single-page application markup and modal dialogs
+├── db.js            # SQLite database schema, tree management, backups, export/import
+├── index.html       # Single-page application markup and tabbed modal dialogs
 ├── app.js           # Client-side state, UI rendering, branch navigation, SSE stream consumer
 ├── styles.css       # Complete dark-mode design system, glassmorphism, responsive styles
 └── AGENTS.md        # Agent and developer guidelines (this document)
 ```
 
 ### Detailed Component Roles
-- **`server.js` (~940 lines)**:
+- **`server.js`**:
   - Custom HTTP router with MIME handling and path traversal protection for static files.
-  - REST API endpoints for characters, chats, tree nodes, poses, personalities, presets, and settings.
+  - REST API endpoints for characters, chats, tree nodes, poses, personalities, presets, settings, export, and import.
   - Server-Sent Events (SSE) streaming endpoints (`/api/chats/:id/messages`, `/api/chats/:id/generate`).
   - LLM client integrations for OpenAI-compatible APIs (`/v1/chat/completions`) and Anthropic (`/v1/messages`).
   - Dynamic Pose Director Agent (`runPoseAgent`) using Jev (a fast, low-cost decision model via OpenRouter Decisions API or custom OpenAI-compatible provider) to select matching character poses.
-- **`db.js` (~985 lines)**:
+- **`db.js`**:
   - `DatabaseSync` initialization, WAL configuration, and graceful checkpointing on shutdown.
   - Database snapshot backup engine: automated backups to `backups/` on startup and prior to destructive actions.
   - Chat tree data structures, tree path algorithms (`pathNodes`, `treeTip`, `poseOnPath`, `activeChildId`).
+  - Universal Export/Import engine (`exportData`, `importData`) supporting JSON card backups.
   - Idempotent database seeder (`seedIfEmpty`) providing demo characters and conversations without collision.
-- **`index.html` (~507 lines)**:
-  - Semantic SPA layout: `#sidebar`, `#welcome`, `#chat-view`, `#chat-header`, `#messages`, `#composer`.
-  - Modal containers: `#modal-settings`, `#modal-persona`, `#modal-char`, `#modal-poses`, `#modal-crop`, `#modal-preset`, `#modal-scenario`, `#modal-pick-scenario`, `#modal-pick-char`.
-- **`app.js` (~2340 lines)**:
+- **`index.html`**:
+  - Semantic SPA layout: `#sidebar` (Characters, Scenarios, Personas), `#welcome`, `#chat-view`, `#chat-header`, `#composer`.
+  - Consolidated header with character details, chats drawer pill, active persona badge, and settings button.
+  - Tabbed modal dialogs: `#modal-settings` (AI Connection, Visuals & Poses, Presets, Backup & Data), `#modal-persona`, `#modal-char`, `#modal-poses`, `#modal-crop`, `#modal-preset`, `#modal-scenario`, `#modal-pick-scenario`, `#modal-pick-char`.
+- **`app.js`**:
   - Client state store (`state = { characters, personalities, presets, settings, poses }`).
-  - Markdown parser (`md`) with character spoken dialogue highlighting (`<span class="dlg">`) and action formatting (`<em>`).
+  - Auto-growing textareas with mobile touch-friendly drag resize handles.
+  - Steer Scene (OOC) directive flow and waiting directive banner.
   - Branch navigation controls (`< x / y >`) for editing and regenerating message trees.
   - Dynamic background pose renderer and canvas-based avatar/pose image cropper.
-- **`styles.css` (~2122 lines)**:
+- **`styles.css`**:
   - Modern dark aesthetic with CSS variables (`--bg`, `--accent`, `--act-dim`, etc.).
-  - Translucent chat bubbles showing character pose backgrounds through messages.
+  - Responsive layout for desktop and mobile with non-overflowing tab bars.
 
 ---
 
@@ -99,10 +103,6 @@ Chats are not flat message lists; each chat contains a tree represented as JSON 
 }
 ```
 - **Node Roles**: `root`, `scenario`, `user`, `char`, `injection` (OOC directive).
-- **Branch Traversal**:
-  - `childOnActivePath(node)`: Returns `node.children[node.active]`.
-  - `pathNodes(tree, uptoId)`: Returns an ordered array of nodes following active child indices from root to the specified node.
-  - `treeTip(tree)`: Walks active children down to the leaf node.
 - **Branch Operations**:
   - **Edit**: Creates a new sibling node, re-parents downstream subtree to the new variant, and updates `parent.active`.
   - **Regenerate**: Attaches a new child variant to the parent prompt and sets it as active.
@@ -113,52 +113,20 @@ Chats are not flat message lists; each chat contains a tree represented as JSON 
 Characters have multiple poses (`poses` table) containing an image and descriptive guidance (e.g., *Sitting*, *Close-up*, *Leaning in*).
 - **Trigger**: During reply streaming, `runPoseAgent(...)` runs asynchronously to select the matching shot.
 - **Decision Engine**: Instead of an expensive, slow full-blown LLM with tool calling, the agent uses **Jev**, a fast, low-cost System One decision model specializing in choosing an option based on text input.
-  - **OpenRouter**: Calls `POST https://openrouter.ai/api/alpha/decisions` with model `typesafe/jev-1.13`.
-  - **Custom OpenAI-compatible provider**: Calls `POST <baseUrl>/decisions` with model `jev` (with automatic fallback if native `/decisions` is unavailable).
 - **Pose Stamps on Nodes**: When a pose changes, `node.poseId` is saved on the character's reply node.
-- **Branch-Accurate Reverts**:
-  - When re-generating, deleting, or switching message branches, the pose reverts to `poseBefore(chatId, nodeId)` or `poseAtTip(chatId)`.
-  - Visual poses never linger from abandoned conversation branches.
+- **Branch-Accurate Reverts**: Visual poses revert accurately when navigating branches or deleting messages.
 
-### 4.3 Prompt Macros (`{{char}}` & `{{user}}`)
-- Dynamically evaluated during prompt assembly in `server.js:expandPromptMacros` and in frontend display `app.js:expandTags`.
-- Replaces `{{char}}` with the character name and `{{user}}` with the active persona name.
-- Macro replacement is never saved into the raw database text, allowing dynamic renaming of characters and personas without database migrations.
-- Implementation uses replacement functions (`s.replace(re, () => replacement)`) to prevent accidental regex replacement patterns like `$&`.
+### 4.3 Clean Composer & Steer Scene (OOC)
+- Normal chat input sends messages directly to the character (`sendUser`).
+- Clicking the Steer button toggles OOC mode (`setSteerMode(true)`), tinting the input and sending a directive (`sendInjection`).
+- When a directive is pending, a clear banner alerts the user with a direct button to trigger the reply (`generateReplyAt`).
+- Textareas automatically grow to fit text up to a threshold, and provide a dedicated touch-drag handle for effortless resizing on mobile touchscreens.
 
-### 4.4 Database Durability & Backup Engine
-- **WAL & Checkpointing**:
-  - `PRAGMA journal_mode = WAL`
-  - `PRAGMA synchronous = FULL`
-  - `PRAGMA wal_checkpoint(TRUNCATE)` is executed on startup, process exit, `SIGINT`, and `SIGTERM`.
-- **Automatic Snapshots**:
-  - Located in `backups/aichat-<timestamp>.db*`.
-  - Copies main DB plus `-wal` and `-shm` to ensure complete consistency.
-  - Triggered on server start and immediately prior to destructive deletions (`snapshotBeforeDestructive`).
-  - Rate-limited to at most 1 snapshot per minute to protect disk space during cascading deletes.
-  - Automatically prunes old snapshots, retaining the newest 10 backups.
-
-### 4.5 Decoupled Scenarios & Access Control System
-Scenarios and characters are completely separate entities:
-- **Scenarios Table (`scenarios`)**:
-  - `id`: Unique identifier (e.g. `sc-c-luna`).
-  - `title`: Short descriptive title (e.g. *Silvermoon Academy Library*).
-  - `description`: Teaser or summary line.
-  - `content`: Full opening scene and prompt beats (supporting `{{char}}` and `{{user}}` macros).
-  - `access_mode`:
-    - `'all'`: Open to all characters.
-    - `'whitelist'`: Only characters in `character_ids` can use this scenario.
-    - `'blacklist'`: All characters except those in `character_ids` can use this scenario.
-  - `character_ids`: JSON array of character IDs.
-- **Chats Integration**:
-  - `chats.scenario_id`: References the scenario in which the conversation takes place.
-  - Scenario prompts populate the root node (`role: 'scenario'`) in the conversation tree.
-  - System prompt generation in `server.js` dynamically pulls the exact scenario text from the conversation tree's scenario node.
-- **Migration Engine (`migrate-scenarios.js`)**:
-  - Standalone, zero-dependency script (`npm run migrate` or `node migrate-scenarios.js`).
-  - Backs up the database into `backups/aichat-pre-scenario-migration-<timestamp>.db`.
-  - Extracts scenarios from all character records, configures them with `access_mode = 'all'`, and links existing chats.
-  - Completely idempotent and safe to run multiple times.
+### 4.4 Universal JSON Export & Import
+- Endpoints: `GET /api/export` and `POST /api/import`.
+- Exports characters, poses (with images), scenarios, and scenario variable configurations.
+- Compatible with single character cards and full backups.
+- Imports execute inside SQLite database transactions with automatic snapshot protection.
 
 ---
 
@@ -179,12 +147,9 @@ When contributing to this codebase, adhere to the following rules:
    - Every node must have a valid `parent` (except `root`).
    - `parent.children` must contain valid node IDs.
    - `parent.active` must stay within `0 <= active < parent.children.length`.
-   - Preserve pose stamp consistency by using `poseBefore` or `poseAtTip` on branch mutations.
 5. **Code Style**:
    - JavaScript: Modern ES6+ standard syntax.
    - Avoid build steps; all files must run directly in Node or evergreen browsers.
-   - Keep functions focused and maintain clear comments on non-obvious logic.
 6. **Verification Checklist**:
    - Check JavaScript syntax: `node -c server.js db.js app.js`.
    - Verify server startup and cleanly shut down without WAL lock issues.
-   - Test endpoints and frontend changes thoroughly before committing.

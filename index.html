@@ -26,7 +26,6 @@
         <button type="button" class="sidebar-tab active" id="tab-chars-btn">Characters</button>
         <button type="button" class="sidebar-tab" id="tab-scenarios-btn">Scenarios</button>
         <button type="button" class="sidebar-tab" id="tab-personas-btn">Personas</button>
-        <button type="button" class="sidebar-tab" id="tab-vars-btn">Variables</button>
       </div>
 
       <div id="panel-chars" class="sidebar-panel">
@@ -85,29 +84,6 @@
               New persona
             </span>
           </button>
-        </div>
-      </div>
-
-      <div id="panel-vars" class="sidebar-panel hidden">
-        <div class="sidebar-label" style="display:flex;justify-content:space-between;align-items:center">
-          <span>Variables directory</span>
-          <span id="vars-count-badge" class="badge">0</span>
-        </div>
-        <div style="padding:0 10px 8px">
-          <input type="text" id="vars-search" class="search-input" placeholder="Search variables or values…" autocomplete="off">
-        </div>
-        <div id="vars-list" class="vars-list"></div>
-        <div class="sidebar-foot">
-          <div class="sidebar-foot-row">
-            <button id="import-vars-btn" type="button" class="btn btn-ghost sm" title="Import variable values from JSON" style="flex:1">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Import
-            </button>
-            <button id="export-vars-btn" type="button" class="btn btn-ghost sm" title="Export variable values as JSON" style="flex:1">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Export
-            </button>
-          </div>
         </div>
       </div>
     </aside>
@@ -191,7 +167,9 @@
               <button type="button" id="steer-toggle-btn" class="comp-btn steer-btn" title="Steer reply (OOC) — Tell the AI what should happen next without speaking as your character">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
               </button>
-              <textarea id="msg-input" rows="1" placeholder="Say something..."></textarea>
+              <div class="msg-input-wrap">
+                <textarea id="msg-input" rows="1" placeholder="Say something..."></textarea>
+              </div>
               <button id="inject-btn" class="comp-btn hidden" aria-label="Send as directive" disabled></button>
               <button id="generate-btn" class="comp-btn hidden" aria-label="Generate reply now" disabled></button>
               <button id="send-btn" aria-label="Send message" title="Send message">

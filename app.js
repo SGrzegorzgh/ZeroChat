@@ -814,6 +814,8 @@ async function sendUser() {
   const text = ta.value.trim();
   if (!text) return;
   ta.value = '';
+  msgInputManualHeight = 0;
+  ta.style.height = '';
   autoGrow();
   const tmp = pushOptimistic(chat, 'user', text);
   typing = true;
@@ -849,6 +851,8 @@ async function sendInjection() {
   const text = ta.value.trim();
   if (!text) return;
   ta.value = '';
+  msgInputManualHeight = 0;
+  ta.style.height = '';
   autoGrow();
   const tmp = pushOptimistic(chat, 'injection', text);
   renderChat();
@@ -967,12 +971,117 @@ let msgInputManualHeight = 0;
 function autoGrow() {
   const ta = $('#msg-input');
   if (!ta) return;
+  if (!ta.value.trim()) {
+    msgInputManualHeight = 0;
+    ta.style.height = '';
+    ta.style.overflowY = 'hidden';
+    ta.style.resize = 'none';
+    return;
+  }
   if (msgInputManualHeight > 0) {
     ta.style.height = Math.max(msgInputManualHeight, ta.scrollHeight) + 'px';
+    ta.style.overflowY = 'auto';
+    ta.style.resize = 'vertical';
     return;
   }
   ta.style.height = 'auto';
-  ta.style.height = Math.max(46, Math.min(ta.scrollHeight, 360)) + 'px';
+  const maxLimit = window.innerWidth <= 768 ? 180 : 280;
+  if (ta.scrollHeight <= maxLimit) {
+    ta.style.height = Math.max(46, ta.scrollHeight) + 'px';
+    ta.style.overflowY = 'hidden';
+    ta.style.resize = 'none';
+  } else {
+    ta.style.height = maxLimit + 'px';
+    ta.style.overflowY = 'auto';
+    ta.style.resize = 'vertical';
+  }
+}
+
+function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } = {}) {
+  if (!ta) return () => {};
+
+  const resize = () => {
+    if (isComposer && !ta.value.trim()) {
+      msgInputManualHeight = 0;
+      ta.style.height = '';
+      ta.style.overflowY = 'hidden';
+      ta.style.resize = 'none';
+      return;
+    }
+    if (isComposer && msgInputManualHeight > 0) {
+      ta.style.height = Math.max(msgInputManualHeight, ta.scrollHeight) + 'px';
+      ta.style.overflowY = 'auto';
+      ta.style.resize = 'vertical';
+      return;
+    }
+    ta.style.height = 'auto';
+    const limit = typeof max === 'function' ? max() : max;
+    if (ta.scrollHeight <= limit) {
+      ta.style.height = Math.max(min, ta.scrollHeight) + 'px';
+      ta.style.overflowY = 'hidden';
+      ta.style.resize = 'none';
+    } else {
+      ta.style.height = limit + 'px';
+      ta.style.overflowY = 'auto';
+      ta.style.resize = 'vertical';
+    }
+  };
+
+  ta.addEventListener('input', resize);
+
+  // Add touch resize bar below textarea if not already present
+  if (!ta.dataset.hasResizeBar && ta.parentNode) {
+    ta.dataset.hasResizeBar = '1';
+    const bar = document.createElement('div');
+    bar.className = 'touch-resize-handle';
+    bar.title = 'Drag to adjust height';
+    bar.innerHTML = '<span></span>';
+
+    let startY = 0;
+    let startH = 0;
+
+    const onPointerMove = (e) => {
+      const clientY = e.clientY != null ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+      const dy = clientY - startY;
+      const newH = Math.max(min, startH + dy);
+      ta.style.height = newH + 'px';
+      ta.style.overflowY = 'auto';
+      ta.style.resize = 'vertical';
+      if (isComposer) msgInputManualHeight = newH;
+      if (e.cancelable) e.preventDefault();
+    };
+
+    const onPointerUp = () => {
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+      document.removeEventListener('touchmove', onPointerMove);
+      document.removeEventListener('touchend', onPointerUp);
+    };
+
+    const startDrag = (clientY) => {
+      startY = clientY;
+      startH = ta.offsetHeight;
+      document.addEventListener('pointermove', onPointerMove);
+      document.addEventListener('pointerup', onPointerUp);
+      document.addEventListener('touchmove', onPointerMove, { passive: false });
+      document.addEventListener('touchend', onPointerUp);
+    };
+
+    bar.addEventListener('pointerdown', (e) => {
+      startDrag(e.clientY);
+    });
+
+    bar.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches[0]) {
+        startDrag(e.touches[0].clientY);
+      }
+    });
+
+    ta.parentNode.insertBefore(bar, ta.nextSibling);
+  }
+
+  resize();
+  return resize;
 }
 
 function closeMenus() {
@@ -2476,27 +2585,23 @@ function accessBadgeLabel(s) {
 }
 
 function switchSidebarTab(tab) {
-  ui.sidebarTab = tab;
+  ui.sidebarTab = tab === 'vars' ? 'chars' : tab;
   saveUi();
   const isChars = tab === 'chars';
   const isScen = tab === 'scenarios';
   const isPers = tab === 'personas';
-  const isVars = tab === 'vars';
 
   $('#tab-chars-btn').classList.toggle('active', isChars);
   $('#tab-scenarios-btn').classList.toggle('active', isScen);
   $('#tab-personas-btn')?.classList.toggle('active', isPers);
-  $('#tab-vars-btn').classList.toggle('active', isVars);
 
   $('#panel-chars').classList.toggle('hidden', !isChars);
   $('#panel-scenarios').classList.toggle('hidden', !isScen);
   $('#panel-personas')?.classList.toggle('hidden', !isPers);
-  $('#panel-vars').classList.toggle('hidden', !isVars);
 
   if (isChars) renderSidebar();
   else if (isScen) renderSidebarScenarios();
   else if (isPers) renderSidebarPersonas();
-  else if (isVars) renderSidebarVars();
 }
 
 function renderSidebarPersonas() {
@@ -3215,11 +3320,9 @@ function renderAll() {
   renderSidebar();
   renderSidebarScenarios();
   renderSidebarPersonas();
-  renderSidebarVars();
   setHint();
   if (ui.sidebarTab === 'scenarios') switchSidebarTab('scenarios');
   else if (ui.sidebarTab === 'personas') switchSidebarTab('personas');
-  else if (ui.sidebarTab === 'vars') switchSidebarTab('vars');
   else switchSidebarTab('chars');
   if (ui.activeCharacterId && state.characters.find((c) => c.id === ui.activeCharacterId)) {
     openCharacter(ui.activeCharacterId);
@@ -3526,10 +3629,31 @@ function wireEvents() {
   $('#tab-chars-btn').addEventListener('click', () => switchSidebarTab('chars'));
   $('#tab-scenarios-btn').addEventListener('click', () => switchSidebarTab('scenarios'));
   $('#tab-personas-btn')?.addEventListener('click', () => switchSidebarTab('personas'));
-  $('#tab-vars-btn').addEventListener('click', () => switchSidebarTab('vars'));
   $('#new-char-btn').addEventListener('click', () => openCharModal(null));
   $('#new-scenario-btn').addEventListener('click', () => openScenarioModal(null));
   $('#new-persona-btn')?.addEventListener('click', () => openPersonaModal());
+
+  // Auto-resize and touch-drag handles for text inputs
+  const msgTa = $('#msg-input');
+  if (msgTa) {
+    makeTextareaAutoResize(msgTa, {
+      min: 46,
+      max: () => (window.innerWidth <= 768 ? 180 : 280),
+      isComposer: true,
+    });
+  }
+  const autoTextareas = [
+    { id: '#ce-desc', min: 80, max: 260 },
+    { id: '#ce-note', min: 54, max: 180 },
+    { id: '#se-content', min: 120, max: 340 },
+    { id: '#se-desc', min: 54, max: 180 },
+    { id: '#pf-desc', min: 70, max: 220 },
+    { id: '#pf-note', min: 54, max: 160 },
+  ];
+  for (const item of autoTextareas) {
+    const el = $(item.id);
+    if (el) makeTextareaAutoResize(el, item);
+  }
 
   $('#persona-sidebar-list')?.addEventListener('click', (e) => {
     const editBtn = e.target.closest('[data-edit-persona]');
@@ -3630,11 +3754,11 @@ function wireEvents() {
   $('#menu-btn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
   $('#scrim').addEventListener('click', closeSidebar);
 
-  // Variables Directory in Sidebar
-  $('#vars-search').addEventListener('input', (e) => {
+  // Variables Directory in Sidebar (if present)
+  $('#vars-search')?.addEventListener('input', (e) => {
     renderSidebarVars(e.target.value);
   });
-  $('#vars-list').addEventListener('click', async (e) => {
+  $('#vars-list')?.addEventListener('click', async (e) => {
     const copyBtn = e.target.closest('.var-copy-btn');
     if (copyBtn) {
       const tag = copyBtn.dataset.copy;
@@ -3956,7 +4080,12 @@ function wireEvents() {
         editingId = id;
         renderChat({ keepScroll: true });
         const ta = $('#edit-ta');
-        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+        if (ta) {
+          ta.style.height = Math.max(192, Math.min(ta.scrollHeight, 450)) + 'px';
+          makeTextareaAutoResize(ta, { min: 192, max: 450 });
+          ta.focus();
+          ta.setSelectionRange(ta.value.length, ta.value.length);
+        }
       } else if (act.dataset.act === 'ecancel') {
         editingId = null;
         renderChat({ keepScroll: true });
@@ -4043,12 +4172,6 @@ function wireEvents() {
     }
   });
   $('#msg-input').addEventListener('input', () => { autoGrow(); updateComposerButtons(); });
-  $('#msg-input').addEventListener('pointerup', () => {
-    const ta = $('#msg-input');
-    if (ta && ta.offsetHeight > 50) {
-      msgInputManualHeight = ta.offsetHeight;
-    }
-  });
 
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.menu-wrap')) closeMenus();
