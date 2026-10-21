@@ -945,6 +945,24 @@
     </div>
   </div>
 
+  <div class="modal" id="modal-confirm">
+    <div class="modal-card modal-confirm-card">
+      <div class="confirm-icon-wrap" id="confirm-icon-wrap">
+        <svg id="confirm-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <h3 class="confirm-title" id="confirm-title">Are you sure?</h3>
+      <p class="confirm-message" id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button type="button" class="btn btn-ghost" id="confirm-cancel-btn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="confirm-ok-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <div id="img-viewer" class="hidden">
     <img id="img-viewer-img" alt="Full size image">
   </div>

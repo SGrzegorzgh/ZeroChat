@@ -766,7 +766,13 @@ async function delChat(id) {
   const c = activeChar();
   const chat = c.chats.find((x) => x.id === id);
   if (!chat) return;
-  if (!confirm(`Delete "${chat.title}"? This cannot be undone.`)) return;
+  const ok = await customConfirm({
+    title: 'Delete conversation?',
+    message: `Are you sure you want to delete "${chat.title}"? This cannot be undone.`,
+    confirmText: 'Delete chat',
+    danger: true,
+  });
+  if (!ok) return;
   try { await api('/chats/' + id, { method: 'DELETE' }); }
   catch (e) { toast(e.message); return; }
   c.chats = c.chats.filter((x) => x.id !== id);
@@ -915,7 +921,13 @@ async function delMsg(id) {
   const c = activeChar();
   const chat = c && activeChat(c);
   if (!chat || !chat.tree.nodes[id]) return;
-  if (!confirm('Delete this message and everything after it on this branch?')) return;
+  const ok = await customConfirm({
+    title: 'Delete message branch?',
+    message: 'Delete this message and everything after it on this branch? This cannot be undone.',
+    confirmText: 'Delete branch',
+    danger: true,
+  });
+  if (!ok) return;
   const prev = chat.poseId;
   try {
     const r = await api(`/chats/${chat.id}/nodes/${id}`, { method: 'DELETE' });
@@ -1282,11 +1294,62 @@ function closeModal(id) {
   el.classList.remove('open');
 }
 
-function requestCloseModal(modalOrId) {
+let confirmResolver = null;
+
+function customConfirm({
+  title = 'Are you sure?',
+  message = '',
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  danger = false,
+} = {}) {
+  return new Promise((resolve) => {
+    if (confirmResolver) confirmResolver(false);
+    confirmResolver = resolve;
+
+    const titleEl = $('#confirm-title');
+    const msgEl = $('#confirm-message');
+    const okBtn = $('#confirm-ok-btn');
+    const cancelBtn = $('#confirm-cancel-btn');
+    const iconWrap = $('#confirm-icon-wrap');
+
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl) msgEl.textContent = message;
+    if (okBtn) {
+      okBtn.textContent = confirmText;
+      okBtn.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+    }
+    if (cancelBtn) cancelBtn.textContent = cancelText;
+    if (iconWrap) iconWrap.classList.toggle('danger', danger);
+
+    openModal('modal-confirm');
+    setTimeout(() => { if (okBtn) okBtn.focus(); }, 60);
+  });
+}
+
+function closeConfirm(result) {
+  closeModal('modal-confirm');
+  if (confirmResolver) {
+    const res = confirmResolver;
+    confirmResolver = null;
+    res(result);
+  }
+}
+
+async function requestCloseModal(modalOrId) {
   const m = typeof modalOrId === 'string' ? $('#' + modalOrId) : modalOrId;
   if (!m || !m.classList.contains('open')) return true;
+  if (m.id === 'modal-confirm') {
+    closeConfirm(false);
+    return true;
+  }
   if (isModalDirty(m.id)) {
-    const discard = confirm('You have unsaved changes. Are you sure you want to close without saving?');
+    const discard = await customConfirm({
+      title: 'Discard unsaved changes?',
+      message: 'You have unsaved changes that will be lost if you close this window.',
+      confirmText: 'Discard changes',
+      danger: true,
+    });
     if (!discard) return false;
   }
   closeModal(m.id);
@@ -2567,7 +2630,13 @@ async function presetFormSave() {
 async function presetDelete() {
   const p = state.presets.find((x) => x.id === prId);
   if (!p) return;
-  if (!confirm(`Delete preset "${p.name}"?`)) return;
+  const ok = await customConfirm({
+    title: 'Delete AI preset?',
+    message: `Delete preset "${p.name}"? This cannot be undone.`,
+    confirmText: 'Delete preset',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     const r = await api('/presets/' + prId, { method: 'DELETE' });
     state.presets = r.presets;
@@ -3791,7 +3860,13 @@ function wireEvents() {
     const delGlobal = e.target.closest('.var-del-global-btn');
     if (delGlobal) {
       const key = delGlobal.dataset.delVar;
-      if (!confirm(`Delete variable "{{${key}}}" from all characters?`)) return;
+      const ok = await customConfirm({
+        title: 'Delete variable?',
+        message: `Delete variable "{{${key}}}" from all characters? This cannot be undone.`,
+        confirmText: 'Delete variable',
+        danger: true,
+      });
+      if (!ok) return;
       const affected = state.characters.filter((c) => c.variables && c.variables[key]);
       for (const c of affected) {
         delete c.variables[key];
@@ -4198,6 +4273,9 @@ function wireEvents() {
     if (!e.target.closest('.se-char-selector')) closeSeCharDropdown();
   });
 
+  $('#confirm-ok-btn')?.addEventListener('click', () => closeConfirm(true));
+  $('#confirm-cancel-btn')?.addEventListener('click', () => closeConfirm(false));
+
   $$('.modal').forEach((m) => {
     m.addEventListener('click', (e) => { if (e.target === m) requestCloseModal(m); });
   });
@@ -4262,7 +4340,14 @@ function wireEvents() {
     const del = e.target.closest('[data-del]');
     if (del) {
       const p = state.personalities.find((x) => x.id === del.dataset.del);
-      if (!confirm(`Delete personality "${p.name}"?`)) return;
+      if (!p) return;
+      const ok = await customConfirm({
+        title: 'Delete persona?',
+        message: `Delete persona "${p.name}"? This cannot be undone.`,
+        confirmText: 'Delete persona',
+        danger: true,
+      });
+      if (!ok) return;
       try {
         const r = await api('/personalities/' + p.id, { method: 'DELETE' });
         state.personalities = r.personalities;
@@ -4458,11 +4543,17 @@ function wireEvents() {
   $('#ce-poses-enabled').addEventListener('change', updateCePosesToggleUI);
   $('#pose-add').addEventListener('click', poseAdd);
   $('#pose-save').addEventListener('click', poseFormSave);
-  $('#pose-cancel').addEventListener('click', () => {
+  $('#pose-cancel').addEventListener('click', async () => {
     const name = ($('#pose-name')?.value || '').trim();
     const desc = ($('#pose-desc')?.value || '').trim();
     if (name || desc) {
-      if (!confirm('Discard pose changes?')) return;
+      const ok = await customConfirm({
+        title: 'Discard pose changes?',
+        message: 'You have unsaved changes to this pose.',
+        confirmText: 'Discard',
+        danger: true,
+      });
+      if (!ok) return;
     }
     closePoseForm();
   });
