@@ -2,7 +2,7 @@
 
 > **Lightweight, zero-dependency, self-hosted web application for roleplaying with AI characters.**
 
-ZeroChat combines branching conversation trees, multi-persona management, decoupled scenario scenes, and an AI-driven dynamic visual pose/expression director—all running locally with zero external npm dependencies.
+ZeroChat combines branching conversation trees, multi-persona management, decoupled scenario scenes, an AI-driven dynamic visual pose/expression director, and a built-in AI build Agent—all running locally with zero external npm dependencies.
 
 ---
 
@@ -20,6 +20,8 @@ ZeroChat combines branching conversation trees, multi-persona management, decoup
   - **Personas in Sidebar**: Quickly switch identities or create new personas directly from the sidebar.
   - **Plain-Language Steer Mode (OOC)**: Easily direct the scene out-of-character with a single toggle and clear directive alerts.
   - **Touch-Friendly Auto-Expanding Textareas**: Input boxes automatically adjust to text length and provide smooth drag handles on mobile touchscreens.
+- **Built-In AI Build Agent**:
+  A side drawer assistant that sees your whole site — characters, scenarios, personas and the active AI preset — and can create and edit all of it directly with tools. It guides the complete workflow: character → scenario draft → scaffold + variables, always showing you a proposal and waiting for your approval at each step. Works with OpenAI-compatible providers and Anthropic.
 - **Universal JSON Export & Import**:
   Export or import complete backups, individual character cards (including artwork poses), scenarios, and custom variables in a clean, standard JSON format.
 - **Local-First & Data Durability**:

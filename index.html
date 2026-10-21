@@ -104,6 +104,12 @@
           <div class="w-badge">Sample build · UI preview</div>
           <h1>Who will you talk to tonight?</h1>
           <p id="w-sub">Pick a character below to start a conversation, or create your own. Replies are simulated until you add an API key in Settings.</p>
+          <div class="welcome-agent-row">
+            <button id="welcome-agent-btn" class="btn btn-ghost" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;margin-right:6px;vertical-align:-2px"><path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.7-1.9a2 2 0 0 0 1.3-1.3Z"/></svg>
+              Ask the Agent to build one
+            </button>
+          </div>
           <div id="welcome-grid"></div>
         </div>
       </section>
@@ -154,6 +160,10 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             </button>
 
+            <button id="agent-btn" class="icon-btn" aria-label="AI Agent" title="AI Agent — build characters &amp; scenarios with me">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.7-1.9a2 2 0 0 0 1.3-1.3Z"/></svg>
+            </button>
+
             <button id="settings-btn" class="icon-btn" aria-label="Settings" title="Settings &amp; AI Configuration">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </button>
@@ -192,7 +202,42 @@
     </main>
   </div>
 
-  <div id="scrim"></div>
+  <div id="agent-drawer" aria-label="AI Agent">
+  <div id="agent-head">
+    <button id="agent-close-btn" class="icon-btn" aria-label="Close Agent" title="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="agent-head-info">
+      <div class="agent-head-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="agent-spark"><path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.7-1.9a2 2 0 0 0 1.3-1.3Z"/></svg>
+        Agent
+      </div>
+      <div class="agent-head-sub" id="agent-model-label"></div>
+    </div>
+    <button id="agent-clear-btn" class="btn btn-ghost sm" type="button" title="Clear conversation">Clear</button>
+  </div>
+
+  <div id="agent-scroll">
+    <div id="agent-feed"></div>
+  </div>
+
+  <div id="agent-status-bar" class="hidden">
+    <span class="agent-status-dots"><i></i><i></i><i></i></span>
+    <span id="agent-status-text"></span>
+  </div>
+
+  <div id="agent-composer">
+    <div class="agent-composer-row">
+      <textarea id="agent-input" rows="1" placeholder="Describe what you want to build..."></textarea>
+      <button id="agent-send-btn" aria-label="Send to agent" title="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+      </button>
+    </div>
+    <div class="agent-hint" id="agent-hint">The Agent can create characters, scenarios, personas and variables for you.</div>
+  </div>
+</div>
+
+<div id="scrim"></div>
 
   <div class="modal" id="modal-settings">
     <div class="modal-card modal-lg">

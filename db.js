@@ -143,6 +143,21 @@ ensureColumn('scenarios', 'character_variables', "TEXT DEFAULT '{}'");
 ensureColumn('poses', 'thumb', 'TEXT');
 
 db.exec(`
+CREATE TABLE IF NOT EXISTS agent_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  role TEXT NOT NULL,
+  content TEXT DEFAULT '',
+  call_id TEXT,
+  tool_calls TEXT,
+  tool_name TEXT,
+  tool_args TEXT,
+  tool_result TEXT,
+  tool_error INTEGER DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+`);
+
+db.exec(`
 CREATE TABLE IF NOT EXISTS presets (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -540,6 +555,7 @@ const SETTINGS_DEFAULTS = {
   poseLikelihood: 0.6,
   poseRecheck: true,
   poseContextCount: 3,
+  agentImageModel: '',
 };
 
 const POSES_SEED_FLAG = 'poses.seeded.v1';
@@ -565,7 +581,7 @@ function getSettings() {
 }
 
 function updateSettings(patch) {
-  const allowed = ['provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId', 'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey', 'poseModel', 'poseLikelihood', 'poseRecheck', 'poseContextCount'];
+  const allowed = ['provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId', 'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey', 'poseModel', 'poseLikelihood', 'poseRecheck', 'poseContextCount', 'agentImageModel'];
   const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
   for (const k of allowed) {
     if (!(k in patch)) continue;
@@ -756,12 +772,13 @@ function getCharacters() {
   return db.prepare('SELECT * FROM characters ORDER BY created_at').all().map((r) => shapeCharacter(r, true));
 }
 
-function createCharacter({ id, name, description, note, scenario, emoji, avatar, image, posesEnabled, variables }) {
+function createCharacter({ id, name, description, note, scenario, emoji, avatar, image, posesEnabled, variables, responses }) {
   const charId = (id && typeof id === 'string') ? id : uid();
   const pe = posesEnabled ? 1 : 0;
   const vars = (variables && typeof variables === 'object') ? JSON.stringify(variables) : (typeof variables === 'string' ? variables : '{}');
+  const resps = JSON.stringify(Array.isArray(responses) ? responses.filter((r) => r && String(r).trim()).slice(0, 12) : []);
   db.prepare('INSERT INTO characters (id, name, description, note, scenario, emoji, avatar, image, poses_enabled, variables, responses, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(charId, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, pe, vars, '[]', Date.now());
+    .run(charId, String(name).slice(0, 120), String(description || ''), String(note || ''), String(scenario || ''), String(emoji || '🎭'), avatar || null, image || null, pe, vars, resps, Date.now());
   ensureDefaultPoses(charId);
   const allowed = getScenarios({ characterId: charId });
   createChatInternal(charId, allowed.length > 0 ? allowed[0].id : null);
@@ -779,6 +796,13 @@ function updateCharacter(id, fields) {
   if ('variables' in fields) {
     sets.push('variables = ?');
     vals.push(typeof fields.variables === 'string' ? fields.variables : JSON.stringify(fields.variables || {}));
+  }
+  if ('responses' in fields) {
+    let resps = fields.responses;
+    if (!Array.isArray(resps)) resps = safeParse(resps, []);
+    resps = resps.filter((r) => r && String(r).trim()).slice(0, 12).map((r) => String(r));
+    sets.push('responses = ?');
+    vals.push(JSON.stringify(resps));
   }
   if ('avatar' in fields) { sets.push('avatar = ?'); vals.push(fields.avatar || null); }
   if ('image' in fields) { sets.push('image = ?'); vals.push(fields.image || null); }
@@ -1659,6 +1683,57 @@ function importData(raw) {
   return { ok: true, imported: counts };
 }
 
+/* ---- Agent conversation log ---------------------------------------------- */
+/* The built-in AI Agent keeps one global conversation. Assistant rows may carry
+   native tool_calls JSON; each executed call stores its result in a separate
+   'tool' row linked by call_id so history can be replayed provider-side. */
+function shapeAgentMessage(row) {
+  return {
+    id: row.id,
+    role: row.role,
+    content: row.content || '',
+    callId: row.call_id || null,
+    toolCalls: row.tool_calls ? safeParse(row.tool_calls, null) : null,
+    toolName: row.tool_name || null,
+    toolArgs: row.tool_args ? safeParse(row.tool_args, null) : null,
+    toolResult: row.tool_result ? safeParse(row.tool_result, null) : null,
+    toolError: !!row.tool_error,
+    createdAt: row.created_at,
+  };
+}
+
+function getAgentMessages() {
+  return db.prepare('SELECT * FROM agent_messages ORDER BY id').all().map(shapeAgentMessage);
+}
+
+function addAgentMessage(m) {
+  const info = db.prepare(`INSERT INTO agent_messages (role, content, call_id, tool_calls, tool_name, tool_args, tool_result, tool_error, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?)`)
+    .run(
+      m.role,
+      m.content || '',
+      m.callId || null,
+      m.toolCalls ? JSON.stringify(m.toolCalls) : null,
+      m.toolName || null,
+      m.toolArgs ? JSON.stringify(m.toolArgs) : null,
+      typeof m.toolResult === 'string' ? m.toolResult : (m.toolResult ? JSON.stringify(m.toolResult) : null),
+      m.toolError ? 1 : 0,
+      Date.now(),
+    );
+  const row = db.prepare('SELECT * FROM agent_messages WHERE id = ?').get(info.lastInsertRowid);
+  return shapeAgentMessage(row);
+}
+
+function clearAgentMessages() {
+  snapshotBeforeDestructive();
+  db.prepare('DELETE FROM agent_messages').run();
+  return { ok: true };
+}
+
+function agentMessageCount() {
+  return db.prepare('SELECT COUNT(*) AS n FROM agent_messages').get().n;
+}
+
 module.exports = {
   bootstrap: () => ({ characters: getCharacters(), personalities: getPersonalities(), settings: getSettings(), presets: getPresets(), scenarios: getScenarios() }),
   getCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter,
@@ -1670,4 +1745,5 @@ module.exports = {
   getPoses, getPose, createPose, updatePose, deletePose, setChatPose, ensureDefaultPoses, getDefaultPose, setDefaultPose,
   getSettings, updateSettings,
   exportData, importData,
+  getAgentMessages, addAgentMessage, clearAgentMessages, agentMessageCount,
 };

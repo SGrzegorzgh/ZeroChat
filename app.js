@@ -3840,7 +3840,7 @@ function wireEvents() {
     }
   });
   $('#menu-btn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
-  $('#scrim').addEventListener('click', closeSidebar);
+  $('#scrim').addEventListener('click', () => { closeSidebar(); closeAgentDrawer(); });
 
   // Variables Directory in Sidebar (if present)
   $('#vars-search')?.addEventListener('input', (e) => {
@@ -4291,6 +4291,10 @@ function wireEvents() {
         requestCloseModal(top);
         return;
       }
+      if (document.body.classList.contains('agent-open')) {
+        closeAgentDrawer();
+        return;
+      }
       closeMenus(); closeSidebar(); closeViewer();
       if (editingId) { editingId = null; renderChat({ keepScroll: true }); }
     }
@@ -4699,6 +4703,382 @@ function wireEvents() {
   });
 }
 
+/* ---- AI Agent drawer ------------------------------------------------------ */
+
+const AGENT_TOOL_LABELS = {
+  site_overview: 'Read the site',
+  list_characters: 'Listing characters',
+  get_character: 'Reading character',
+  create_character: 'Created character',
+  update_character: 'Updated character',
+  set_character_variables: 'Set variables',
+  delete_character: 'Deleted character',
+  list_scenarios: 'Listing scenarios',
+  get_scenario: 'Reading scenario',
+  create_scenario: 'Created scenario',
+  update_scenario: 'Updated scenario',
+  set_scenario_character_variables: 'Attached variables to scenario',
+  delete_scenario: 'Deleted scenario',
+  list_personas: 'Listing personas',
+  create_persona: 'Created persona',
+  update_persona: 'Updated persona',
+  set_active_persona: 'Switched active persona',
+  generate_image: 'Generated image',
+};
+
+const AGENT_SUGGESTIONS = [
+  'Let\'s create a new character together — a full set with a scenario.',
+  'What characters and scenarios do I have?',
+  'Write a scenario draft for my active persona.',
+  'Add a variable to one of my characters.',
+];
+
+let agentOpen = false;
+let agentBusy = false;
+let agentStatus = '';
+let agentLoaded = false;
+let agentMessages = [];
+
+function agentEl(sel) { return document.querySelector(sel); }
+
+async function loadAgent() {
+  try {
+    const r = await api('/agent/messages');
+    agentMessages = r.messages || [];
+    agentLoaded = true;
+    renderAgent();
+  } catch { /* agent log is optional */ }
+}
+
+function openAgentDrawer() {
+  document.body.classList.add('agent-open');
+  agentOpen = true;
+  closeMenus(); closeSidebar();
+  agentEl('#agent-model-label').textContent = agentModelLabel();
+  if (!agentLoaded) loadAgent(); else renderAgent();
+  setTimeout(() => agentEl('#agent-input')?.focus(), 240);
+}
+
+function closeAgentDrawer() {
+  document.body.classList.remove('agent-open');
+  agentOpen = false;
+}
+
+function agentModelLabel() {
+  try {
+    const ai = effectiveAi();
+    const label = (PROVIDERS[ai.provider] ? PROVIDERS[ai.provider].label.split(' ')[0] : ai.provider);
+    return ai.model ? `via ${ai.model} · ${label}` : 'no AI connection configured';
+  } catch { return ''; }
+}
+
+function agentToolLabel(name) {
+  return AGENT_TOOL_LABELS[name] || name;
+}
+
+function agentToolSummary(name, args, result) {
+  args = args || {};
+  switch (name) {
+    case 'create_character':
+    case 'update_character':
+    case 'delete_character':
+    case 'get_character': return args.name || String(args.id || '');
+    case 'create_scenario':
+    case 'update_scenario':
+    case 'delete_scenario':
+    case 'get_scenario': return args.title || String(args.id || '');
+    case 'create_persona':
+    case 'update_persona':
+    case 'set_active_persona': return args.name || String(args.id || '');
+    case 'set_character_variables': return Object.keys(args.variables || {}).join(', ');
+    case 'set_scenario_character_variables': return Object.keys(args.variables || {}).join(', ');
+    case 'generate_image': return agentTrimLocal(args.prompt, 60);
+    default: return '';
+  }
+}
+
+function agentRoles(mi) {
+  // Returns 'user' | 'agent' | 'tool' | 'error' for one feed item.
+  if (mi.kind === 'error') return 'error';
+  if (mi.kind === 'tool') return 'tool';
+  if (mi.role === 'assistant') return 'agent';
+  return mi.role;
+}
+
+function agentToolCardHtml(mi) {
+  // Loaded rows use toolName/toolArgs/toolResult/toolError; live events use name/args/result/ok.
+  const name = mi.name || mi.toolName;
+  mi = { ...mi, name, args: (mi.args !== undefined ? mi.args : mi.toolArgs), result: (mi.result !== undefined ? mi.result : mi.toolResult), ok: (mi.ok !== undefined ? mi.ok : !mi.toolError) };
+  const label = agentToolLabel(name);
+  const sub = agentToolSummary(name, mi.args, mi.result) || (mi.ok === false && mi.error ? agentTrimLocal(mi.error, 70) : 'done');
+  const okCls = mi.ok === false ? 'err' : (mi.pending ? 'pending' : '');
+  const hasImg = !!(mi.result && mi.result.image);
+  const acts = mi.pending ? '' : agentToolActions(mi);
+  let html = `<div class="agent-tool ${okCls}" data-agent-tool="${mi.id || ''}">`;
+  html += `<div class="agent-tool-row">`;
+  html += `<span class="agent-tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>`;
+  html += `<div class="agent-tool-main"><div class="agent-tool-name">${esc(label)}</div><div class="agent-tool-sub">${esc(sub)}</div></div>`;
+  html += `<svg class="agent-tool-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
+  html += `</div>`;
+  if (!mi.pending) {
+    if (hasImg) {
+      html += `<div class="agent-tool-img"><img src="${esc(mi.result.image)}" alt="Generated image"></div>`;
+    }
+    html += `<div class="agent-tool-details">`;
+    if (mi.args) html += `<div class="dt-label">Arguments</div><pre>${esc(JSON.stringify(mi.args, null, 2))}</pre>`;
+    if (mi.result !== null && mi.result !== undefined) html += `<div class="dt-label">${mi.ok === false ? 'Error' : 'Result'}</div><pre>${esc(JSON.stringify(mi.result, null, 2))}</pre>`;
+    html += `</div>`;
+    if (acts) html += `<div class="agent-tool-acts">${acts}</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function agentTrimLocal(s, n) {
+  const t = String(s || '');
+  return t.length > n ? t.slice(0, n - 1) + '…' : t;
+}
+
+function agentToolActions(mi) {
+  // Build "Open" style actions once the newer site state is loaded.
+  let chain = [];
+  try {
+    if (['create_character', 'update_character'].includes(mi.name) && mi.result) {
+      const id = (mi.result.created && mi.result.created.id) || (mi.result.updated && mi.result.updated.id) || mi.result.character_id;
+      const c = id && state.characters.find((x) => x.id === id);
+      if (c) {
+        chain = [
+          `<button type="button" class="btn btn-ghost tiny" data-agent-open-chat="${esc(c.id)}">Open chat</button>`,
+          `<button type="button" class="btn btn-ghost tiny" data-agent-edit-char="${esc(c.id)}">Edit</button>`,
+        ];
+      }
+    } else if (['create_scenario', 'update_scenario'].includes(mi.name) && mi.result) {
+      const id = (mi.result.created && mi.result.created.id) || (mi.result.updated && mi.result.updated.id);
+      const s = id && state.scenarios.find((x) => x.id === id);
+      if (s) {
+        chain = [`<button type="button" class="btn btn-ghost tiny" data-agent-edit-scen="${esc(s.id)}">Edit scenario</button>`];
+      }
+    } else if (mi.name === 'generate_image' && mi.result && mi.result.image && mi.result.applied_to) {
+      const c = state.characters.find((x) => x.id === mi.result.applied_to);
+      if (c) chain = [`<button type="button" class="btn btn-ghost tiny" data-agent-edit-char="${esc(c.id)}">Edit character</button>`];
+    } else if (mi.name === 'create_persona' && mi.result && mi.result.created) {
+      const pi = mi.result.created.id;
+      const pp = state.personalities.find((x) => x.id === pi);
+      if (pp) chain = [`<button type="button" class="btn btn-ghost tiny" data-agent-activate-persona="${esc(pp.id)}">Set active</button>`];
+    }
+  } catch { /* state may be mid-refresh */ }
+  return chain.length ? chain.join('') : '';
+}
+
+function renderAgent() {
+  const feed = agentEl('#agent-feed');
+  if (!feed) return;
+  let html = '';
+  if (!agentMessages.length) {
+    const suggestion = AGENT_SUGGESTIONS.map((s) => `<button type="button" class="btn btn-ghost tiny" data-agent-suggest="${esc(s)}">${esc(s)}</button>`).join('');
+    html = `<div class="agent-msg agent empty"><div class="agent-empty">
+      <svg class="ae-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.7-1.9a2 2 0 0 0 1.3-1.3Z"/></svg>
+      <h4>Hi — I'm your build agent</h4>
+      <p>I can design characters, draft scenarios, split them into scaffolds + variables, and wire everything up — with your approval at each step. I can also answer anything about this site.</p>
+      <div class="ae-suggest">${suggestion}</div>
+    </div></div>`;
+  } else {
+    let openToolGroup = false;
+    for (const mi of agentMessages) {
+      const role = agentRoles(mi);
+      if (role !== 'tool' && openToolGroup) { html += '</div>'; openToolGroup = false; }
+      if (role === 'user') {
+        html += `<div class="agent-msg user"><div class="agent-bubble">${md(mi.content || '')}</div></div>`;
+      } else if (role === 'agent') {
+        if ((mi.content || '').trim()) {
+          html += `<div class="agent-msg agent"><div class="agent-bubble">${md(mi.content)}</div></div>`;
+        }
+      } else if (role === 'tool') {
+        if (!openToolGroup) { html += `<div class="agent-msg agent tool-group">`; openToolGroup = true; }
+        html += agentToolCardHtml(mi);
+      } else if (role === 'error') {
+        html += `<div class="agent-msg agent err"><div class="agent-bubble">${esc(mi.text || 'Something went wrong.')}</div></div>`;
+      }
+    }
+    if (openToolGroup) html += '</div>';
+  }
+  feed.innerHTML = html;
+  const sc = agentEl('#agent-scroll');
+  if (sc) sc.scrollTop = sc.scrollHeight;
+  const sendBtn = agentEl('#agent-send-btn');
+  if (sendBtn) sendBtn.disabled = agentBusy;
+}
+
+function setAgentStatus(status) {
+  agentStatus = status || '';
+  const bar = agentEl('#agent-status-bar');
+  const txt = agentEl('#agent-status-text');
+  if (agentBusy && agentStatus) {
+    bar.classList.remove('hidden');
+    if (agentStatus === 'thinking') txt.textContent = 'Thinking…';
+    else if (agentStatus.startsWith('running_tool:')) txt.textContent = 'Running ' + agentToolLabel(agentStatus.slice(13).toLowerCase()) + '…';
+    else txt.textContent = agentStatus;
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+
+async function refreshDataAfterAgent() {
+  try { await bootstrap(); } catch { return; }
+  renderSidebar();
+  renderSidebarScenarios();
+  renderSidebarPersonas();
+  renderHeader();
+  const c = activeChar();
+  if (c) renderChat({ keepScroll: true });
+  else showWelcome();
+}
+
+async function streamAgent(body, onEvent) {
+  const r = await fetch('/api/agent/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok || !(r.headers.get('content-type') || '').includes('text/event-stream')) {
+    const d = await r.json().catch(() => ({}));
+    throw new Error(d.error || 'Agent stream failed');
+  }
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) !== -1) {
+      const chunk = buf.slice(0, i);
+      buf = buf.slice(i + 2);
+      const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+      if (!line) continue;
+      let ev;
+      try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+      onEvent(ev);
+    }
+  }
+}
+
+async function agentSend() {
+  const ta = agentEl('#agent-input');
+  const text = (ta.value || '').trim();
+  if (!text || agentBusy) return;
+  ta.value = '';
+  ta.style.height = 'auto';
+  agentMessages.push({ role: 'user', content: text });
+  agentBusy = true;
+  setAgentStatus('thinking');
+  renderAgent();
+  try {
+    await streamAgent({ message: text }, (ev) => {
+      if (ev.type === 'status') {
+        agentStatus = 'thinking';
+      } else if (ev.type === 'tool_call') {
+        agentStatus = 'running_tool:' + ev.name;
+        agentMessages.push({ kind: 'tool', pending: true, id: ev.id, name: ev.name, args: ev.args });
+      } else if (ev.type === 'tool_result') {
+        agentStatus = 'thinking';
+        const t = agentMessages.find((m) => m.kind === 'tool' && m.pending && m.id === ev.id);
+        if (t) { t.pending = false; t.ok = ev.ok; t.error = ev.error; t.result = ev.result; }
+      } else if (ev.type === 'done') {
+        agentMessages.push({ role: 'assistant', content: ev.text || '' });
+        agentBusy = false;
+        agentStatus = '';
+      } else if (ev.type === 'error') {
+        agentMessages.push({ kind: 'error', text: ev.error || 'Agent failed' });
+        agentBusy = false;
+        agentStatus = '';
+      }
+      renderAgent();
+    });
+  } catch (e) {
+    agentMessages.push({ kind: 'error', text: e.message || 'Agent failed' });
+    agentBusy = false;
+    agentStatus = '';
+  }
+  setAgentStatus('');
+  renderAgent();
+  if (!agentBusy) {
+    await refreshDataAfterAgent();
+    renderAgent();
+  }
+}
+
+function wireAgent() {
+  $('#agent-btn')?.addEventListener('click', () => {
+    if (agentOpen) closeAgentDrawer(); else openAgentDrawer();
+  });
+  $('#welcome-agent-btn')?.addEventListener('click', () => { openAgentDrawer(); setTimeout(() => agentEl('#agent-input')?.focus(), 240); });
+  $('#agent-close-btn').addEventListener('click', closeAgentDrawer);
+  $('#agent-clear-btn').addEventListener('click', async () => {
+    if (!agentMessages.length) return;
+    const clearOk = await customConfirm({
+      title: 'Clear agent conversation?',
+      message: 'The whole Agent chat history will be deleted. Created characters and scenarios stay.',
+      confirmText: 'Clear chat',
+      danger: true,
+    });
+    if (!clearOk) return;
+    try { await api('/agent/clear', { method: 'POST' }); } catch (e) { /* ignore */ }
+    agentMessages = [];
+    renderAgent();
+  });
+
+  const ta = $('#agent-input');
+  ta.addEventListener('input', () => {
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 150) + 'px';
+  });
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      agentSend();
+    }
+  });
+  $('#agent-send-btn').addEventListener('click', agentSend);
+
+  // Feed interactions: toggle tool details, run actions
+  $('#agent-feed').addEventListener('click', (e) => {
+    const actBtn = e.target.closest('[data-agent-open-chat]');
+    if (actBtn) {
+      closeAgentDrawer();
+      openCharacter(actBtn.dataset.agentOpenChat);
+      return;
+    }
+    const editChar = e.target.closest('[data-agent-edit-char]');
+    if (editChar) {
+      const c = state.characters.find((x) => x.id === editChar.dataset.agentEditChar);
+      if (c) openCharModal(c);
+      return;
+    }
+    const editScen = e.target.closest('[data-agent-edit-scen]');
+    if (editScen) {
+      const s = state.scenarios.find((x) => x.id === editScen.dataset.agentEditScen);
+      if (s) openScenarioModal(s);
+      return;
+    }
+    const activateP = e.target.closest('[data-agent-activate-persona]');
+    if (activateP) {
+      setPersona(activateP.dataset.agentActivatePersona);
+      refreshDataAfterAgent().then(renderAgent);
+      return;
+    }
+    const sug = e.target.closest('[data-agent-suggest]');
+    if (sug) {
+      $('#agent-input').value = sug.dataset.agentSuggest;
+      agentEl('#agent-input').focus();
+      return;
+    }
+    const row = e.target.closest('.agent-tool-row');
+    if (row) row.closest('.agent-tool').classList.toggle('open');
+  });
+}
+
 (async function init() {
   wireEvents();
   try {
@@ -4711,4 +5091,6 @@ function wireEvents() {
     return;
   }
   renderAll();
+  wireAgent();
+  loadAgent();
 })();
