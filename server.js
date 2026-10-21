@@ -741,6 +741,14 @@ async function route(req, res, u) {
       return send(res, 404, { error: e.message });
     }
   }
+  if ((m = p.match(/^\/api\/personalities\/([\w-]+)\/export$/)) && req.method === 'GET') {
+    try {
+      const data = db.exportData({ type: 'personas', id: m[1] });
+      return send(res, 200, data);
+    } catch (e) {
+      return send(res, 404, { error: e.message });
+    }
+  }
   if (req.method === 'POST' && p === '/api/import') {
     try {
       const result = db.importData(body);

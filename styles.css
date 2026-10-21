@@ -1016,17 +1016,6 @@ body.sidebar-open #scrim {
   gap: 10px;
 }
 
-.msg-input-wrap {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.msg-input-wrap #msg-input {
-  flex: none;
-  width: 100%;
-}
-
 .steer-btn {
   width: 46px;
   height: 46px;
@@ -1040,6 +1029,11 @@ body.sidebar-open #scrim {
   cursor: pointer;
   transition: all 0.15s ease;
   flex: none;
+  box-sizing: border-box;
+}
+.steer-btn svg {
+  width: 19px;
+  height: 19px;
 }
 .steer-btn:hover:not(:disabled) {
   color: #e8eaed;
@@ -2022,9 +2016,23 @@ input[type="range"] {
     height: 38px;
     border-radius: 11px;
   }
+  .steer-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+  }
+  .steer-btn svg {
+    width: 18px;
+    height: 18px;
+  }
   #send-btn {
     width: 42px;
     height: 42px;
+    border-radius: 12px;
+  }
+  #send-btn svg {
+    width: 18px;
+    height: 18px;
   }
   #msg-input {
     min-height: 42px;

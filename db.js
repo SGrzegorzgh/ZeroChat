@@ -1300,6 +1300,13 @@ function exportData({ type = 'all', id = null } = {}) {
     return result;
   }
 
+  if ((type === 'personas' || type === 'personalities') && id) {
+    const p = getPersona(id);
+    if (!p) throw new Error(`Persona ${id} not found`);
+    result.persona = p;
+    return result;
+  }
+
   if (type === 'characters' || type === 'all') {
     const chars = db.prepare('SELECT * FROM characters ORDER BY created_at ASC').all();
     result.characters = chars.map((row) => {
@@ -1311,6 +1318,10 @@ function exportData({ type = 'all', id = null } = {}) {
 
   if (type === 'scenarios' || type === 'all') {
     result.scenarios = getScenarios();
+  }
+
+  if (type === 'personas' || type === 'personalities' || type === 'all') {
+    result.personas = getPersonalities();
   }
 
   if (type === 'variables' || type === 'all') {
@@ -1346,7 +1357,7 @@ function importData(raw) {
 
   snapshotBeforeDestructive();
 
-  const counts = { characters: 0, scenarios: 0, variables: 0, poses: 0 };
+  const counts = { characters: 0, scenarios: 0, personas: 0, variables: 0, poses: 0 };
 
   let data = raw;
   if (data.spec === 'chara_card_v2' && data.data) {
@@ -1531,7 +1542,46 @@ function importData(raw) {
       }
     }
 
-    // 3. Process standalone variables if provided
+    // 3. Process personas / personalities
+    let personasToImport = [];
+    if (Array.isArray(data.personas)) {
+      personasToImport = data.personas;
+    } else if (Array.isArray(data.personalities)) {
+      personasToImport = data.personalities;
+    } else if (data.persona && typeof data.persona === 'object') {
+      personasToImport = [data.persona];
+    } else if (data.personality && typeof data.personality === 'object') {
+      personasToImport = [data.personality];
+    }
+
+    for (const item of personasToImport) {
+      if (!item || typeof item !== 'object') continue;
+      const name = String(item.name || 'Unnamed Persona').trim().slice(0, 80);
+      if (!name) continue;
+      const desc = String(item.description || '');
+      const note = String(item.note || '');
+      const avatar = typeof item.avatar === 'string' ? item.avatar : null;
+      const image = typeof item.image === 'string' ? item.image : null;
+
+      let pid = (item.id && typeof item.id === 'string') ? item.id.trim() : null;
+      let existing = pid ? getPersona(pid) : null;
+      if (!existing) {
+        existing = db.prepare('SELECT id FROM personalities WHERE LOWER(name) = LOWER(?)').get(name);
+        if (existing && !pid) pid = existing.id;
+      }
+
+      if (existing) {
+        db.prepare('UPDATE personalities SET name = ?, description = ?, note = ?, avatar = COALESCE(?, avatar), image = COALESCE(?, image) WHERE id = ?')
+          .run(name, desc, note, avatar, image, pid || existing.id);
+      } else {
+        if (!pid) pid = uid();
+        db.prepare('INSERT INTO personalities (id, name, description, note, avatar, image) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(pid, name, desc, note, avatar, image);
+      }
+      counts.personas++;
+    }
+
+    // 4. Process standalone variables if provided
     const varsData = data.variables !== undefined ? data.variables : data.characterVariables;
     if (varsData && typeof varsData === 'object') {
       if (Array.isArray(varsData)) {

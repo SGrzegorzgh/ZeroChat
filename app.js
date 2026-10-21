@@ -1029,14 +1029,20 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
 
   ta.addEventListener('input', resize);
 
-  // Add touch resize bar below textarea if not already present
-  if (!ta.dataset.hasResizeBar && ta.parentNode) {
+  // For composer, use the dedicated #composer-touch-handle below the row
+  let bar = null;
+  if (isComposer) {
+    bar = document.getElementById('composer-touch-handle');
+  } else if (!ta.dataset.hasResizeBar && ta.parentNode) {
     ta.dataset.hasResizeBar = '1';
-    const bar = document.createElement('div');
+    bar = document.createElement('div');
     bar.className = 'touch-resize-handle';
     bar.title = 'Drag to adjust height';
     bar.innerHTML = '<span></span>';
+    ta.parentNode.insertBefore(bar, ta.nextSibling);
+  }
 
+  if (bar) {
     let startY = 0;
     let startH = 0;
 
@@ -1076,8 +1082,6 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
         startDrag(e.touches[0].clientY);
       }
     });
-
-    ta.parentNode.insertBefore(bar, ta.nextSibling);
   }
 
   resize();
@@ -1341,6 +1345,8 @@ function updatePersonaForm() {
   $('#pf-label').textContent = peMode === 'edit' ? 'Edit personality' : 'Add personality';
   $('#pf-save').textContent = peMode === 'edit' ? 'Save changes' : 'Add personality';
   $('#pf-cancel').classList.toggle('hidden', peMode !== 'edit');
+  const exp = $('#pf-export');
+  if (exp) exp.classList.toggle('hidden', peMode !== 'edit');
 }
 
 async function personaFormSave() {
@@ -3610,6 +3616,7 @@ async function handleImportFile(file) {
     if (imp.characters) parts.push(`${imp.characters} character${imp.characters === 1 ? '' : 's'}`);
     if (imp.poses) parts.push(`${imp.poses} pose${imp.poses === 1 ? '' : 's'}`);
     if (imp.scenarios) parts.push(`${imp.scenarios} scenario${imp.scenarios === 1 ? '' : 's'}`);
+    if (imp.personas) parts.push(`${imp.personas} persona${imp.personas === 1 ? '' : 's'}`);
     if (imp.variables) parts.push(`${imp.variables} variable value${imp.variables === 1 ? '' : 's'}`);
     const summary = parts.length > 0 ? parts.join(', ') : 'no items found';
     toast(`Imported: ${summary}`);
@@ -3700,6 +3707,7 @@ function wireEvents() {
 
   $('#import-chars-btn')?.addEventListener('click', triggerImport);
   $('#import-scenarios-btn')?.addEventListener('click', triggerImport);
+  $('#import-personas-btn')?.addEventListener('click', triggerImport);
   $('#import-vars-btn')?.addEventListener('click', triggerImport);
   $('#set-import-btn')?.addEventListener('click', triggerImport);
 
@@ -3708,6 +3716,9 @@ function wireEvents() {
   });
   $('#export-scenarios-btn')?.addEventListener('click', () => {
     triggerExport('scenarios', null, 'aichat-scenarios.json');
+  });
+  $('#export-personas-btn')?.addEventListener('click', () => {
+    triggerExport('personas', null, 'aichat-personas.json');
   });
   $('#export-vars-btn')?.addEventListener('click', () => {
     triggerExport('variables', null, 'aichat-variables.json');
@@ -3729,6 +3740,14 @@ function wireEvents() {
       const s = state.scenarios.find((x) => x.id === seId);
       const name = s ? s.title.toLowerCase().replace(/[^a-z0-9_-]+/g, '-') : seId;
       triggerExport('scenarios', seId, `scenario-${name}.json`);
+    }
+  });
+
+  $('#pf-export')?.addEventListener('click', () => {
+    if (peId) {
+      const p = state.personalities.find((x) => x.id === peId);
+      const name = p ? p.name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-') : peId;
+      triggerExport('personas', peId, `persona-${name}.json`);
     }
   });
   $('#char-list').addEventListener('click', (e) => {

@@ -78,12 +78,22 @@
         <div class="sidebar-label">Your Personas</div>
         <div id="persona-sidebar-list" class="sidebar-persona-list"></div>
         <div class="sidebar-foot">
-          <button id="new-persona-btn" class="btn btn-ghost" style="width:100%" type="button">
+          <button id="new-persona-btn" class="btn btn-ghost" style="width:100%;margin-bottom:6px" type="button">
             <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px"><path d="M12 5v14M5 12h14"/></svg>
               New persona
             </span>
           </button>
+          <div class="sidebar-foot-row">
+            <button id="import-personas-btn" type="button" class="btn btn-ghost sm" title="Import personas from JSON" style="flex:1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Import
+            </button>
+            <button id="export-personas-btn" type="button" class="btn btn-ghost sm" title="Export all personas as JSON" style="flex:1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Export
+            </button>
+          </div>
         </div>
       </div>
     </aside>
@@ -164,18 +174,17 @@
               <button type="button" id="cd-generate-btn" class="btn btn-primary sm">Generate reply now ➔</button>
             </div>
             <div class="composer-row">
-              <button type="button" id="steer-toggle-btn" class="comp-btn steer-btn" title="Steer reply (OOC) — Tell the AI what should happen next without speaking as your character">
+              <button type="button" id="steer-toggle-btn" class="steer-btn" title="Steer reply (OOC) — Tell the AI what should happen next without speaking as your character">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
               </button>
-              <div class="msg-input-wrap">
-                <textarea id="msg-input" rows="1" placeholder="Say something..."></textarea>
-              </div>
+              <textarea id="msg-input" rows="1" placeholder="Say something..."></textarea>
               <button id="inject-btn" class="comp-btn hidden" aria-label="Send as directive" disabled></button>
               <button id="generate-btn" class="comp-btn hidden" aria-label="Generate reply now" disabled></button>
               <button id="send-btn" aria-label="Send message" title="Send message">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 22-8z"/></svg>
               </button>
             </div>
+            <div class="touch-resize-handle" id="composer-touch-handle" title="Drag to adjust input height"><span></span></div>
             <div class="composer-hint" id="composer-hint"></div>
           </div>
         </div>
@@ -434,6 +443,7 @@
       </div>
       <div class="m-foot">
         <button id="pf-cancel" class="btn btn-ghost hidden">Cancel edit</button>
+        <button id="pf-export" type="button" class="btn btn-ghost sm hidden" title="Export this persona as JSON">Export</button>
         <span class="spacer"></span>
         <button id="pf-save" class="btn btn-primary">Add personality</button>
       </div>
