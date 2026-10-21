@@ -556,6 +556,11 @@ const SETTINGS_DEFAULTS = {
   poseRecheck: true,
   poseContextCount: 3,
   agentImageModel: '',
+  agentOverride: false,
+  agentProvider: 'openrouter',
+  agentBaseUrl: '',
+  agentApiKey: '',
+  agentModel: '',
 };
 
 const POSES_SEED_FLAG = 'poses.seeded.v1';
@@ -581,7 +586,7 @@ function getSettings() {
 }
 
 function updateSettings(patch) {
-  const allowed = ['provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId', 'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey', 'poseModel', 'poseLikelihood', 'poseRecheck', 'poseContextCount', 'agentImageModel'];
+  const allowed = ['provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId', 'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey', 'poseModel', 'poseLikelihood', 'poseRecheck', 'poseContextCount', 'agentImageModel', 'agentOverride', 'agentProvider', 'agentBaseUrl', 'agentApiKey', 'agentModel'];
   const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
   for (const k of allowed) {
     if (!(k in patch)) continue;
@@ -595,6 +600,9 @@ function updateSettings(patch) {
     if (k === 'poseAgent' || k === 'poseRecheck') v = !!v;
     if (k === 'poseProvider') v = PROVIDER_IDS.includes(String(v)) ? String(v) : 'openrouter';
     if (k === 'poseBaseUrl' || k === 'poseApiKey' || k === 'poseModel') v = String(v ?? '');
+    if (k === 'agentOverride') v = !!v;
+    if (k === 'agentProvider') v = PROVIDER_IDS.includes(String(v)) ? String(v) : 'openrouter';
+    if (k === 'agentBaseUrl' || k === 'agentApiKey' || k === 'agentModel') v = String(v ?? '');
     if (k === 'activePresetId' || k === 'activePersonalityId') v = v || null;
     up.run(k, JSON.stringify(v));
   }

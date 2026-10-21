@@ -204,9 +204,6 @@
 
   <div id="agent-drawer" aria-label="AI Agent">
   <div id="agent-head">
-    <button id="agent-close-btn" class="icon-btn" aria-label="Close Agent" title="Close">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-    </button>
     <div class="agent-head-info">
       <div class="agent-head-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="agent-spark"><path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.7-1.9a2 2 0 0 0 1.3-1.3Z"/></svg>
@@ -215,6 +212,9 @@
       <div class="agent-head-sub" id="agent-model-label"></div>
     </div>
     <button id="agent-clear-btn" class="btn btn-ghost sm" type="button" title="Clear conversation">Clear</button>
+    <button id="agent-close-btn" class="icon-btn" aria-label="Close Agent" title="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
   </div>
 
   <div id="agent-scroll">
@@ -229,7 +229,7 @@
   <div id="agent-composer">
     <div class="agent-composer-row">
       <textarea id="agent-input" rows="1" placeholder="Describe what you want to build..."></textarea>
-      <button id="agent-send-btn" aria-label="Send to agent" title="Send">
+      <button id="agent-send-btn" class="agent-send" aria-label="Send to agent" title="Send">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
       </button>
     </div>
@@ -324,6 +324,42 @@
               </div>
             </div>
           </details>
+
+          <div class="pf-sep"></div>
+
+          <div class="settings-section-title">AI Agent</div>
+          <div class="field">
+            <div class="set-toggle-card">
+              <div class="set-toggle-info">
+                <label for="set-agent-override" class="set-toggle-title">Give the Agent its own model &amp; provider</label>
+                <p class="set-toggle-desc">By default the site Agent runs on your active AI preset. Enable this to connect a separate provider just for it — a fast, cheap model works well.</p>
+              </div>
+              <input type="checkbox" id="set-agent-override">
+            </div>
+          </div>
+          <div id="agent-conn-fields" hidden>
+            <div class="field">
+              <label>Agent provider</label>
+              <div id="agent-prov-grid" class="prov-grid"></div>
+            </div>
+            <div class="field">
+              <label>Agent API key</label>
+              <div class="key-row">
+                <input type="password" id="agent-key" placeholder="sk-..." autocomplete="off">
+                <button id="agent-key-toggle" class="mini" type="button">Show</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>Agent model</label>
+              <input type="text" id="agent-model" placeholder="e.g. openai/gpt-4o-mini, gemini-2.0-flash, haiku..." spellcheck="false">
+              <p class="m-note" style="margin-top:6px">The Agent mostly picks tools and drafts text — a small model handles that fine.</p>
+            </div>
+            <div class="field">
+              <label>Agent base URL (optional)</label>
+              <input type="url" id="agent-url" placeholder="Leave empty for provider defaults">
+              <p class="m-note">Set for custom or local OpenAI-compatible endpoints (e.g. LM Studio, Ollama).</p>
+            </div>
+          </div>
         </div>
 
         <!-- Tab 2: Visuals & Poses -->

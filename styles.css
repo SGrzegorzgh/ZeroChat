@@ -4351,6 +4351,9 @@ body.agent-open #scrim {
 }
 .agent-empty .ae-suggest button {
   text-align: left;
+  white-space: normal;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .agent-msg {
@@ -4558,7 +4561,7 @@ body.agent-open #scrim {
   50% { opacity: 1; transform: scale(1.1); }
 }
 
-/* Composer */
+/* Composer — mirrors the main composer: separate input box + square light send */
 #agent-composer {
   flex: none;
   padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
@@ -4567,56 +4570,59 @@ body.agent-open #scrim {
 .agent-composer-row {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  padding: 6px 6px 6px 12px;
-  border-radius: 14px;
-  background: var(--panel);
-  border: 1px solid var(--border2);
-}
-.agent-composer-row:focus-within {
-  border-color: #4a4f57;
+  gap: 10px;
 }
 #agent-input {
   flex: 1;
   min-width: 0;
-  border: none;
-  background: transparent;
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 12px 15px;
   color: var(--text);
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-family: inherit;
   line-height: 1.5;
   resize: none;
   outline: none;
-  max-height: 150px;
-  padding: 4px 0;
+  min-height: 46px;
+  max-height: 170px;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+#agent-input:focus {
+  border-color: #4a4f57;
+  box-shadow: var(--ring);
 }
 #agent-input::placeholder {
   color: var(--muted2);
 }
 .agent-send {
   flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  border: none;
+  background: #d9dbde;
+  color: #14161a;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #d9dbde;
-  color: #14161a;
-  border: none;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, transform 0.1s, opacity 0.15s;
 }
 .agent-send:hover {
   background: #e6e8ea;
+}
+.agent-send:active {
+  transform: scale(0.94);
 }
 .agent-send:disabled {
   opacity: 0.4;
   cursor: default;
 }
 .agent-send svg {
-  width: 16px;
-  height: 16px;
+  width: 19px;
+  height: 19px;
 }
 .agent-hint {
   text-align: center;
@@ -4635,6 +4641,19 @@ body.agent-open #scrim {
 @media (max-width: 940px) {
   #agent-drawer {
     width: min(100vw, 430px);
+  }
+  #agent-input {
+    min-height: 42px;
+    border-radius: 12px;
+  }
+  .agent-send {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+  }
+  .agent-send svg {
+    width: 18px;
+    height: 18px;
   }
 }
 @media (max-width: 560px) {

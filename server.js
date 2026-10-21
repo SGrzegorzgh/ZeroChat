@@ -109,6 +109,25 @@ function resolveAiConfig(settings) {
   };
 }
 
+/* The Agent can run on a separate connection: if the "own model & provider"
+   override is on, its own settings win with sensible fallbacks to the main one. */
+function resolveAgentConfig(settings) {
+  const base = resolveAiConfig(settings);
+  if (!settings.agentOverride) return base;
+  const pickAgent = (key, fb) => {
+    const av = settings['agent' + key.charAt(0).toUpperCase() + key.slice(1)];
+    if (av !== undefined && av !== null && av !== '' && av !== 'default') return av;
+    return fb;
+  };
+  return {
+    ...base,
+    provider: pickAgent('provider', base.provider),
+    baseUrl: pickAgent('baseUrl', base.baseUrl),
+    apiKey: pickAgent('apiKey', base.apiKey),
+    model: pickAgent('model', base.model),
+  };
+}
+
 function poseCfg(settings) {
   const provider = settings.poseProvider || 'openrouter';
   const defaultModel = provider === 'openrouter' ? 'typesafe/jev-1.13' : 'jev';
@@ -1174,6 +1193,7 @@ function mapAgentHistoryAnthropic(rows) {
 
 function buildAgentSystem(settings) {
   const cfg = resolveAiConfig(settings);
+  const aCfg = resolveAgentConfig(settings);
   const persona = settings.activePersonalityId ? db.getPersona(settings.activePersonalityId) : null;
   const preset = settings.activePresetId ? db.getPreset(settings.activePresetId) : null;
   const chars = db.getCharacters();
@@ -1185,6 +1205,9 @@ function buildAgentSystem(settings) {
     ctx.push(`- Active AI preset: "${preset.name}" (provider ${cfg.provider}, model ${cfg.model || 'unset'}). Its roleplay focus: "${agentTrim(preset.systemPrompt || '(default)', 500)}"`);
   } else {
     ctx.push('- Active AI preset: none selected');
+  }
+  if (settings.agentOverride) {
+    ctx.push(`- You (the Agent) run on a separate connection: ${aCfg.provider} / ${aCfg.model || 'unset'}`);
   }
   ctx.push(`- Characters (${chars.length}):`);
   for (const c of chars) {
@@ -1205,11 +1228,13 @@ function buildAgentSystem(settings) {
 
 async function runAgentChat(body, emit, ctrl) {
   const settings = db.getSettings();
-  const cfg = resolveAiConfig(settings);
+  const cfg = resolveAgentConfig(settings);
   const text = String((body && body.message) || '').trim();
   if (!text) throw new Error('Message is empty');
   if (!cfg.apiKey && cfg.provider !== 'ollama') {
-    throw new Error('No AI connection configured for the Agent. Open Settings → AI Connection (or pick an AI preset in the header) and connect a provider first.');
+    throw new Error(settings.agentOverride
+      ? 'No AI connection configured for the Agent. Open Settings → AI Connection → Agent connection and connect a provider first.'
+      : 'No AI connection configured for the Agent. Open Settings → AI Connection (or pick an AI preset in the header) and connect a provider first.');
   }
 
   db.addAgentMessage({ role: 'user', content: text });

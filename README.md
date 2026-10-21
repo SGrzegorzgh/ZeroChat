@@ -21,7 +21,7 @@ ZeroChat combines branching conversation trees, multi-persona management, decoup
   - **Plain-Language Steer Mode (OOC)**: Easily direct the scene out-of-character with a single toggle and clear directive alerts.
   - **Touch-Friendly Auto-Expanding Textareas**: Input boxes automatically adjust to text length and provide smooth drag handles on mobile touchscreens.
 - **Built-In AI Build Agent**:
-  A side drawer assistant that sees your whole site — characters, scenarios, personas and the active AI preset — and can create and edit all of it directly with tools. It guides the complete workflow: character → scenario draft → scaffold + variables, always showing you a proposal and waiting for your approval at each step. Works with OpenAI-compatible providers and Anthropic.
+  A side drawer assistant that sees your whole site — characters, scenarios, personas and the active AI preset — and can create and edit all of it directly with tools. It guides the complete workflow: character → scenario draft → scaffold + variables, always showing you a proposal and waiting for your approval at each step. Works with OpenAI-compatible providers and Anthropic. By default it runs on your active preset, but you can give it its own dedicated model & provider in Settings → AI Connection (handy for a fast, cheap model).
 - **Universal JSON Export & Import**:
   Export or import complete backups, individual character cards (including artwork poses), scenarios, and custom variables in a clean, standard JSON format.
 - **Local-First & Data Durability**:

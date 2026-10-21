@@ -2225,6 +2225,14 @@ function openSettings() {
   $('#pose-key').value = s.poseApiKey || '';
   $('#pose-model').value = s.poseModel || 'typesafe/jev-1.13';
   updatePoseProviderHints();
+  $('#set-agent-override').checked = !!s.agentOverride;
+  $('#agent-prov-grid').innerHTML = provGridHtml(s.agentProvider || 'openrouter');
+  $('#agent-url').value = s.agentBaseUrl || '';
+  $('#agent-key').value = s.agentApiKey || '';
+  $('#agent-key').type = 'password';
+  $('#agent-key-toggle').textContent = 'Show';
+  $('#agent-model').value = s.agentModel || '';
+  updateAgentConnUI();
   const posePct = Math.round((Number.isFinite(+s.poseLikelihood) ? +s.poseLikelihood : 0.6) * 100);
   $('#set-poselike').value = posePct;
   $('#poselike-val').textContent = posePct + '%';
@@ -2236,6 +2244,19 @@ function openSettings() {
   updateSettingsStatusCard();
   openModal('modal-settings');
   takeModalSnapshot('modal-settings');
+}
+
+function updateAgentConnUI() {
+  const el = $('#agent-conn-fields');
+  if (el) el.hidden = !$('#set-agent-override').checked;
+}
+
+function setAgentProviderUI(pv) {
+  $$('#agent-prov-grid .prov').forEach((b) => b.classList.toggle('selected', b.dataset.pv === pv));
+  const meta = PROVIDERS[pv];
+  if (!meta) return;
+  $('#agent-url').value = meta.baseUrl || '';
+  $('#agent-model').value = (meta.models && meta.models[0]) || '';
 }
 
 function updatePoseProviderHints() {
@@ -2488,6 +2509,7 @@ function renderPresetList() {
 
 async function settingsSave() {
   const selected = $('#prov-grid .prov.selected');
+  const agentProv = $('#agent-prov-grid .prov.selected');
   const body = {
     provider: selected ? selected.dataset.pv : 'custom',
     baseUrl: $('#set-url').value.trim(),
@@ -2505,12 +2527,19 @@ async function settingsSave() {
     poseModel: $('#pose-model').value.trim(),
     poseLikelihood: (+$('#set-poselike').value || 0) / 100,
     poseContextCount: Math.round(+$('#set-posecontext').value || 0),
+    agentOverride: $('#set-agent-override').checked,
+    agentProvider: agentProv ? agentProv.dataset.pv : 'custom',
+    agentBaseUrl: $('#agent-url').value.trim(),
+    agentApiKey: $('#agent-key').value.trim(),
+    agentModel: $('#agent-model').value.trim(),
   };
   try {
     state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(body) });
     closeModal('modal-settings');
     setHint();
     applyChatBg();
+    const agentSub = agentEl('#agent-model-label');
+    if (agentSub) agentSub.textContent = agentModelLabel();
     toast('Settings saved');
     if (body.poseAgent) poseAgentHint();
   } catch (e) { toast(e.message); }
@@ -4314,6 +4343,17 @@ function wireEvents() {
     const card = e.target.closest('.prov');
     if (card) setProviderUI(card.dataset.pv);
   });
+  $('#agent-prov-grid').addEventListener('click', (e) => {
+    const card = e.target.closest('.prov');
+    if (card) setAgentProviderUI(card.dataset.pv);
+  });
+  $('#set-agent-override').addEventListener('change', updateAgentConnUI);
+  $('#agent-key-toggle').addEventListener('click', () => {
+    const input = $('#agent-key');
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    $('#agent-key-toggle').textContent = showing ? 'Show' : 'Hide';
+  });
   $('#key-toggle').addEventListener('click', () => {
     const input = $('#set-key');
     const showing = input.type === 'text';
@@ -4766,7 +4806,17 @@ function closeAgentDrawer() {
 
 function agentModelLabel() {
   try {
-    const ai = effectiveAi();
+    const s = state.settings;
+    let ai;
+    if (s.agentOverride) {
+      ai = {
+        provider: s.agentProvider || 'openrouter',
+        model: s.agentModel || '',
+        apiKey: s.agentApiKey || '',
+      };
+    } else {
+      ai = effectiveAi();
+    }
     const label = (PROVIDERS[ai.provider] ? PROVIDERS[ai.provider].label.split(' ')[0] : ai.provider);
     return ai.model ? `via ${ai.model} · ${label}` : 'no AI connection configured';
   } catch { return ''; }
