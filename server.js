@@ -733,7 +733,7 @@ function startEventStream(res, fn) {
 
 const AGENT_MAX_ITERATIONS = 8;
 const AGENT_HISTORY_LIMIT = 80;
-const AGENT_TOOL_RESULT_CAP = 6000;
+const AGENT_TOOL_RESULT_CAP = 8000;
 
 const AGENT_IDENTITY = `You are the Agent — ZeroChat's built-in AI assistant. You live inside a self-hosted roleplay app and the user talks to you in a side drawer.
 
@@ -913,6 +913,49 @@ function sanitizeForModel(value) {
   return value;
 }
 
+/* Tool results are persisted as JSON the model re-reads on the next turn.
+   A detail record can exceed the per-result cap, and slicing the JSON string
+   mid-way used to corrupt it: safeParse then produced null and the model saw
+   an empty tool result ("detail lookups came back empty"). Degrade instead:
+   1) try the sanitized payload as-is;
+   2) shave every string down and retry;
+   3) fall back to a preview stub with an explanatory note — always valid JSON. */
+const AGENT_TOOL_STR_CAP = 600;
+function shaveStrings(value, cap) {
+  if (typeof value === 'string') return agentTrim(value, cap);
+  if (Array.isArray(value)) return value.map((v) => shaveStrings(v, cap));
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = shaveStrings(v, cap);
+    return out;
+  }
+  return value;
+}
+function capToolResultJson(result, cap) {
+  let s = JSON.stringify(result);
+  if (s.length <= cap) return s;
+  s = JSON.stringify(shaveStrings(result, AGENT_TOOL_STR_CAP));
+  if (s.length <= cap) return s;
+  const preview = JSON.stringify(shaveStrings(result, 1400));
+  const clamped = Math.max(300, cap - 200);
+  return JSON.stringify({
+    truncated: true,
+    preview: preview.length > clamped ? preview.slice(0, clamped) + '…' : preview,
+    note: 'Full result was too large and is truncated. Long text fields were shortened — use the list tools or ask me to re-query specific parts.',
+  });
+}
+
+/* Rebuild the text the model sees for a stored tool row: parsed object when
+   the JSON survived, the raw stored string when parsing failed (historical/
+   truncated rows) — never an empty string without cause. */
+function agentToolResultText(r) {
+  if (typeof r.toolResult === 'string') return r.toolResult;
+  if (r.toolResult !== null && r.toolResult !== undefined) {
+    try { return JSON.stringify(r.toolResult); } catch { /* fall through */ }
+  }
+  return r.toolResultRaw || '';
+}
+
 async function runAgentTool(name, args, settings, cfg) {
   switch (name) {
     case 'site_overview':
@@ -928,6 +971,9 @@ async function runAgentTool(name, args, settings, cfg) {
       return {
         ...c,
         avatar: undefined, image: undefined,
+        /* open_chats below already summarizes them — raw chats would drag
+           full conversation trees into the payload for no benefit. */
+        chats: undefined,
         responses: (c.responses || []).slice(0, 8),
         poses: (c.poses || []).map((pp) => ({ id: pp.id, name: pp.name, description: agentTrim(pp.description, 100), is_default: !!pp.isDefault })),
         open_chats: (c.chats || []).map((ch) => ({ id: ch.id, title: ch.title, scenario: ch.scenarioTitle })),
@@ -1157,7 +1203,7 @@ function mapAgentHistoryOpenAI(rows) {
         out.push({ role: 'assistant', content: r.content });
       }
     } else if (r.role === 'tool') {
-      out.push({ role: 'tool', tool_call_id: r.callId || ('call_' + r.id), content: typeof r.toolResult === 'string' ? r.toolResult : JSON.stringify(r.toolResult ?? '') });
+      out.push({ role: 'tool', tool_call_id: r.callId || ('call_' + r.id), content: agentToolResultText(r) });
     }
   }
   return out;
@@ -1182,7 +1228,7 @@ function mapAgentHistoryAnthropic(rows) {
       }
       if (content.length) msgs.push({ role: 'assistant', content });
     } else if (r.role === 'tool') {
-      pending.push({ type: 'tool_result', tool_use_id: r.callId || ('call_' + r.id), content: typeof r.toolResult === 'string' ? r.toolResult : JSON.stringify(r.toolResult ?? ''), is_error: !!r.toolError });
+      pending.push({ type: 'tool_result', tool_use_id: r.callId || ('call_' + r.id), content: agentToolResultText(r), is_error: !!r.toolError });
     }
   }
   flush();
@@ -1277,7 +1323,7 @@ async function runAgentChat(body, emit, ctrl) {
           callId: call.id,
           toolName: call.name,
           toolArgs: call.args || {},
-          toolResult: JSON.stringify(sanitizeForModel(result)).slice(0, AGENT_TOOL_RESULT_CAP),
+          toolResult: capToolResultJson(sanitizeForModel(result), AGENT_TOOL_RESULT_CAP),
           toolError: !ok,
         });
         rows.push(trow);

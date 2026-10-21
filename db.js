@@ -1705,6 +1705,10 @@ function shapeAgentMessage(row) {
     toolName: row.tool_name || null,
     toolArgs: row.tool_args ? safeParse(row.tool_args, null) : null,
     toolResult: row.tool_result ? safeParse(row.tool_result, null) : null,
+    /* Raw stored JSON — lets history replay fall back to the (possibly
+       truncated) string rather than silently sending the model "" when a
+       legacy row fails to parse. */
+    toolResultRaw: typeof row.tool_result === 'string' ? row.tool_result : '',
     toolError: !!row.tool_error,
     createdAt: row.created_at,
   };
