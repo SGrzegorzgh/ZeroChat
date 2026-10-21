@@ -25,6 +25,7 @@
       <div class="sidebar-tabs">
         <button type="button" class="sidebar-tab active" id="tab-chars-btn">Characters</button>
         <button type="button" class="sidebar-tab" id="tab-scenarios-btn">Scenarios</button>
+        <button type="button" class="sidebar-tab" id="tab-personas-btn">Personas</button>
         <button type="button" class="sidebar-tab" id="tab-vars-btn">Variables</button>
       </div>
 
@@ -74,6 +75,19 @@
         </div>
       </div>
 
+      <div id="panel-personas" class="sidebar-panel hidden">
+        <div class="sidebar-label">Your Personas</div>
+        <div id="persona-sidebar-list" class="sidebar-persona-list"></div>
+        <div class="sidebar-foot">
+          <button id="new-persona-btn" class="btn btn-ghost" style="width:100%" type="button">
+            <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:16px;height:16px"><path d="M12 5v14M5 12h14"/></svg>
+              New persona
+            </span>
+          </button>
+        </div>
+      </div>
+
       <div id="panel-vars" class="sidebar-panel hidden">
         <div class="sidebar-label" style="display:flex;justify-content:space-between;align-items:center">
           <span>Variables directory</span>
@@ -114,44 +128,50 @@
           <div class="chat-bg-layer" id="chat-bg-b"></div>
         </div>
         <header id="chat-header">
-          <button id="menu-btn" class="icon-btn" aria-label="Open menu">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-          </button>
-          <div id="char-info"></div>
-
-          <div class="menu-wrap" id="persona-wrap">
-            <button id="persona-btn" class="pill">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <span class="as">as</span>
-              <span class="label" id="persona-label"></span>
-              <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+          <div class="header-left">
+            <button id="menu-btn" class="icon-btn" aria-label="Open menu">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
             </button>
-            <div class="menu" id="persona-menu"></div>
+            <div id="char-info" class="char-info-interactive"></div>
           </div>
 
-          <div class="menu-wrap" id="chats-wrap">
-            <button id="chats-btn" class="icon-btn" aria-label="Chat history">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/><path d="M12 7v5l4 2"/></svg>
-            </button>
-            <div class="menu" id="chats-menu"></div>
+          <div class="header-center">
+            <div class="menu-wrap" id="chats-wrap">
+              <button id="chats-btn" class="pill header-chats-pill" aria-label="Chat history" title="View conversations with this character">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span class="label" id="chats-pill-label">Chats</span>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div class="menu" id="chats-menu"></div>
+            </div>
           </div>
 
-          <div class="menu-wrap" id="preset-wrap">
-            <button id="preset-btn" class="pill" title="AI preset">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
-              <span class="label" id="preset-label">AI</span>
-              <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+          <div class="header-right">
+            <div class="menu-wrap" id="persona-wrap">
+              <button id="persona-btn" class="pill header-persona-pill" title="Playing as (switch personality)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span class="as">You:</span>
+                <span class="label" id="persona-label"></span>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div class="menu" id="persona-menu"></div>
+            </div>
+
+            <div class="menu-wrap hidden" id="preset-wrap">
+              <button id="preset-btn" class="pill" title="AI preset">
+                <span class="label" id="preset-label">AI</span>
+              </button>
+              <div class="menu" id="preset-menu"></div>
+            </div>
+
+            <button id="edit-char-btn" class="icon-btn" aria-label="Edit character" title="Edit character">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             </button>
-            <div class="menu" id="preset-menu"></div>
+
+            <button id="settings-btn" class="icon-btn" aria-label="Settings" title="Settings &amp; AI Configuration">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
           </div>
-
-          <button id="edit-char-btn" class="icon-btn" aria-label="Edit character" title="Edit character">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-          </button>
-
-          <button id="settings-btn" class="icon-btn" aria-label="Settings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          </button>
         </header>
 
         <div id="chat-scroll">
@@ -160,15 +180,21 @@
 
         <div id="composer">
           <div class="composer-inner">
+            <div id="composer-directive-bar" class="composer-directive-bar hidden">
+              <div class="cd-info">
+                <span class="cd-icon">⚡</span>
+                <span class="cd-text" id="cd-text">Directive waiting · The AI will incorporate your instruction into the next reply</span>
+              </div>
+              <button type="button" id="cd-generate-btn" class="btn btn-primary sm">Generate reply now ➔</button>
+            </div>
             <div class="composer-row">
-              <textarea id="msg-input" rows="1" placeholder="Say something..."></textarea>
-              <button id="inject-btn" class="comp-btn" aria-label="Send as directive" title="Send as an OOC directive — steers the next reply, the AI won't answer yet" disabled>
+              <button type="button" id="steer-toggle-btn" class="comp-btn steer-btn" title="Steer reply (OOC) — Tell the AI what should happen next without speaking as your character">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
               </button>
-              <button id="generate-btn" class="comp-btn" aria-label="Generate reply now" title="Generate a reply now (responds to queued directives)" disabled>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
-              </button>
-              <button id="send-btn" aria-label="Send message">
+              <textarea id="msg-input" rows="1" placeholder="Say something..."></textarea>
+              <button id="inject-btn" class="comp-btn hidden" aria-label="Send as directive" disabled></button>
+              <button id="generate-btn" class="comp-btn hidden" aria-label="Generate reply now" disabled></button>
+              <button id="send-btn" aria-label="Send message" title="Send message">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 22-8z"/></svg>
               </button>
             </div>
@@ -182,148 +208,210 @@
   <div id="scrim"></div>
 
   <div class="modal" id="modal-settings">
-    <div class="modal-card">
+    <div class="modal-card modal-lg">
       <div class="m-head">
-        <h3>Settings</h3>
+        <div class="m-head-title">
+          <h3>Settings</h3>
+          <p class="m-sub">AI configuration, dynamic visuals, and data backups</p>
+        </div>
         <button class="icon-btn tiny" data-close aria-label="Close">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
+
+      <!-- Settings Tab Bar -->
+      <div class="settings-tabs-nav">
+        <button type="button" class="settings-tab-btn active" data-stab="ai">
+          <span class="tab-icon">⚡</span>
+          <span class="tab-label">AI Connection</span>
+        </button>
+        <button type="button" class="settings-tab-btn" data-stab="visuals">
+          <span class="tab-icon">🎨</span>
+          <span class="tab-label">Visuals &amp; Poses</span>
+        </button>
+        <button type="button" class="settings-tab-btn" data-stab="presets">
+          <span class="tab-icon">🎭</span>
+          <span class="tab-label">AI Presets</span>
+        </button>
+        <button type="button" class="settings-tab-btn" data-stab="data">
+          <span class="tab-icon">💾</span>
+          <span class="tab-label">Backup &amp; Data</span>
+        </button>
+      </div>
+
       <div class="m-body">
-        <div class="field">
-          <label>AI provider</label>
-          <div id="prov-grid" class="prov-grid"></div>
-        </div>
-        <div class="field">
-          <label>Base URL</label>
-          <input type="url" id="set-url" placeholder="https://...">
-        </div>
-        <div class="field">
-          <label>API key</label>
-          <div class="key-row">
-            <input type="password" id="set-key" placeholder="sk-..." autocomplete="off">
-            <button id="key-toggle" class="mini" type="button">Show</button>
+        <!-- Tab 1: AI Connection -->
+        <div class="settings-tab-pane" id="set-pane-ai">
+          <div id="set-status-card" class="set-status-card"></div>
+
+          <div class="field">
+            <label>AI provider</label>
+            <div id="prov-grid" class="prov-grid"></div>
           </div>
-        </div>
-        <div class="field">
-          <label>Model</label>
-          <div class="combo" data-combo>
+
+          <div class="field">
+            <label>API key</label>
             <div class="key-row">
-              <input type="text" id="set-model" class="combo-value" placeholder="model-id" autocomplete="off" spellcheck="false">
-              <button id="set-fetch-models" class="mini" type="button">Fetch list</button>
+              <input type="password" id="set-key" placeholder="sk-..." autocomplete="off">
+              <button id="key-toggle" class="mini" type="button">Show</button>
             </div>
-            <div class="combo-pop" hidden>
-              <input type="text" class="combo-search" placeholder="Search models…" autocomplete="off" spellcheck="false">
-              <div class="combo-list" role="listbox"></div>
-              <div class="combo-foot">
-                <span class="combo-foot-label">Custom id</span>
-                <code class="combo-custom">—</code>
+            <p class="m-note" style="margin-top:6px">Stored locally on your machine in SQLite. Never sent to any third party except your chosen provider.</p>
+          </div>
+
+          <div class="field">
+            <label>Model</label>
+            <div class="combo" data-combo>
+              <div class="key-row">
+                <input type="text" id="set-model" class="combo-value" placeholder="e.g. mistralai/mistral-large, gpt-4o..." autocomplete="off" spellcheck="false">
+                <button id="set-fetch-models" class="mini" type="button">Fetch list</button>
+              </div>
+              <div class="combo-pop" hidden>
+                <input type="text" class="combo-search" placeholder="Search models…" autocomplete="off" spellcheck="false">
+                <div class="combo-list" role="listbox"></div>
+                <div class="combo-foot">
+                  <span class="combo-foot-label">Custom id</span>
+                  <code class="combo-custom">—</code>
+                </div>
               </div>
             </div>
+            <p class="m-note" style="margin-top:6px">Select from recommended models or type any custom model ID your provider supports.</p>
           </div>
-          <p class="m-note" style="margin-top:8px">Pick from the dropdown, or type any model id yourself and it is used as-is.</p>
-        </div>
-        <div class="field">
-          <label>Temperature <span class="val" id="temp-val"></span></label>
-          <input type="range" id="set-temp" min="0" max="2" step="0.1">
+
+          <details class="set-advanced-box" id="set-adv-ai">
+            <summary class="set-advanced-summary">Advanced AI Options (Base URL, Temperature)</summary>
+            <div class="set-advanced-content">
+              <div class="field">
+                <label>Base URL (optional)</label>
+                <input type="url" id="set-url" placeholder="https://...">
+                <p class="m-note">Leave empty for provider defaults. Set for custom/local OpenAI endpoints (e.g. LM Studio, Ollama).</p>
+              </div>
+              <div class="field">
+                <label>Creativity / Temperature <span class="val" id="temp-val"></span></label>
+                <input type="range" id="set-temp" min="0" max="2" step="0.1">
+                <p class="m-note">Lower = strict &amp; predictable; Higher = creative &amp; varied. 0.7 - 1.0 is balanced for roleplay.</p>
+              </div>
+            </div>
+          </details>
         </div>
 
-        <div class="pf-sep"></div>
+        <!-- Tab 2: Visuals & Poses -->
+        <div class="settings-tab-pane hidden" id="set-pane-visuals">
+          <div class="settings-section-title">Character Poses &amp; Expression Director</div>
+          <div class="field">
+            <div class="set-toggle-card">
+              <div class="set-toggle-info">
+                <label for="pose-agent" class="set-toggle-title">Dynamic character expressions</label>
+                <p class="set-toggle-desc">Automatically chooses the best-matching character artwork and pose in real time based on dialogue and events.</p>
+              </div>
+              <input type="checkbox" id="pose-agent">
+            </div>
+          </div>
 
-        <div class="field">
-          <label>AI presets <span class="val" id="preset-count" style="font-weight:600"></span></label>
+          <div class="field">
+            <div class="set-toggle-card">
+              <div class="set-toggle-info">
+                <label for="pose-recheck" class="set-toggle-title">Re-evaluate expression with every message</label>
+                <p class="set-toggle-desc">When disabled, selects a pose once at the start of the chat and keeps it steady.</p>
+              </div>
+              <input type="checkbox" id="pose-recheck">
+            </div>
+          </div>
+
+          <details class="set-advanced-box">
+            <summary class="set-advanced-summary">Advanced Expression Engine Settings (Jev)</summary>
+            <div class="set-advanced-content">
+              <div class="field">
+                <label>Pose decision provider</label>
+                <select id="pose-provider">
+                  <option value="openrouter">OpenRouter (Jev)</option>
+                  <option value="custom">Custom (OpenAI-compatible)</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Decision Base URL</label>
+                <input type="text" id="pose-url" placeholder="Leave blank for OpenRouter (or e.g. http://localhost:8000/v1)">
+              </div>
+              <div class="field">
+                <label>Decision API key</label>
+                <input type="text" id="pose-key" placeholder="Leave blank to use the main model&rsquo;s key">
+              </div>
+              <div class="field">
+                <label>Decision model (Jev)</label>
+                <input type="text" id="pose-model" placeholder="typesafe/jev-1.13 (OpenRouter) or jev (Custom)">
+              </div>
+              <div class="field">
+                <label>Pose swap sensitivity <span class="val" id="poselike-val"></span></label>
+                <input type="range" id="set-poselike" min="0" max="100" step="1">
+                <p class="m-note">Minimum confidence required before swapping pose. Higher = fewer, steadier changes.</p>
+              </div>
+              <div class="field">
+                <label>Context memory window <span class="val" id="posecontext-val"></span></label>
+                <input type="range" id="set-posecontext" min="0" max="10" step="1">
+                <p class="m-note">Number of recent messages sent to the director to understand the current scene mood.</p>
+              </div>
+            </div>
+          </details>
+
+          <div class="pf-sep"></div>
+
+          <div class="settings-section-title">Reading &amp; Background Display</div>
+          <div class="field">
+            <label>Chat background opacity <span class="val" id="bgop-val"></span></label>
+            <input type="range" id="set-bgop" min="0" max="100" step="1">
+            <p class="m-note">Shows the character's full artwork softly behind the message feed. 0% hides it.</p>
+          </div>
+          <div class="field">
+            <label>Chat background blur <span class="val" id="bgblur-val"></span></label>
+            <input type="range" id="set-bgblur" min="0" max="24" step="1">
+          </div>
+          <div class="field">
+            <label>Action text brightness <span class="val" id="actdim-val"></span></label>
+            <input type="range" id="set-actdim" min="30" max="100" step="1">
+            <p class="m-note">Brightness of descriptive *actions* vs spoken lines.</p>
+          </div>
+        </div>
+
+        <!-- Tab 3: Presets -->
+        <div class="settings-tab-pane hidden" id="set-pane-presets">
+          <div class="settings-section-title">AI Roleplay Presets <span class="val" id="preset-count" style="font-weight:600;margin-left:8px"></span></div>
+          <p class="m-note" style="margin-bottom:12px">A preset lets you bundle a specific model, temperature, and custom system prompt. Switching presets updates the AI immediately.</p>
           <div id="preset-list"></div>
-          <button id="preset-new" class="btn btn-ghost sm" type="button" style="margin-top:9px">+ New preset</button>
-          <p class="m-note" style="margin-top:9px">A preset overrides the provider settings above for every chat — its own provider, model, key, temperature, reasoning effort and system prompt. Empty fields fall back to the settings here. Selecting a preset switches the AI immediately.</p>
+          <button id="preset-new" class="btn btn-ghost sm" type="button" style="margin-top:12px">+ Create new preset</button>
         </div>
 
-        <div class="pf-sep"></div>
-
-        <div class="field">
-          <label>Chat background opacity <span class="val" id="bgop-val"></span></label>
-          <input type="range" id="set-bgop" min="0" max="100" step="1">
-          <p class="m-note" style="margin-top:8px">Shows the character's full image behind the messages (falls back to the square avatar). 0% hides it.</p>
-        </div>
-        <div class="field">
-          <label>Chat background blur <span class="val" id="bgblur-val"></span></label>
-          <input type="range" id="set-bgblur" min="0" max="24" step="1">
-        </div>
-        <div class="field">
-          <label>Action text opacity <span class="val" id="actdim-val"></span></label>
-          <input type="range" id="set-actdim" min="30" max="100" step="1">
-          <p class="m-note" style="margin-top:8px">Brightness of the *action* text in messages. Spoken "quotes" always stay at full brightness.</p>
-        </div>
-
-        <div class="pf-sep"></div>
-
-        <div class="field">
-          <label>Pose director (Jev)</label>
-          <p class="m-note">A fast decision model (Jev) chooses the best-matching character pose based on the reply text, without slow or costly tool calling.</p>
-        </div>
-        <div class="field">
-          <div class="set-check">
-            <label for="pose-agent">Enable pose director</label>
-            <input type="checkbox" id="pose-agent">
+        <!-- Tab 4: Backup & Data -->
+        <div class="settings-tab-pane hidden" id="set-pane-data">
+          <div class="settings-section-title">Backup &amp; Data Management</div>
+          <p class="m-note" style="margin-bottom:16px">All your roleplay data is saved in a local SQLite database (`aichat.db`). Automatic snapshots are taken before deletions to protect your stories.</p>
+          <div class="set-data-cards">
+            <div class="set-data-card">
+              <div class="set-data-card-info">
+                <strong>Export Complete Backup</strong>
+                <p>Download a single JSON file containing all characters, expressions, scenarios, and variable values.</p>
+              </div>
+              <button type="button" id="set-export-all-btn" class="btn btn-ghost sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Export JSON
+              </button>
+            </div>
+            <div class="set-data-card">
+              <div class="set-data-card-info">
+                <strong>Import Backup or Cards</strong>
+                <p>Restore or import characters, scenarios, and variables from any compatible JSON file.</p>
+              </div>
+              <button type="button" id="set-import-btn" class="btn btn-ghost sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Import JSON
+              </button>
+            </div>
           </div>
         </div>
-        <div class="field">
-          <div class="set-check">
-            <label for="pose-recheck">Re-check every message</label>
-            <input type="checkbox" id="pose-recheck">
-          </div>
-          <p class="m-note" style="margin-top:8px">Off = pick a pose once at the start of the chat and keep it.</p>
-        </div>
-        <div class="field">
-          <label>Provider</label>
-          <select id="pose-provider">
-            <option value="openrouter">OpenRouter (Jev)</option>
-            <option value="custom">Custom (OpenAI-compatible)</option>
-            <option value="openai">OpenAI</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Base URL</label>
-          <input type="text" id="pose-url" placeholder="Leave blank for OpenRouter (or e.g. http://localhost:8000/v1)">
-        </div>
-        <div class="field">
-          <label>API key</label>
-          <input type="text" id="pose-key" placeholder="Leave blank to use the main model&rsquo;s key">
-        </div>
-        <div class="field">
-          <label>Decision model (Jev)</label>
-          <input type="text" id="pose-model" placeholder="typesafe/jev-1.13 (OpenRouter) or jev (Custom)">
-        </div>
-        <div class="field">
-          <label>Change threshold <span class="val" id="poselike-val"></span></label>
-          <input type="range" id="set-poselike" min="0" max="100" step="1">
-          <p class="m-note" style="margin-top:8px">Minimum confidence before the image is allowed to change. Higher = fewer, steadier swaps.</p>
-        </div>
-        <div class="field">
-          <label>Context messages for Jev <span class="val" id="posecontext-val"></span></label>
-          <input type="range" id="set-posecontext" min="0" max="10" step="1">
-          <p class="m-note" style="margin-top:8px">Number of recent messages sent to Jev alongside the latest reply to understand dialogue and scene changes.</p>
-        </div>
-
-        <div class="field">
-          <label>Data management</label>
-          <p class="m-note" style="margin-bottom:10px">Export or import characters, scenarios, and variable values in standard JSON format.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button type="button" id="set-export-all-btn" class="btn btn-ghost sm">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Export all (JSON)
-            </button>
-            <button type="button" id="set-import-btn" class="btn btn-ghost sm">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Import (JSON)
-            </button>
-          </div>
-        </div>
-
-        <p class="m-note">Requests are proxied through the local server, which stores this configuration (including the API key) in its SQLite database. Single-user setup — keys are not encrypted.</p>
       </div>
+
       <div class="m-foot">
         <span class="spacer"></span>
-        <button id="settings-save" class="btn btn-primary">Save</button>
+        <button id="settings-save" class="btn btn-primary">Save changes</button>
       </div>
     </div>
   </div>

@@ -322,6 +322,11 @@ function renderHeader() {
   $('#persona-label').textContent = p ? p.name : '—';
   const pr = activePreset();
   $('#preset-label').textContent = pr ? pr.name : 'AI';
+
+  const pillLabel = $('#chats-pill-label');
+  if (pillLabel) {
+    pillLabel.textContent = chat && chat.title ? chat.title : 'Chats';
+  }
 }
 
 let currentBgSrc = null;
@@ -637,6 +642,26 @@ function msgHtml(c, p, n, chat) {
   return `<div class="msg char" data-id="${n.id}">${avatarHtml(c, 'sm', true, msgPose && msgPose.thumb)}${main}</div>`;
 }
 
+let isSteerMode = false;
+
+function setSteerMode(active) {
+  isSteerMode = active;
+  const btn = $('#steer-toggle-btn');
+  const input = $('#msg-input');
+  const sendBtn = $('#send-btn');
+  if (btn) btn.classList.toggle('active', isSteerMode);
+  if (input) {
+    input.classList.toggle('steer-mode', isSteerMode);
+    input.placeholder = isSteerMode
+      ? 'Direct the scene (OOC): What should happen next? (e.g. A storm suddenly rolls in...)'
+      : 'Say something...';
+  }
+  if (sendBtn) {
+    sendBtn.classList.toggle('steer-send', isSteerMode);
+    sendBtn.title = isSteerMode ? 'Send directive (OOC)' : 'Send message';
+  }
+}
+
 function updateComposerButtons() {
   const c = activeChar();
   const chat = c && activeChat(c);
@@ -644,8 +669,19 @@ function updateComposerButtons() {
   const tip = chat ? tipNode(chat) : null;
   const canReply = !!tip && (tip.role === 'user' || tip.role === 'injection') && !tip.pending;
   $('#send-btn').disabled = typing || !chat || !text;
-  $('#inject-btn').disabled = typing || !chat || !text;
-  $('#generate-btn').disabled = typing || !chat || !canReply;
+  if ($('#inject-btn')) $('#inject-btn').disabled = typing || !chat || !text;
+  if ($('#generate-btn')) $('#generate-btn').disabled = typing || !chat || !canReply;
+  if ($('#steer-toggle-btn')) $('#steer-toggle-btn').disabled = typing || !chat;
+
+  const bar = $('#composer-directive-bar');
+  if (bar) {
+    const hasPendingDirective = !!tip && tip.role === 'injection' && !tip.pending;
+    bar.classList.toggle('hidden', !hasPendingDirective);
+    if (hasPendingDirective) {
+      const cdGen = $('#cd-generate-btn');
+      if (cdGen) cdGen.disabled = typing;
+    }
+  }
 }
 
 function liveStreamUpdate() {
@@ -1003,6 +1039,7 @@ async function setPersona(pid) {
   } catch (e) { toast(e.message); return; }
   renderHeader();
   if ($('#modal-persona').classList.contains('open')) renderPersonaList();
+  renderSidebarPersonas();
 }
 
 function renderPersonaList() {
@@ -1966,6 +2003,25 @@ function provGridHtml(sel) {
     </button>`).join('');
 }
 
+function switchSettingsTab(tabName) {
+  $$('.settings-tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.stab === tabName));
+  $$('.settings-tab-pane').forEach((p) => p.classList.toggle('hidden', p.id !== `set-pane-${tabName}`));
+}
+
+function updateSettingsStatusCard() {
+  const card = $('#set-status-card');
+  if (!card) return;
+  const ai = effectiveAi();
+  const live = ai.apiKey || ai.provider === 'ollama';
+  const providerLabel = PROVIDERS[ai.provider]?.label || 'Custom';
+  const modelName = ai.model || 'Default';
+  card.innerHTML = live
+    ? `<div class="status-badge live">🟢 Ready to Chat</div>
+       <div class="status-desc">Connected to <strong>${esc(providerLabel)}</strong> (${esc(modelName)}). Real AI replies are enabled.</div>`
+    : `<div class="status-badge sim">⚪ Simulated Mode</div>
+       <div class="status-desc">No API key entered. AI replies are simulated samples until you add a key below.</div>`;
+}
+
 function openSettings() {
   const s = state.settings;
   $('#prov-grid').innerHTML = provGridHtml(s.provider);
@@ -1998,6 +2054,8 @@ function openSettings() {
   $('#set-posecontext').value = poseCtx;
   $('#posecontext-val').textContent = poseCtx === 0 ? 'None (latest reply only)' : `${poseCtx} message${poseCtx === 1 ? '' : 's'}`;
   renderPresetList();
+  switchSettingsTab('ai');
+  updateSettingsStatusCard();
   openModal('modal-settings');
   takeModalSnapshot('modal-settings');
 }
@@ -2202,6 +2260,7 @@ function setProviderUI(pv) {
   $('#set-url').value = meta.baseUrl;
   setComboModels($('#set-model').closest('.combo'), meta.models);
   $('#set-model').value = meta.models[0] || '';
+  updateSettingsStatusCard();
 }
 
 async function fetchModelList(baseUrl, apiKey, combo, btn) {
@@ -2233,7 +2292,8 @@ function presetSummary(p) {
 
 function renderPresetList() {
   const s = state.settings;
-  $('#preset-count').textContent = state.presets.length ? `${state.presets.length}` : 'none yet';
+  const countEl = $('#preset-count');
+  if (countEl) countEl.textContent = state.presets.length ? `${state.presets.length}` : 'none yet';
   $('#preset-list').innerHTML = state.presets.map((p) => `
     <div class="prow ${p.id === s.activePresetId ? 'active' : ''}">
       <button class="radio" data-use="${p.id}" title="Use this preset"></button>
@@ -2420,19 +2480,51 @@ function switchSidebarTab(tab) {
   saveUi();
   const isChars = tab === 'chars';
   const isScen = tab === 'scenarios';
+  const isPers = tab === 'personas';
   const isVars = tab === 'vars';
 
   $('#tab-chars-btn').classList.toggle('active', isChars);
   $('#tab-scenarios-btn').classList.toggle('active', isScen);
+  $('#tab-personas-btn')?.classList.toggle('active', isPers);
   $('#tab-vars-btn').classList.toggle('active', isVars);
 
   $('#panel-chars').classList.toggle('hidden', !isChars);
   $('#panel-scenarios').classList.toggle('hidden', !isScen);
+  $('#panel-personas')?.classList.toggle('hidden', !isPers);
   $('#panel-vars').classList.toggle('hidden', !isVars);
 
   if (isChars) renderSidebar();
   else if (isScen) renderSidebarScenarios();
+  else if (isPers) renderSidebarPersonas();
   else if (isVars) renderSidebarVars();
+}
+
+function renderSidebarPersonas() {
+  const list = $('#persona-sidebar-list');
+  if (!list) return;
+  const activeId = state.settings.activePersonalityId;
+  if (!state.personalities || state.personalities.length === 0) {
+    list.innerHTML = `<div class="prow-desc" style="padding:16px 10px;text-align:center">No personas created.<br>Click "New persona" below.</div>`;
+    return;
+  }
+  list.innerHTML = state.personalities.map((p) => {
+    const isActive = p.id === activeId;
+    return `
+      <div class="sidebar-persona-item ${isActive ? 'active' : ''}" data-pid="${p.id}">
+        ${personaAvatarHtml(p, 'sm')}
+        <div class="spi-main">
+          <div class="spi-name-row">
+            <span class="spi-name">${esc(p.name)}</span>
+            ${isActive ? '<span class="spi-badge">Active</span>' : ''}
+          </div>
+          <span class="spi-desc">${esc(p.note || p.description || 'No description')}</span>
+        </div>
+        <button type="button" class="icon-btn tiny spi-edit" data-edit-persona="${p.id}" title="Edit persona">
+          ${I.pencil}
+        </button>
+      </div>
+    `;
+  }).join('');
 }
 
 function renderSidebarScenarios() {
@@ -3122,9 +3214,11 @@ function closeSidebar() {
 function renderAll() {
   renderSidebar();
   renderSidebarScenarios();
+  renderSidebarPersonas();
   renderSidebarVars();
   setHint();
   if (ui.sidebarTab === 'scenarios') switchSidebarTab('scenarios');
+  else if (ui.sidebarTab === 'personas') switchSidebarTab('personas');
   else if (ui.sidebarTab === 'vars') switchSidebarTab('vars');
   else switchSidebarTab('chars');
   if (ui.activeCharacterId && state.characters.find((c) => c.id === ui.activeCharacterId)) {
@@ -3431,9 +3525,44 @@ function wireEvents() {
   $$('.combo').forEach((c) => setupModelCombo(c));
   $('#tab-chars-btn').addEventListener('click', () => switchSidebarTab('chars'));
   $('#tab-scenarios-btn').addEventListener('click', () => switchSidebarTab('scenarios'));
+  $('#tab-personas-btn')?.addEventListener('click', () => switchSidebarTab('personas'));
   $('#tab-vars-btn').addEventListener('click', () => switchSidebarTab('vars'));
   $('#new-char-btn').addEventListener('click', () => openCharModal(null));
   $('#new-scenario-btn').addEventListener('click', () => openScenarioModal(null));
+  $('#new-persona-btn')?.addEventListener('click', () => openPersonaModal());
+
+  $('#persona-sidebar-list')?.addEventListener('click', (e) => {
+    const editBtn = e.target.closest('[data-edit-persona]');
+    if (editBtn) {
+      const p = state.personalities.find((x) => x.id === editBtn.dataset.editPersona);
+      if (p) {
+        peMode = 'edit'; peId = p.id; peAvatar = p.avatar || null; peImage = p.image || null;
+        $('#pf-name').value = p.name;
+        $('#pf-desc').value = p.description;
+        $('#pf-note').value = p.note || '';
+        updatePersonaForm();
+        updatePfAvatarUI();
+        openModal('modal-persona');
+      }
+      return;
+    }
+    const item = e.target.closest('.sidebar-persona-item');
+    if (item && item.dataset.pid) {
+      setPersona(item.dataset.pid);
+    }
+  });
+
+  // Settings Tabs
+  $$('.settings-tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => switchSettingsTab(btn.dataset.stab));
+  });
+
+  // Clicking Character Info opens Edit Character
+  $('#char-info')?.addEventListener('click', (e) => {
+    if (e.target.closest('.avatar')) return;
+    const c = activeChar();
+    if (c) openCharModal(c);
+  });
 
   // Import & Export buttons
   const fileInput = $('#global-import-file');
@@ -3877,16 +4006,41 @@ function wireEvents() {
     }
   });
 
-  $('#send-btn').addEventListener('click', sendUser);
-  $('#inject-btn').addEventListener('click', sendInjection);
-  $('#generate-btn').addEventListener('click', () => {
+  $('#send-btn').addEventListener('click', () => {
+    if (isSteerMode) {
+      sendInjection();
+      setSteerMode(false);
+    } else {
+      sendUser();
+    }
+  });
+  $('#steer-toggle-btn')?.addEventListener('click', () => {
+    setSteerMode(!isSteerMode);
+    $('#msg-input').focus();
+  });
+  $('#cd-generate-btn')?.addEventListener('click', () => {
+    const c = activeChar();
+    const chat = c && activeChat(c);
+    const tip = chat && tipNode(chat);
+    if (tip && !typing) generateReplyAt(tip.id);
+  });
+  $('#inject-btn')?.addEventListener('click', sendInjection);
+  $('#generate-btn')?.addEventListener('click', () => {
     const c = activeChar();
     const chat = c && activeChat(c);
     const tip = chat && tipNode(chat);
     if (tip) generateReplyAt(tip.id);
   });
   $('#msg-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendUser(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (isSteerMode) {
+        sendInjection();
+        setSteerMode(false);
+      } else {
+        sendUser();
+      }
+    }
   });
   $('#msg-input').addEventListener('input', () => { autoGrow(); updateComposerButtons(); });
   $('#msg-input').addEventListener('pointerup', () => {
