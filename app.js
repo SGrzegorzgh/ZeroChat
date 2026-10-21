@@ -4889,6 +4889,98 @@ function agentTrimLocal(s, n) {
   return t.length > n ? t.slice(0, n - 1) + '…' : t;
 }
 
+/* --- Agent markdown --------------------------------------------------------
+   The Agent drafts content in markdown (headings, lists, tables, code
+   fences) which the chat's simple md() doesn't cover, so agent bubbles use
+   this richer renderer. Input is esc()ed; every tag added below is ours. */
+function agentInline(t) {
+  return t
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+function agentMd(src) {
+  const lines = esc(String(src || '')).replace(/\r/g, '').split('\n');
+  let html = '';
+  let list = null;      // 'ul' | 'ol' while a list is open
+  let para = [];        // pending paragraph lines
+  let code = null;      // fenced code lines
+  let table = null;     // pending pipe-table rows
+
+  const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
+  const flushPara = () => {
+    if (para.length) { html += `<p>${para.map(agentInline).join('<br>')}</p>`; para = []; }
+  };
+  const closeCode = () => {
+    if (code) { html += `<pre class="agent-pre">${code.join('\n')}</pre>`; code = null; }
+  };
+  const tableRow = (row) => {
+    let cells = row.split('|');
+    if (cells.length && cells[0].trim() === '') cells = cells.slice(1);
+    if (cells.length && cells[cells.length - 1].trim() === '') cells = cells.slice(0, -1);
+    return cells.map((c) => c.trim());
+  };
+  const closeTable = () => {
+    if (!table) return;
+    const first = tableRow(table[0]);
+    const sep = /^:?-{1,}:?$/;
+    const isSep = (cells) => cells.length && cells.every((c) => sep.test(c));
+    html += '<div class="agent-table-wrap"><table>';
+    html += `<thead><tr>${first.map((c) => `<th>${agentInline(c)}</th>`).join('')}</tr></thead>`;
+    html += '<tbody>';
+    table.slice(1).forEach((row) => {
+      const cells = tableRow(row);
+      if (isSep(cells)) return;
+      const n = Math.max(first.length, cells.length);
+      const tds = [];
+      for (let i = 0; i < n; i++) tds.push(`<td>${agentInline(cells[i] || '')}</td>`);
+      html += `<tr>${tds.join('')}</tr>`;
+    });
+    html += '</tbody></table></div>';
+    table = null;
+  };
+
+  for (const ln of lines) {
+    const t = ln.trim();
+    if (/^```/.test(t)) {
+      if (code) closeCode();
+      else { flushPara(); closeList(); closeTable(); code = []; }
+      continue;
+    }
+    if (code !== null) { code.push(ln); continue; }
+
+    if (/^\|.*\|$/.test(t)) { flushPara(); closeList(); if (table) table.push(t); else { closeTable(); table = [t]; } continue; }
+    if (table) closeTable();
+
+    if (!t) { flushPara(); closeList(); continue; }
+
+    const h = t.match(/^#{1,4}\s+(.+)$/);
+    if (h) { flushPara(); closeList(); html += `<h3>${agentInline(h[1])}</h3>`; continue; }
+
+    if (/^(-{3,}|\*{3,})$/.test(t)) { flushPara(); closeList(); html += '<hr>'; continue; }
+
+    const ul = t.match(/^[-*•]\s+(.*)$/);
+    const ol = t.match(/^(\d+)[.)]\s+(.+)$/);
+    if (ul || ol) {
+      flushPara();
+      const want = ul ? 'ul' : 'ol';
+      if (list !== want) { closeList(); html += `<${want}>`; list = want; }
+      html += `<li>${agentInline(ul ? ul[1] : ol[2])}</li>`;
+      continue;
+    }
+
+    const bq = t.match(/^&gt;\s?(.*)$/);
+    if (bq) { flushPara(); closeList(); html += `<blockquote>${agentInline(bq[1])}</blockquote>`; continue; }
+
+    if (list) closeList();
+    para.push(t);
+  }
+  flushPara(); closeList(); closeCode(); closeTable();
+  return html;
+}
+
 function agentToolActions(mi) {
   // Build "Open" style actions once the newer site state is loaded.
   let chain = [];
@@ -4938,10 +5030,10 @@ function renderAgent() {
       const role = agentRoles(mi);
       if (role !== 'tool' && openToolGroup) { html += '</div>'; openToolGroup = false; }
       if (role === 'user') {
-        html += `<div class="agent-msg user"><div class="agent-bubble">${md(mi.content || '')}</div></div>`;
+        html += `<div class="agent-msg user"><div class="agent-bubble agent-md">${agentMd(mi.content || '')}</div></div>`;
       } else if (role === 'agent') {
         if ((mi.content || '').trim()) {
-          html += `<div class="agent-msg agent"><div class="agent-bubble">${md(mi.content)}</div></div>`;
+          html += `<div class="agent-msg agent"><div class="agent-bubble agent-md">${agentMd(mi.content)}</div></div>`;
         }
       } else if (role === 'tool') {
         if (!openToolGroup) { html += `<div class="agent-msg agent tool-group">`; openToolGroup = true; }
