@@ -3309,16 +3309,16 @@ function renderPsGrid(query = '') {
       const missing = reqVars.filter((v) => !charVars[v] || !String(charVars[v]).trim());
       let varBadge = '';
       if (missing.length > 0) {
-        varBadge = `<span class="ce-scen-stat-pill red sm" style="font-size:11px;padding:2px 7px">${missing.length} missing</span>`;
+        varBadge = `<span class="ce-scen-stat-pill red sm">${missing.length} missing</span>`;
       } else if (reqVars.length > 0) {
-        varBadge = `<span class="ce-scen-stat-pill green sm" style="font-size:11px;padding:2px 7px">✓ Ready</span>`;
+        varBadge = `<span class="ce-scen-stat-pill green sm">✓ Ready</span>`;
       }
       return `
         <div class="ps-item-card" data-scen-id="${s.id}">
           <div class="ps-item-top">
             <div class="ps-item-header">
               <span class="ps-item-title">${esc(s.title)}</span>
-              <div style="display:flex;align-items:center;gap:6px">
+              <div class="ps-item-badges">
                 ${varBadge}
               </div>
             </div>
