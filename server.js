@@ -921,6 +921,7 @@ const AGENT_RULES = `## Ground rules
 - Never assume: draw facts from your tools (site_overview / list / get) and from what the user says. If a needed fact exists nowhere, ask.
 - Only call create / update / delete tools for a specific action the user has approved. Reading tools is always fine.
 - Always use real ids returned by tools. Never invent an id.
+- When the user attaches an image, look at it directly — you have full vision capabilities and can see the image pixels. Inspect it to answer questions, describe it, or base characters/scenarios on it. The text marker [attached image: att-xxx — name] indicates its attachment id so you can pass it to apply_image or edit_image via source_type="attachment" and source_id="att-xxx".
 - After any successful action, tell the user exactly what changed and what the next sensible step is.
 - Prefer showing content INSIDE the conversation (formatted with markdown) over making the user open editors. Editors are for fine-tuning; you are for creation.
 - Be honest about limits: when something is not possible with your tools, say so instead of pretending.
@@ -1416,8 +1417,17 @@ function agentParseArgs(raw) {
    provider cannot stream (or streams nothing usable), the plain non-streaming
    call — same prompts — runs instead, so behavior degrades gracefully. */
 
-async function agentReqLog(cfg, url, out) {
+function agentReqLog(cfg, url, out) {
+  let imgCount = 0;
+  for (const m of out.messages || []) {
+    if (Array.isArray(m.content)) {
+      for (const p of m.content) {
+        if (p.type === 'image_url' || p.type === 'image') imgCount++;
+      }
+    }
+  }
   tlog('agent', `→ ${out.stream ? 'SSE ' : ''}${url}`, `model=${cfg.model || '(empty)'}`, `msgs=${(out.messages || []).length}`,
+    imgCount ? `images=${imgCount}` : '',
     out.tools ? `tools=${out.tools.length}` : 'no-tools', `temp=${out.temperature ?? '—'}`,
     `sys=${(out.system !== undefined ? String(out.system) : out.messages?.[0]?.content || '').length}ch`);
 }
@@ -1622,11 +1632,57 @@ async function agentCallAnthropicPlain(cfg, system, messages, tools, signal) {
 
 /* ---- History mapping ------------------------------------------------------ */
 
+function extractAttachments(text, allowedIds) {
+  if (!text || typeof text !== 'string') return [];
+  const matches = [...text.matchAll(/\[attached image:\s*(att-[\w-]+)/gi)];
+  if (!matches.length) return [];
+  const seen = new Set();
+  const atts = [];
+  for (const m of matches) {
+    const id = m[1];
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (allowedIds && !allowedIds.has(id)) continue;
+    try {
+      const a = db.getAgentAttachment(id);
+      if (a && a.dataUrl) atts.push(a);
+    } catch { /* DB read safety */ }
+  }
+  return atts;
+}
+
+function getRecentActiveAttachmentIds(rows, limit = 8) {
+  const allAttIds = [];
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i].role === 'user') {
+      const matches = [...(rows[i].content || '').matchAll(/\[attached image:\s*(att-[\w-]+)/gi)];
+      for (const m of matches) {
+        if (!allAttIds.includes(m[1])) allAttIds.push(m[1]);
+      }
+    }
+  }
+  return new Set(allAttIds.slice(0, limit));
+}
+
 function mapAgentHistoryOpenAI(rows) {
+  const activeAtts = getRecentActiveAttachmentIds(rows, 8);
   const out = [];
   for (const r of rows) {
     if (r.role === 'user') {
-      out.push({ role: 'user', content: r.content || '' });
+      const text = r.content || '';
+      const atts = extractAttachments(text, activeAtts);
+      if (atts.length) {
+        const content = [{ type: 'text', text }];
+        for (const a of atts) {
+          content.push({
+            type: 'image_url',
+            image_url: { url: a.dataUrl },
+          });
+        }
+        out.push({ role: 'user', content });
+      } else {
+        out.push({ role: 'user', content: text });
+      }
     } else if (r.role === 'assistant') {
       if (r.toolCalls && r.toolCalls.length) {
         out.push({
@@ -1649,6 +1705,7 @@ function mapAgentHistoryOpenAI(rows) {
 }
 
 function mapAgentHistoryAnthropic(rows) {
+  const activeAtts = getRecentActiveAttachmentIds(rows, 8);
   const msgs = [];
   let pending = [];
   const flush = () => {
@@ -1657,7 +1714,31 @@ function mapAgentHistoryAnthropic(rows) {
   for (const r of rows) {
     if (r.role === 'user') {
       flush();
-      msgs.push({ role: 'user', content: r.content || '' });
+      const text = r.content || '';
+      const atts = extractAttachments(text, activeAtts);
+      if (atts.length) {
+        const content = [{ type: 'text', text }];
+        for (const a of atts) {
+          const m = a.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+          if (m) {
+            let media_type = m[1].toLowerCase();
+            if (media_type === 'image/jpg') media_type = 'image/jpeg';
+            if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(media_type)) {
+              content.push({
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type,
+                  data: m[2],
+                },
+              });
+            }
+          }
+        }
+        msgs.push({ role: 'user', content });
+      } else {
+        msgs.push({ role: 'user', content: text });
+      }
     } else if (r.role === 'assistant') {
       flush();
       const content = [];
