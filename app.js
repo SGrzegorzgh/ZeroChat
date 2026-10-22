@@ -979,6 +979,7 @@ async function switchVariant(dir, nodeId) {
 }
 
 let msgInputManualHeight = 0;
+let agentInputManualHeight = 0;
 
 function autoGrow() {
   const ta = $('#msg-input');
@@ -1011,17 +1012,24 @@ function autoGrow() {
 
 function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } = {}) {
   if (!ta) return () => {};
+  const isAgent = ta.id === 'agent-input';
+  const getManual = () => (isAgent ? agentInputManualHeight : msgInputManualHeight);
+  const setManual = (h) => {
+    if (isAgent) agentInputManualHeight = h;
+    else msgInputManualHeight = h;
+  };
 
   const resize = () => {
     if (isComposer && !ta.value.trim()) {
-      msgInputManualHeight = 0;
+      setManual(0);
       ta.style.height = '';
       ta.style.overflowY = 'hidden';
       ta.style.resize = 'none';
       return;
     }
-    if (isComposer && msgInputManualHeight > 0) {
-      ta.style.height = Math.max(msgInputManualHeight, ta.scrollHeight) + 'px';
+    const manualH = getManual();
+    if (isComposer && manualH > 0) {
+      ta.style.height = Math.max(manualH, ta.scrollHeight) + 'px';
       ta.style.overflowY = 'auto';
       ta.style.resize = 'vertical';
       return;
@@ -1041,10 +1049,10 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
 
   ta.addEventListener('input', resize);
 
-  // For composer, use the dedicated #composer-touch-handle above the row
+  // For composers, use their dedicated top touch handle
   let bar = null;
   if (isComposer) {
-    bar = document.getElementById('composer-touch-handle');
+    bar = isAgent ? document.getElementById('agent-touch-handle') : document.getElementById('composer-touch-handle');
   } else if (!ta.dataset.hasResizeBar && ta.parentNode) {
     ta.dataset.hasResizeBar = '1';
     bar = document.createElement('div');
@@ -1066,7 +1074,7 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
       ta.style.height = newH + 'px';
       ta.style.overflowY = 'auto';
       ta.style.resize = 'vertical';
-      if (isComposer) msgInputManualHeight = newH;
+      if (isComposer) setManual(newH);
       if (e.cancelable) e.preventDefault();
     };
 
@@ -1098,9 +1106,9 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
 
     bar.addEventListener('dblclick', () => {
       if (isComposer) {
-        msgInputManualHeight = 0;
+        setManual(0);
         ta.style.height = '';
-        autoGrow();
+        resize();
       }
     });
   }
@@ -2767,6 +2775,7 @@ function renderMoreMenu() {
       </button>`).join('')}
     <div class="menu-sep"></div>
     ${c ? `<button class="menu-item" id="mf-edit-char">${I.pencil}<span>Edit ${esc(c.name)}</span></button>` : ''}
+    <button class="menu-item" id="mf-agent">${I.sparkles}<span>AI Agent</span></button>
     <button class="menu-item" id="mf-manage-presets">${I.gear}<span>Manage presets</span></button>
     <button class="menu-item" id="mf-settings">${I.gear}<span>Settings</span></button>`;
 }
@@ -4307,6 +4316,7 @@ function wireEvents() {
       if (c) openCharModal(c);
       return;
     }
+    if (e.target.closest('#mf-agent')) { closeMenus(); openAgentDrawer(); return; }
     if (e.target.closest('#mf-manage-presets')) { closeMenus(); openSettings('presets'); return; }
     if (e.target.closest('#mf-settings')) { closeMenus(); openSettings(); }
   });
@@ -5494,7 +5504,8 @@ async function agentSend() {
   if ((!text && !atts.length) || agentBusy) return;
   if (!text && atts.length) text = 'Please take a look at the attached image(s).';
   ta.value = '';
-  ta.style.height = 'auto';
+  ta.style.height = '';
+  agentInputManualHeight = 0;
   const markers = atts.map((a) => `[attached image: ${a.id} — ${a.name}]`).join('\n');
   agentMessages.push({ role: 'user', content: text + (markers ? '\n\n' + markers : '') });
   agentAttachments = [];
@@ -5629,6 +5640,34 @@ function initAgentDrawerResize() {
       drawer.style.width = maxW + 'px';
     }
   });
+
+  // Mobile swipe right to close drawer
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isSwiping = false;
+
+  drawer.addEventListener('touchstart', (e) => {
+    if (!agentOpen || e.touches.length !== 1 || window.innerWidth > 640) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    isSwiping = false;
+  }, { passive: true });
+
+  drawer.addEventListener('touchmove', (e) => {
+    if (!agentOpen || e.touches.length !== 1 || window.innerWidth > 640) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = Math.abs(e.touches[0].clientY - touchStartY);
+    if (dx > 45 && dx > dy * 1.4) {
+      isSwiping = true;
+    }
+  }, { passive: true });
+
+  drawer.addEventListener('touchend', () => {
+    if (isSwiping) {
+      isSwiping = false;
+      closeAgentDrawer();
+    }
+  }, { passive: true });
 }
 
 function wireAgent() {
@@ -5655,9 +5694,10 @@ function wireAgent() {
   });
 
   const ta = $('#agent-input');
-  ta.addEventListener('input', () => {
-    ta.style.height = 'auto';
-    ta.style.height = Math.min(ta.scrollHeight, 150) + 'px';
+  makeTextareaAutoResize(ta, {
+    min: 44,
+    max: () => (window.innerWidth <= 768 ? 180 : 280),
+    isComposer: true,
   });
   ta.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
