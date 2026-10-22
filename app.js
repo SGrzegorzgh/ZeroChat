@@ -1356,13 +1356,140 @@ async function requestCloseModal(modalOrId) {
   return true;
 }
 
+/* --- Fullscreen image viewer -------------------------------------------------
+   Any thumbnail (agent tool results, attachment chips, portraits...) opens
+   here. Wheel / pinch zooms toward the pointer, drag pans when zoomed,
+   double-click toggles 1x / 2.5x. Escape, ✕ or clicking the backdrop closes. */
+const LB_MIN = 1;
+const LB_MAX = 8;
+let lbZoom = { scale: 1, x: 0, y: 0 };
+
+const lbClamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+function viewerElCenter() {
+  const img = $('#img-viewer-img');
+  const r = img.getBoundingClientRect();
+  /* getBoundingClientRect may be transformed already — the untransformed
+     element center is that visual center minus the pan offset. */
+  return { x: r.left + r.width / 2 - lbZoom.x, y: r.top + r.height / 2 - lbZoom.y };
+}
+
+function viewerClampPan() {
+  const img = $('#img-viewer-img');
+  const w = img.offsetWidth * lbZoom.scale;
+  const h = img.offsetHeight * lbZoom.scale;
+  const maxX = Math.max(0, (w - window.innerWidth) / 2);
+  const maxY = Math.max(0, (h - window.innerHeight) / 2);
+  lbZoom.x = lbClamp(lbZoom.x, -maxX, maxX);
+  lbZoom.y = lbClamp(lbZoom.y, -maxY, maxY);
+}
+
+function viewerApply() {
+  const img = $('#img-viewer-img');
+  img.style.transform = `translate(${lbZoom.x}px, ${lbZoom.y}px) scale(${lbZoom.scale})`;
+  $('#img-viewer').classList.toggle('zoomed', lbZoom.scale > 1.001);
+}
+
+function viewerZoomAt(clientX, clientY, factor) {
+  const next = lbClamp(lbZoom.scale * factor, LB_MIN, LB_MAX);
+  if (next === lbZoom.scale) return;
+  factor = next / lbZoom.scale;
+  const c = viewerElCenter();
+  /* Keep the point currently under the pointer visually fixed while zooming. */
+  lbZoom.x += (clientX - c.x - lbZoom.x) * (1 - factor);
+  lbZoom.y += (clientY - c.y - lbZoom.y) * (1 - factor);
+  lbZoom.scale = next;
+  viewerClampPan();
+  viewerApply();
+}
+
 function openViewer(src) {
-  $('#img-viewer-img').src = src;
+  lbZoom = { scale: 1, x: 0, y: 0 };
+  const img = $('#img-viewer-img');
+  img.style.transform = '';
+  img.src = src;
   $('#img-viewer').classList.remove('hidden');
+  $('#img-viewer').classList.remove('zoomed', 'grabbing');
 }
 function closeViewer() {
   $('#img-viewer').classList.add('hidden');
+  $('#img-viewer').classList.remove('zoomed', 'grabbing');
   $('#img-viewer-img').src = '';
+}
+
+function viewerWire() {
+  const v = $('#img-viewer');
+  if (v.dataset.wired) return;
+  v.dataset.wired = '1';
+  const img = $('#img-viewer-img');
+  const pointers = new Map();
+  let lbMoved = false;
+  let pinch = null;
+
+  v.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    viewerZoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0016));
+  }, { passive: false });
+
+  v.addEventListener('pointerdown', (e) => {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    lbMoved = false;
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+    }
+    if (e.target === img || e.target === v) v.classList.add('grabbing');
+  });
+  v.addEventListener('pointermove', (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    const dx = e.clientX - prev.x;
+    const dy = e.clientY - prev.y;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2 && pinch) {
+      lbMoved = true;
+      const [a, b] = [...pointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const cx = (a.x + b.x) / 2;
+      const cy = (a.y + b.y) / 2;
+      if (dist > 0) viewerZoomAt(cx, cy, dist / pinch.dist);
+      lbZoom.x += cx - pinch.cx;
+      lbZoom.y += cy - pinch.cy;
+      viewerClampPan();
+      viewerApply();
+      pinch = { dist, cx, cy };
+    } else if (pointers.size === 1 && lbZoom.scale > 1) {
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) lbMoved = true;
+      lbZoom.x += dx;
+      lbZoom.y += dy;
+      viewerClampPan();
+      viewerApply();
+    } else if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      lbMoved = true;
+    }
+  });
+  const pointerUp = (e) => {
+    pointers.delete(e.pointerId);
+    pinch = null;
+    if (!pointers.size) v.classList.remove('grabbing');
+  };
+  v.addEventListener('pointerup', pointerUp);
+  v.addEventListener('pointercancel', pointerUp);
+  v.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    lbZoom = { scale: lbZoom.scale > 1.001 ? 1 : 2.5, x: 0, y: 0 };
+    viewerApply();
+  });
+  /* Close on a plain click, but not when the gesture was a pan or pinch. */
+  v.addEventListener('click', (e) => {
+    if (e.target === $('#img-viewer-close') || e.target.closest('#img-viewer-close')) return;
+    if (lbMoved) { lbMoved = false; return; }
+    closeViewer();
+  });
+  $('#img-viewer-close').addEventListener('click', closeViewer);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !v.classList.contains('hidden')) closeViewer();
+  });
 }
 
 let peMode = 'new';
@@ -4255,7 +4382,7 @@ function wireEvents() {
     $('#posecontext-val').textContent = v === 0 ? 'None (latest reply only)' : `${v} message${v === 1 ? '' : 's'}`;
   });
 
-  $('#img-viewer').addEventListener('click', closeViewer);
+  viewerWire();
   $('#chat-feed').addEventListener('click', (e) => {
     const nav = e.target.closest('[data-nav]');
     if (nav) {
@@ -5204,7 +5331,9 @@ function renderAgent() {
         html += `<div class="agent-msg user"><div class="agent-bubble agent-md">${agentUserHtml(mi.content || '')}</div></div>`;
       } else if (role === 'agent') {
         if ((mi.content || '').trim()) {
-          html += `<div class="agent-msg agent"><div class="agent-bubble agent-md">${agentMd(mi.content)}</div></div>`;
+          html += `<div class="agent-msg agent"><div class="agent-bubble agent-md${mi.streaming ? ' streaming' : ''}">${agentMd(mi.content)}</div></div>`;
+        } else if (mi.streaming) {
+          html += `<div class="agent-msg agent"><div class="agent-bubble agent-md streaming"></div></div>`;
         }
       } else if (role === 'tool') {
         if (!openToolGroup) { html += `<div class="agent-msg agent tool-group">`; openToolGroup = true; }
@@ -5222,9 +5351,16 @@ function renderAgent() {
   if (sendBtn) sendBtn.disabled = agentBusy;
 }
 
+function closeAgentStreamingRow() {
+  const cur = agentMessages[agentMessages.length - 1];
+  if (cur && cur.role === 'assistant' && cur.streaming) {
+    cur.streaming = false;
+    if (!(cur.content || '').trim()) agentMessages.pop();
+  }
+}
+
 function setAgentStatus(status) {
-  agentStatus = status || '';
-  const bar = agentEl('#agent-status-bar');
+  agentStatus = status || '';  const bar = agentEl('#agent-status-bar');
   const txt = agentEl('#agent-status-text');
   if (agentBusy && agentStatus) {
     bar.classList.remove('hidden');
@@ -5295,18 +5431,37 @@ async function agentSend() {
     await streamAgent({ message: text, attachments: atts.map((a) => a.id) }, (ev) => {
       if (ev.type === 'status') {
         agentStatus = 'thinking';
+      } else if (ev.type === 'delta') {
+        /* Live text from whatever turn the provider is currently streaming.
+           The partial narration may be superseded by tool calls in the same
+           turn — it stays in its own row either way. */
+        let cur = agentMessages[agentMessages.length - 1];
+        if (!cur || cur.role !== 'assistant' || !cur.streaming) {
+          cur = { role: 'assistant', content: '', streaming: true };
+          agentMessages.push(cur);
+        }
+        cur.content += ev.text;
       } else if (ev.type === 'tool_call') {
         agentStatus = 'running_tool:' + ev.name;
+        closeAgentStreamingRow();
         agentMessages.push({ kind: 'tool', pending: true, id: ev.id, name: ev.name, args: ev.args });
       } else if (ev.type === 'tool_result') {
         agentStatus = 'thinking';
         const t = agentMessages.find((m) => m.kind === 'tool' && m.pending && m.id === ev.id);
         if (t) { t.pending = false; t.ok = ev.ok; t.error = ev.error; t.result = ev.result; }
       } else if (ev.type === 'done') {
-        agentMessages.push({ role: 'assistant', content: ev.text || '' });
+        /* The server persisted the exact final text — snap the live row to it. */
+        const cur = agentMessages[agentMessages.length - 1];
+        if (cur && cur.role === 'assistant' && cur.streaming) {
+          cur.content = ev.text || '';
+          cur.streaming = false;
+        } else {
+          agentMessages.push({ role: 'assistant', content: ev.text || '' });
+        }
         agentBusy = false;
         agentStatus = '';
       } else if (ev.type === 'error') {
+        closeAgentStreamingRow();
         agentMessages.push({ kind: 'error', text: ev.error || 'Agent failed' });
         agentBusy = false;
         agentStatus = '';
@@ -5314,6 +5469,7 @@ async function agentSend() {
       renderAgent();
     });
   } catch (e) {
+    closeAgentStreamingRow();
     agentMessages.push({ kind: 'error', text: e.message || 'Agent failed' });
     agentBusy = false;
     agentStatus = '';
@@ -5418,6 +5574,8 @@ function wireAgent() {
       agentEl('#agent-input').focus();
       return;
     }
+    const toolImg = e.target.closest('.agent-tool-img img');
+    if (toolImg) { openViewer(toolImg.src); return; }
     const chipImg = e.target.closest('.agent-attach-chip[data-att-id] img');
     if (chipImg) { openViewer(chipImg.src); return; }
     const row = e.target.closest('.agent-tool-row');

@@ -60,6 +60,16 @@ function truncTitle(s, n = 40) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
+/* ---- Terminal logs ----------------------------------------------------------
+   Timestamped, component-prefixed lines so live agent sessions can be debugged
+   right from the terminal that runs `node server.js`.
+   Component tags: [http] [agent] [ai] [pose/jev]                                */
+function tlog(tag, ...parts) {
+  const t = new Date().toISOString().slice(11, 23);
+  console.log(`[${t}] [${tag}]`, ...parts);
+}
+const truncArg = (v, n = 160) => truncTitle(JSON.stringify(v), n);
+
 async function fetchJson(url, opts, timeoutMs = 30000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -558,6 +568,76 @@ async function postAgentJson(url, headers, body, signal, timeoutMs = 30000) {
   }
 }
 
+/* SSE POST for streaming LLM answers (chat/completions and /v1/messages).
+   Calls onEvent(dataString) for every `data:` line of the server-sent stream.
+   Returns the same {status, sse, aborted} envelope as postAgentJson, with
+   `sse: true` when the body really was an event stream. */
+async function postAgentSSE(url, headers, body, signal, timeoutMs = 180000, onEvent) {
+  if (signal && signal.aborted) return { status: 0, json: null, text: '', sse: false, aborted: true };
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const onAbort = () => ctrl.abort();
+  if (signal) signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    let r;
+    try {
+      r = await fetch(url, {
+        method: 'POST',
+        headers: { ...headers, ...(body.stream ? { accept: 'text/event-stream' } : {}) },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      if (signal && signal.aborted) return { status: 0, json: null, text: '', sse: false, aborted: true };
+      throw new Error(e.name === 'AbortError' ? 'Provider timed out' : `Provider unreachable (${e.message})`);
+    }
+    const ct = r.headers.get('content-type') || '';
+    if (!r.ok) {
+      const text = await r.text().catch(() => '');
+      return { status: r.status, json: null, text: text.slice(0, 400), sse: false };
+    }
+    if (!ct.includes('text/event-stream')) {
+      /* Provider ignored `stream: true` and answered with a JSON body. */
+      const text = await r.text().catch(() => '');
+      let json = null;
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        try { json = JSON.parse(text.slice(start, end + 1)); } catch { json = null; }
+      }
+      return { status: r.status, json, text, sse: false };
+    }
+    const dec = new TextDecoder();
+    let buf = '';
+    let chunks = 0;
+    try {
+      for await (const chunk of r.body) {
+        chunks++;
+        buf += dec.decode(chunk, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf('\n')) !== -1) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line || line.startsWith(':')) continue;
+          if (!line.startsWith('data:')) continue;
+          const data = line.slice(5).trim();
+          if (!data) continue;
+          let parsed = null;
+          try { parsed = JSON.parse(data); } catch { parsed = data; }
+          onEvent(parsed);
+        }
+      }
+    } catch (e) {
+      if (signal && signal.aborted) return { status: r.status, json: null, text: '', sse: true, aborted: true, chunks };
+      throw new Error(`Provider stream failed (${e.message})`);
+    }
+    return { status: r.status, json: null, text: '', sse: true, chunks };
+  } finally {
+    clearTimeout(t);
+    if (signal) signal.removeEventListener('abort', onAbort);
+  }
+}
+
 // Fast Jev decision model chooses the best character pose based on reply text.
 // Instead of a full-blown tool-calling LLM, Jev evaluates typed choices with calibrated probabilities.
 async function runPoseAgent({ char, persona, chat, poses, currentPoseId, replyText, settings, signal }) {
@@ -736,29 +816,43 @@ function decidePose(arg, candidates, currentPose, cfg) {
   return { poseId: pose.id, poseName: pose.name, confidence: conf, reason, changed: true };
 }
 
-function startEventStream(res, fn) {
+function startEventStream(res, fn, tag = 'stream') {
+  const t0 = Date.now();
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-store',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
   });
+  tlog('http', 'SSE ▶', tag);
   const ctrl = new AbortController();
   let closed = false;
+  let ended = false;
   res.on('close', () => { closed = true; ctrl.abort(); });
   const emit = (obj) => {
     if (closed) return;
     try { res.write(`data: ${JSON.stringify(obj)}\n\n`); } catch {}
   };
   fn(emit, ctrl)
-    .catch((e) => { if (!closed) emit({ type: 'error', error: e.message }); })
-    .finally(() => { try { res.end(); } catch {} });
+    .then(() => { tlog('http', `SSE ■ ${tag} complete (${Date.now() - t0}ms)`); })
+    .catch((e) => {
+      tlog('http', `SSE ✗ ${tag} FAILED after ${Date.now() - t0}ms — ${e.message}`);
+      if (!closed) emit({ type: 'error', error: e.message });
+    })
+    .finally(() => {
+      ended = true;
+      try { res.end(); } catch {}
+    });
+  /* A close before our normal end means the client hung up mid-stream —
+     that is the classic "response never finished" signature. */
+  res.on('close', () => { if (!ended) tlog('http', `SSE ⚡ ${tag} — client disconnected after ${Date.now() - t0}ms`); });
 }
 
 /* ==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-=== */
 /* AI Agent — a built-in assistant that can inspect and edit the whole site.  */
-/* Runs a non-streaming tool-calling loop (OpenAI `tools` / Anthropic `tools`),*/
-/* streaming SSE *events* to the client instead of text deltas.               */
+/* Runs a tool-calling loop over streaming LLM calls (OpenAI `tools` /        */
+/* Anthropic `tools`): text deltas stream live to the client, tool calls      */
+/* execute server-side. Non-streaming fallback when a provider can't stream. */
 /* ==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-=== */
 
 const AGENT_MAX_ITERATIONS = 8;
@@ -1314,23 +1408,83 @@ function agentParseArgs(raw) {
   try { return JSON.parse(raw); } catch { return { _raw: String(raw) }; }
 }
 
-async function agentCallOpenAI(cfg, system, messages, tools, signal) {
+/* Provider adapters for the Agent. Every adapter streams the final text live
+   (deltas are forwarded to the client as {type:'delta'} SSE events) while
+   still returning the complete structured result for the tool loop. When a
+   provider cannot stream (or streams nothing usable), the plain non-streaming
+   call — same prompts — runs instead, so behavior degrades gracefully. */
+
+async function agentReqLog(cfg, url, out) {
+  tlog('agent', `→ ${out.stream ? 'SSE ' : ''}${url}`, `model=${cfg.model || '(empty)'}`, `msgs=${(out.messages || []).length}`,
+    out.tools ? `tools=${out.tools.length}` : 'no-tools', `temp=${out.temperature ?? '—'}`,
+    `sys=${(out.system !== undefined ? String(out.system) : out.messages?.[0]?.content || '').length}ch`);
+}
+
+function agentProviderError(status, body, providerLabel) {
+  tlog('agent', `✗ ${providerLabel} HTTP ${status} — body: ${truncArg(body, 300)}`);
+  const err = (typeof body === 'object' && body && body.error && (body.error.message || body.error)) || body;
+  const msg = typeof err === 'string' ? err : JSON.stringify(err);
+  return new Error(`${providerLabel}${status ? ' ' + status : ''}: ${msg || 'Provider error'}`);
+}
+
+async function agentCallOpenAI(cfg, system, messages, tools, signal, onDelta) {
   const base = agentNormBase(cfg.baseUrl);
-  const out = { model: cfg.model, messages: [{ role: 'system', content: system }, ...messages], tools, tool_choice: 'auto' };
+  const headers = { 'content-type': 'application/json', ...(cfg.apiKey ? { authorization: 'Bearer ' + cfg.apiKey } : {}) };
+  const out = { model: cfg.model, messages: [{ role: 'system', content: system }, ...messages], tools, tool_choice: 'auto', stream: true };
   if (typeof cfg.temperature === 'number') out.temperature = cfg.temperature;
-  const r = await postAgentJson(
-    base + '/chat/completions',
-    { 'content-type': 'application/json', ...(cfg.apiKey ? { authorization: 'Bearer ' + cfg.apiKey } : {}) },
-    out, signal, 120000,
-  );
+  agentReqLog(cfg, base + '/chat/completions', out);
+
+  let text = '';
+  let fin = '';
+  let sseError = null;
+  const parts = new Map(); // tool_call index -> { id, name, argsText }
+  const r = await postAgentSSE(base + '/chat/completions', headers, out, signal, 180000, (json) => {
+    if (!json || typeof json !== 'object') return;
+    if (json.error) { sseError = json.error; return; }
+    const ch = json.choices && json.choices[0] || {};
+    const d = ch.delta || {};
+    if (typeof d.content === 'string' && d.content) {
+      text += d.content;
+      if (onDelta) onDelta(d.content);
+    }
+    for (const t of d.tool_calls || []) {
+      const idx = t.index ?? 0;
+      const p = parts.get(idx) || { id: '', name: '', argsText: '' };
+      if (t.id) p.id = t.id;
+      if (t.function && t.function.name) p.name += t.function.name;
+      if (t.function && typeof t.function.arguments === 'string') p.argsText += t.function.arguments;
+      parts.set(idx, p);
+    }
+    if (ch.finish_reason) fin = ch.finish_reason;
+  });
   if (r.aborted) throw new Error('Aborted');
-  if (r.status !== 200 || !r.json) {
-    const j = r.json;
-    const msg = (j && j.error && (j.error.message || j.error)) || r.text || 'Provider error';
-    throw new Error('AI provider' + (r.status ? ' ' + r.status + ': ' : ': ') + (typeof msg === 'string' ? msg : JSON.stringify(msg)));
+  if (r.status !== 200 || !r.sse) {
+    /* Provider errored before streaming, or answered non-streamed JSON. */
+    if (r.status === 200 && r.json && r.json.choices) return agentShapeOpenAIDone(r.json, cfg);
+    throw agentProviderError(r.status, r.json || r.text, 'AI provider');
   }
-  const m0 = (r.json.choices && r.json.choices[0] && r.json.choices[0].message) || {};
-  const fin = (r.json.choices && r.json.choices[0] && r.json.choices[0].finish_reason) || '';
+  if (sseError) throw agentProviderError(200, { error: sseError }, 'AI provider');
+  const calls = [...parts.values()].map((p, i) => ({
+    id: p.id || ('call_' + Date.now().toString(36) + '_' + i),
+    name: p.name,
+    args: agentParseArgs(p.argsText),
+  })).filter((c) => c.name);
+  text = String(text || '').trim();
+  if (!text && !calls.length) {
+    /* Empty stream (reasoning-only models, silent providers): the plain call
+       knows the array-content and reasoning-only response shapes. */
+    tlog('agent', `↻ streamed nothing this turn (finish_reason: ${fin || '?'}) — retrying non-streaming`);
+    return agentCallOpenAIPlain(cfg, system, messages, tools, signal);
+  }
+  tlog('agent', `← SSE turn — text ${text.length}ch${calls.length ? `, tool calls: ${calls.map((c) => c.name).join(', ')}` : `, finish ${fin || 'stop'}`}`);
+  return { text, toolCalls: calls, finishReason: fin };
+}
+
+/* Parse a completed (non-streamed) OpenAI response, including the reasoning /
+   array-content shapes. Throws a descriptive error on truly empty turns. */
+function agentShapeOpenAIDone(json, cfg) {
+  const m0 = (json.choices && json.choices[0] && json.choices[0].message) || {};
+  const fin = (json.choices && json.choices[0] && json.choices[0].finish_reason) || '';
   const calls = (m0.tool_calls || []).map((tc, i) => ({
     id: tc.id || ('call_' + Date.now().toString(36) + '_' + i),
     name: tc.function && tc.function.name,
@@ -1350,7 +1504,19 @@ async function agentCallOpenAI(cfg, system, messages, tools, signal) {
       (fin ? ` (finish_reason: ${fin})` : '') +
       '. It may be incompatible with tool calling for the Agent — pick another Agent model in Settings → AI Connection, or clear the Agent log.');
   }
-  return { text, toolCalls: calls };
+  return { text, toolCalls: calls, finishReason: fin };
+}
+
+async function agentCallOpenAIPlain(cfg, system, messages, tools, signal) {
+  const base = agentNormBase(cfg.baseUrl);
+  const headers = { 'content-type': 'application/json', ...(cfg.apiKey ? { authorization: 'Bearer ' + cfg.apiKey } : {}) };
+  const out = { model: cfg.model, messages: [{ role: 'system', content: system }, ...messages], tools, tool_choice: 'auto' };
+  if (typeof cfg.temperature === 'number') out.temperature = cfg.temperature;
+  agentReqLog(cfg, base + '/chat/completions', out);
+  const r = await postAgentJson(base + '/chat/completions', headers, out, signal, 180000);
+  if (r.aborted) throw new Error('Aborted');
+  if (r.status !== 200 || !r.json) throw agentProviderError(r.status, r.json || r.text, 'AI provider');
+  return agentShapeOpenAIDone(r.json, cfg);
 }
 
 /* Collect reasoning-only output across the field names providers actually use. */
@@ -1367,27 +1533,64 @@ function agentReasoningText(m0) {
   return parts.map((s) => s.trim()).filter(Boolean).join('\n').trim();
 }
 
-async function agentCallAnthropic(cfg, system, messages, tools, signal) {
+async function agentCallAnthropic(cfg, system, messages, tools, signal, onDelta) {
   const base = cfg.baseUrl.replace(/\/+$/, '');
+  const headers = { 'content-type': 'application/json', 'x-api-key': cfg.apiKey || '', 'anthropic-version': '2023-06-01' };
   const body = {
     model: cfg.model,
     system,
     messages,
     tools: tools.map((t) => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })),
     max_tokens: 4096,
+    stream: true,
   };
-  const r = await postAgentJson(
-    base + '/messages',
-    { 'content-type': 'application/json', 'x-api-key': cfg.apiKey || '', 'anthropic-version': '2023-06-01' },
-    body, signal, 120000,
-  );
+  agentReqLog(cfg, base + '/messages', { ...body, system, messages });
+
+  let fin = '';
+  let sseError = null;
+  const blocks = new Map(); // index -> { type, id, name, text, argsText, thinking }
+  const r = await postAgentSSE(base + '/messages', headers, body, signal, 180000, (json) => {
+    if (!json || typeof json.type !== 'string') return;
+    if (json.type === 'error') { sseError = json.error; return; }
+    if (json.type === 'content_block_start') {
+      const cb = json.content_block || {};
+      blocks.set(json.index, { type: cb.type, id: cb.id || '', name: cb.name || '', text: '', argsText: '', thinking: '' });
+    } else if (json.type === 'content_block_delta') {
+      const b = blocks.get(json.index);
+      if (!b) return;
+      const d = json.delta || {};
+      if (d.type === 'text_delta' && d.text) {
+        b.text += d.text;
+        if (onDelta) onDelta(d.text);
+      } else if (d.type === 'input_json_delta' && typeof d.partial_json === 'string') b.argsText += d.partial_json;
+      else if (d.type === 'thinking_delta' && typeof d.thinking === 'string') b.thinking += d.thinking;
+    } else if (json.type === 'message_delta' && json.delta && json.delta.stop_reason) fin = json.delta.stop_reason;
+  });
   if (r.aborted) throw new Error('Aborted');
-  if (r.status !== 200 || !r.json) {
-    const j = r.json;
-    const msg = (j && j.error && (j.error.message || j.error)) || r.text || 'Provider error';
-    throw new Error('AI provider' + (r.status ? ' ' + r.status + ': ' : ': ') + (typeof msg === 'string' ? msg : JSON.stringify(msg)));
+  if (r.status !== 200 || !r.sse) {
+    if (r.status === 200 && r.json) return agentShapeAnthropicDone(r.json, cfg);
+    throw agentProviderError(r.status, r.json || r.text, 'AI provider');
   }
-  const blocks = r.json.content || [];
+  if (sseError) throw agentProviderError(200, sseError, 'AI provider');
+  const list = [...blocks.values()];
+  const calls = list.filter((b) => b.type === 'tool_use').map((b, i) => ({
+    id: b.id || ('call_' + Date.now().toString(36) + '_' + i),
+    name: b.name,
+    args: agentParseArgs(b.argsText),
+  }));
+  let text = list.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+  if (!text && !calls.length) text = list.filter((b) => b.type === 'thinking').map((b) => b.thinking).join('\n').trim();
+  if (!text && !calls.length) {
+    tlog('agent', `↻ streamed nothing this turn (stop_reason: ${fin || '?'}) — retrying non-streaming`);
+    return agentCallAnthropicPlain(cfg, system, messages, tools, signal);
+  }
+  tlog('agent', `← SSE turn — text ${text.length}ch${calls.length ? `, tool calls: ${calls.map((c) => c.name).join(', ')}` : `, stop ${fin || 'end_turn'}`}`);
+  return { text, toolCalls: calls, finishReason: fin };
+}
+
+/* Shape a completed (non-streamed) Anthropic response. */
+function agentShapeAnthropicDone(json, cfg) {
+  const blocks = json.content || [];
   const calls = blocks.filter((b) => b.type === 'tool_use').map((b) => ({ id: b.id, name: b.name, args: b.input || {} }));
   let text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
   /* Extended-thinking turns can end with only thinking blocks and no text. */
@@ -1395,7 +1598,24 @@ async function agentCallAnthropic(cfg, system, messages, tools, signal) {
   if (!text && !calls.length) {
     throw new Error(`The model (${cfg.model || 'unknown'}) returned no text this turn. It may be incompatible with tool calling for the Agent — pick another Agent model in Settings → AI Connection, or clear the Agent log.`);
   }
-  return { text, toolCalls: calls };
+  return { text, toolCalls: calls, finishReason: '' };
+}
+
+async function agentCallAnthropicPlain(cfg, system, messages, tools, signal) {
+  const base = cfg.baseUrl.replace(/\/+$/, '');
+  const headers = { 'content-type': 'application/json', 'x-api-key': cfg.apiKey || '', 'anthropic-version': '2023-06-01' };
+  const body = {
+    model: cfg.model,
+    system,
+    messages,
+    tools: tools.map((t) => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })),
+    max_tokens: 4096,
+  };
+  agentReqLog(cfg, base + '/messages', { ...body, system, messages });
+  const r = await postAgentJson(base + '/messages', headers, body, signal, 180000);
+  if (r.aborted) throw new Error('Aborted');
+  if (r.status !== 200 || !r.json) throw agentProviderError(r.status, r.json || r.text, 'AI provider');
+  return agentShapeAnthropicDone(r.json, cfg);
 }
 
 /* ---- History mapping ------------------------------------------------------ */
@@ -1490,6 +1710,7 @@ function buildAgentSystem(settings) {
 /* ---- The agent loop -------------------------------------------------------- */
 
 async function runAgentChat(body, emit, ctrl) {
+  const turnT0 = Date.now();
   const settings = db.getSettings();
   const cfg = resolveAgentConfig(settings);
   const text = String((body && body.message) || '').trim();
@@ -1511,31 +1732,43 @@ async function runAgentChat(body, emit, ctrl) {
   }
   const userText = text + (markers.length ? (text ? '\n\n' : '') + markers.join('\n') : '');
 
+  tlog('agent', `▼ turn — user ${text.length}ch: "${truncTitle(userText, 90)}" | ${cfg.provider}/${cfg.model || 'unset'}` +
+    ` | ${settings.agentOverride ? 'own agent connection' : 'follows active preset'} | ${attIds.length} image(s) attached`);
+
   db.addAgentMessage({ role: 'user', content: userText });
 
   const rows = db.getAgentMessages().slice(-AGENT_HISTORY_LIMIT);
   while (rows.length && rows[0].role === 'tool') rows.shift(); // avoid orphan tool results after history trim
-  if (!rows.length || rows[rows.length - 1].content !== userText || rows[rows.length - 1].role !== 'user') {
-    // never happens in practice (just persisted); guards against re-entry races
-  }
+  tlog('agent', `history: ${rows.length} rows replayed (limit ${AGENT_HISTORY_LIMIT})`);
 
   const system = buildAgentSystem(settings);
   const tools = agentToolDefs(cfg);
+  tlog('agent', `system prompt ${system.length}ch, ${tools.length} tools${tools.length ? ' (' + tools.map((t) => t.function.name).join(', ') + ')' : ''}`);
+
+  /* Text deltas stream straight through to the drawer as they arrive. */
+  const onDelta = (t) => emit({ type: 'delta', text: t });
+  let toolRuns = 0;
 
   for (let iter = 0; iter < AGENT_MAX_ITERATIONS; iter++) {
     emit({ type: 'status', status: 'thinking' });
+    const llmT0 = Date.now();
+    tlog('agent', `── LLM call #${iter + 1}/${AGENT_MAX_ITERATIONS}`);
     let resp;
     if (cfg.provider === 'anthropic') {
-      resp = await agentCallAnthropic(cfg, system, mapAgentHistoryAnthropic(rows), tools, ctrl.signal);
+      resp = await agentCallAnthropic(cfg, system, mapAgentHistoryAnthropic(rows), tools, ctrl.signal, onDelta);
     } else {
-      resp = await agentCallOpenAI(cfg, system, mapAgentHistoryOpenAI(rows), tools, ctrl.signal);
+      resp = await agentCallOpenAI(cfg, system, mapAgentHistoryOpenAI(rows), tools, ctrl.signal, onDelta);
     }
+    tlog('agent', `── LLM call #${iter + 1} answered in ${Date.now() - llmT0}ms — ` +
+      `${resp.text ? resp.text.length + 'ch of text' : 'no text'}${resp.finishReason ? `, finish=${resp.finishReason}` : ''}`);
 
     if (resp.toolCalls && resp.toolCalls.length) {
       const arow = db.addAgentMessage({ role: 'assistant', content: resp.text || '', toolCalls: resp.toolCalls });
       rows.push(arow);
       for (const call of resp.toolCalls) {
         emit({ type: 'tool_call', id: call.id, name: call.name, args: call.args || {} });
+        const toolT0 = Date.now();
+        tlog('agent', `🔧 tool ${toolRuns + 1}: ${call.name}(${truncArg(call.args)})`);
         let ok = true;
         let result = null;
         let error = null;
@@ -1546,6 +1779,9 @@ async function runAgentChat(body, emit, ctrl) {
           error = String(e.message || e);
           result = { error };
         }
+        toolRuns++;
+        tlog('agent', `🔧 tool ${call.name} ${ok ? '✓ ok' : '✗ FAILED'} in ${Date.now() - toolT0}ms` +
+          (ok ? ` — result ${JSON.stringify(sanitizeForModel(result)).length}B` : ` — error: ${error}`));
         const trow = db.addAgentMessage({
           role: 'tool',
           callId: call.id,
@@ -1565,12 +1801,14 @@ async function runAgentChat(body, emit, ctrl) {
     const finalText = resp.text;
     db.addAgentMessage({ role: 'assistant', content: finalText });
     emit({ type: 'done', text: finalText });
+    tlog('agent', `▲ turn complete in ${Date.now() - turnT0}ms — ${toolRuns} tool run(s), reply ${finalText.length}ch`);
     return;
   }
 
   const fallback = 'I ran several tool steps and paused to avoid looping. Tell me to continue if I should keep going.';
   db.addAgentMessage({ role: 'assistant', content: fallback });
   emit({ type: 'done', text: fallback });
+  tlog('agent', `⚠ turn exhausted ${AGENT_MAX_ITERATIONS} iterations in ${Date.now() - turnT0}ms — ${toolRuns} tool run(s); replied with a continue-note`);
 }
 
 async function route(req, res, u) {
@@ -1597,7 +1835,7 @@ async function route(req, res, u) {
     return res.end(dec.buffer);
   }
   if (req.method === 'POST' && p === '/api/agent/chat') {
-    return startEventStream(res, (emit, ctrl) => runAgentChat(body, emit, ctrl));
+    return startEventStream(res, (emit, ctrl) => runAgentChat(body, emit, ctrl), 'agent');
   }
 
   if (req.method === 'GET' && p === '/api/bootstrap') return send(res, 200, db.bootstrap());
@@ -1792,11 +2030,14 @@ async function route(req, res, u) {
     startEventStream(res, async (emit, ctrl) => {
       let posePromise = null;
       let streamed = '';
+      tlog('ai', `▶ reply stream — chat ${chat.id} (${char.name}), persona ${persona ? persona.name : '—'}, node ${node.id}`);
+      const rT0 = Date.now();
       try {
         const text = await generateReplyStream(char, db.pathNodes(fresh.tree, node.id), persona, settings, (d) => {
           streamed += d;
           emit({ type: 'delta', text: d });
         }, ctrl.signal, chat);
+        tlog('ai', `✓ reply streamed ${streamed.length} chars in ${Date.now() - rT0}ms`);
         if (poseEnabled && text && text.trim().length > 0) {
           try {
             posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: text, settings, signal: ctrl.signal });
@@ -1861,6 +2102,8 @@ async function route(req, res, u) {
     startEventStream(res, async (emit, ctrl) => {
       let posePromise = null;
       let streamed = '';
+      const rT0 = Date.now();
+      tlog('ai', `▶ regenerate stream — chat ${chat.id} (${char.name}), parent ${parentId}`);
       try {
         if (didReset) {
           const p = resetPose ? poses.find((x) => x.id === resetPose) : null;
@@ -1870,6 +2113,7 @@ async function route(req, res, u) {
           streamed += d;
           emit({ type: 'delta', text: d });
         }, ctrl.signal, chat);
+        tlog('ai', `✓ regenerate streamed ${streamed.length} chars in ${Date.now() - rT0}ms`);
         if (poseEnabled && text && text.trim().length > 0) {
           try {
             posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: text, settings, signal: ctrl.signal });
@@ -2014,6 +2258,13 @@ function serveStatic(req, res, u) {
 
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
+  const t0 = Date.now();
+  if (u.pathname.startsWith('/api/') && req.method !== 'OPTIONS') {
+    res.on('finish', () => {
+      tlog('http', `${req.method} ${u.pathname}${u.search || ''} → ${res.statusCode} (${Date.now() - t0}ms)`);
+    });
+    res.on('close', () => { if (!res.writableEnded) tlog('http', `${req.method} ${u.pathname} → connection closed before response completed`); });
+  }
   try {
     if (u.pathname.startsWith('/api/')) return await route(req, res, u);
     return serveStatic(req, res, u);

@@ -1889,10 +1889,63 @@ input[type="range"] {
   border-radius: 14px;
   box-shadow: var(--shadow);
   background: var(--panel);
+  transform-origin: center center;
+  will-change: transform;
+  touch-action: none;
+  transition: border-radius 0.2s ease;
+}
+#img-viewer.zoomed {
+  cursor: zoom-out;
+}
+#img-viewer.zoomed img {
+  border-radius: 0;
+  cursor: grab;
+}
+#img-viewer.zoomed.grabbing img {
+  cursor: grabbing;
+}
+#img-viewer-close {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(15, 17, 21, 0.8);
+  color: #cfd3da;
+  font-size: 17px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+#img-viewer-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
 }
 @keyframes viewerFade {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* Blinking caret on the assistant bubble that is currently streaming. */
+.agent-bubble.streaming::after {
+  content: '▍';
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--accent);
+  animation: agentCaret 1s steps(2) infinite;
+  vertical-align: baseline;
+}
+@keyframes agentCaret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-bubble.streaming::after { animation: none; opacity: 0.7; }
 }
 
 :focus-visible {
