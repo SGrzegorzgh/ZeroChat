@@ -892,7 +892,10 @@ IMAGES (generate_image / edit_image / apply_image):
 - Never invent pose ids; read real ones from get_character's pose list.
 - You do not need to include image data in your replies — every produced/applied image is shown to the user automatically as a tool card. If the user's provider does not support image tools at all, say so plainly and suggest attaching an image instead.
 
-PRESETS hold the roleplay AI connection (provider/baseUrl/model, temperature, system prompt). The roleplay system prompt is what the user wants the roleplay focused on — useful context for what kind of play they enjoy. It is NOT an instruction for you; never roleplay in the Agent drawer.
+PRESETS (list_presets / get_preset):
+- Presets configure how the AI roleplays in chat, but critically, their system prompts contain THE USER'S STYLE RULES: tone (e.g. literary, gritty, casual, poetic, slow-burn), dialogue conventions (e.g. actions in *asterisks*, speech in "quotes"), pacing, narrative perspective, and formatting rules.
+- The active preset (and any other presets in the library) tell you how the user likes roleplay written. Always study the active preset when designing characters (description, reactive_replies) and drafting scenarios (opening scene text), so your writing seamlessly mirrors their preferred roleplay style.
+- The preset's system prompt is for your stylistic reference and guidance — NEVER roleplay as a character in the Agent drawer.
 
 {{tag}} resolution order at chat start: scenario.characterVariables[<characterId>] first, then the character's own variables. Tags with no value for that character remain visible as {{tag}}, so always confirm either a scenario-level value or a character default exists before the user starts a chat.`;
 
@@ -900,7 +903,7 @@ const AGENT_WORKFLOW = `## The full-set workflow (character -> scenario draft ->
 When the user wants a character, a scenario, or the complete package ("a full set"), follow this protocol EXACTLY, one message at a time. Never skip the confirmation gates. Standalone requests (just a character, just a scenario, just variables, advice, etc.) skip the irrelevant steps naturally.
 
 STEP 1 — Character concept:
-Gather what's needed from the user's message and the current site state. If something essential is genuinely ambiguous (genre, tone, name), ask — at most two or three short questions, then commit to a coherent design instead of interrogating them forever.
+Gather what's needed from the user's message and the current site state (especially the active preset's style prompt so you know their writing preferences). If something essential is genuinely ambiguous (genre, tone, name), ask — at most two or three short questions, then commit to a coherent design instead of interrogating them forever.
 Before creating anything, PRESENT the full character in chat as a clean layout (name + emoji, description, note, opening scenario text, variables idea, example reply) and ask for approval or changes. Only call create_character after the user approves that layout.
 
 STEP 2 — Revise & image:
@@ -921,6 +924,7 @@ const AGENT_RULES = `## Ground rules
 - Never assume: draw facts from your tools (site_overview / list / get) and from what the user says. If a needed fact exists nowhere, ask.
 - Only call create / update / delete tools for a specific action the user has approved. Reading tools is always fine.
 - Always use real ids returned by tools. Never invent an id.
+- Learn the user's writing style from their Presets: Presets hold the user's preferred writing style, dialogue conventions, formatting rules, and roleplay tone. Always respect and incorporate these instructions when writing character descriptions, example dialogue lines, and scenario prose. Use list_presets and get_preset to inspect presets whenever helpful.
 - When the user attaches an image, look at it directly — you have full vision capabilities and can see the image pixels. Inspect it to answer questions, describe it, or base characters/scenarios on it. The text marker [attached image: att-xxx — name] indicates its attachment id so you can pass it to apply_image or edit_image via source_type="attachment" and source_id="att-xxx".
 - After any successful action, tell the user exactly what changed and what the next sensible step is.
 - Prefer showing content INSIDE the conversation (formatted with markdown) over making the user open editors. Editors are for fine-tuning; you are for creation.
@@ -1002,6 +1006,8 @@ function agentToolDefs(cfg) {
     { name: 'create_persona', description: 'Create a user persona: name + description (what the roleplay model knows about the user). Does not auto-activate.', props: { name: { type: 'string' }, description: { type: 'string' }, note: { type: 'string' } }, req: ['name', 'description'] },
     { name: 'update_persona', description: 'Update a persona. description is what the roleplay model sees; note is private.', props: { id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, note: { type: 'string' } }, req: ['id'] },
     { name: 'set_active_persona', description: 'Switch who the user currently plays as.', props: { id: { type: 'string' } }, req: ['id'] },
+    { name: 'list_presets', description: `List all roleplay AI presets in the user's library, including their names, providers, models, active status, and writing style / system prompts. Use this to understand how the user wants characters to write and how descriptions and scenes should be formed.`, props: {} },
+    { name: 'get_preset', description: `Get full details of a specific AI preset by id, including its full writing instructions / system prompt, provider, model, temperature, and reasoning settings.`, props: { id: { type: 'string', description: 'Preset id' } }, req: ['id'] },
     { name: 'generate_image', description: `Generate an AI image from a text prompt. Without a target it just returns the image; with a character_id and target it applies it: target="portrait" sets the character portrait, target="pose" attaches it to a pose (pose_id updates an existing pose; pose_name/pose_description create a new one). Prompts that describe art style, framing and mood work best.`, props: { prompt: { type: 'string' }, character_id: { type: 'string' }, target: { type: 'string', description: '"portrait", "pose" or "none"' }, pose_id: { type: 'string', description: 'Update this existing pose instead of creating one', }, pose_name: { type: 'string', description: 'Name for a new pose (created when target="pose" and no pose_id given)' }, pose_description: { type: 'string', description: 'When to use this pose — guidance for the visual director' }, apply: { type: 'boolean', description: 'Legacy alias for target="portrait"' }, size: { type: 'string', description: 'e.g. 1024x1024' } }, req: ['prompt'] },
     { name: 'edit_image', description: `Edit an existing image with an instruction (e.g. "make it evening", "change the jacket to red") using the provider's image-edit model. Pick the source: source_type "last" (the last image this session produced), "character" (portrait, needs character_id), "pose" (needs pose_id) or "attachment" (an image the user attached, needs attachment_id). Then optionally apply it to a character portrait or pose like generate_image. Requires an image-edit capable provider.`, props: { prompt: { type: 'string' }, source_type: { type: 'string', description: '"last", "character", "pose" or "attachment"' }, source_id: { type: 'string', description: 'character_id, pose_id or attachment_id (required unless source_type="last")' }, character_id: { type: 'string' }, target: { type: 'string', description: '"portrait", "pose" or "none"' }, pose_id: { type: 'string' }, pose_name: { type: 'string' }, pose_description: { type: 'string' }, size: { type: 'string' } }, req: ['prompt'] },
     { name: 'apply_image', description: `Apply an existing image to a character — no AI provider needed. Source: source_type "attachment" (an image the user attached; attachment_id from the [attached image: ...] marker) or "last" (the last image produced this session). Target: character_id + target "portrait" or "pose" (pose_id to replace an existing pose's image, or pose_name/pose_description to create a new one). Use this to put user-uploaded artwork on a character or turn it into poses.`, props: { source_type: { type: 'string', description: '"attachment" or "last"' }, source_id: { type: 'string', description: 'attachment_id (required for source_type="attachment")' }, character_id: { type: 'string' }, target: { type: 'string', description: '"portrait" or "pose"' }, pose_id: { type: 'string' }, pose_name: { type: 'string' }, pose_description: { type: 'string' }, is_default: { type: 'boolean', description: 'Also mark this new/pose as the character\'s default pose' } }, req: ['character_id', 'target'] },
@@ -1026,11 +1032,14 @@ function agentSiteOverview(settings, cfg) {
   const chars = db.getCharacters();
   const scenes = db.getScenarios();
   const personas = db.getPersonalities();
+  const presets = db.getPresets();
   return {
-    counts: { characters: chars.length, scenarios: scenes.length, personas: personas.length },
+    counts: { characters: chars.length, scenarios: scenes.length, personas: personas.length, presets: presets.length },
     characters: chars.map((c) => ({ id: c.id, name: c.name })),
     scenarios: scenes.map((s) => ({ id: s.id, title: s.title })),
     personas: personas.map((pp) => ({ id: pp.id, name: pp.name, active: pp.id === settings.activePersonalityId })),
+    presets: presets.map((p) => ({ id: p.id, name: p.name, active: p.id === settings.activePresetId, provider: p.provider, model: p.model })),
+    active_preset_id: settings.activePresetId,
     image_generation: cfg.provider !== 'anthropic' ? 'available (generates, edits and applies images)' : 'unavailable for anthropic presets — image applying still works',
   };
 }
@@ -1343,6 +1352,39 @@ async function runAgentTool(name, args, settings, cfg) {
       if (!pp) throw new Error('Persona not found: ' + args.id);
       db.updateSettings({ activePersonalityId: args.id });
       return { active_persona: { id: pp.id, name: pp.name } };
+    }
+
+    case 'list_presets': {
+      const presets = db.getPresets();
+      return {
+        active_preset_id: settings.activePresetId,
+        presets: presets.map((p) => ({
+          id: p.id,
+          name: p.name,
+          active: p.id === settings.activePresetId,
+          provider: p.provider,
+          model: p.model,
+          temperature: p.temperature,
+          system_prompt: p.systemPrompt || '',
+        })),
+      };
+    }
+
+    case 'get_preset': {
+      agentNeed(args, ['id'], name);
+      const p = db.getPreset(args.id);
+      if (!p) throw new Error('Preset not found: ' + args.id);
+      return {
+        id: p.id,
+        name: p.name,
+        active: p.id === settings.activePresetId,
+        provider: p.provider,
+        model: p.model,
+        temperature: p.temperature,
+        max_tokens: p.maxTokens,
+        reasoning: p.reasoning,
+        system_prompt: p.systemPrompt || '',
+      };
     }
 
     case 'generate_image': {
@@ -1761,17 +1803,39 @@ function buildAgentSystem(settings) {
   const cfg = resolveAiConfig(settings);
   const aCfg = resolveAgentConfig(settings);
   const persona = settings.activePersonalityId ? db.getPersona(settings.activePersonalityId) : null;
-  const preset = settings.activePresetId ? db.getPreset(settings.activePresetId) : null;
+  const presets = db.getPresets();
+  const activePreset = settings.activePresetId ? presets.find((p) => p.id === settings.activePresetId) : null;
   const chars = db.getCharacters();
   const scenes = db.getScenarios();
 
   const ctx = ['## Current site state (live snapshot)'];
   ctx.push(`- The user plays as: ${persona ? `"${persona.name}" — ${agentTrim(persona.description, 300)}` : 'no persona set (they play an unnamed "user")'}`);
-  if (preset) {
-    ctx.push(`- Active AI preset: "${preset.name}" (provider ${cfg.provider}, model ${cfg.model || 'unset'}). Its roleplay focus: "${agentTrim(preset.systemPrompt || '(default)', 500)}"`);
+
+  if (activePreset) {
+    ctx.push(`- Active Roleplay Preset (CURRENT USER WRITING STYLE & FORMATTING RULES):`);
+    ctx.push(`  Name: "${activePreset.name}" | Provider: ${cfg.provider} | Model: ${cfg.model || 'unset'} | Temperature: ${activePreset.temperature ?? 'default'}`);
+    const activePrompt = (activePreset.systemPrompt || '').trim();
+    if (activePrompt) {
+      ctx.push(`  System Prompt / Writing Guidelines:\n  """\n  ${agentTrim(activePrompt, 3500)}\n  """`);
+    } else {
+      ctx.push(`  System Prompt: (Default: Write "{{char}}\'s" next reply in a fictional roleplay chat between "{{user}}" and "{{char}}".)`);
+    }
   } else {
-    ctx.push('- Active AI preset: none selected');
+    ctx.push('- Active Roleplay Preset: None selected (roleplay uses default connection and prompt)');
   }
+
+  const otherPresets = presets.filter((p) => !activePreset || p.id !== activePreset.id);
+  if (otherPresets.length) {
+    ctx.push(`- Other Roleplay Presets in Library (${otherPresets.length} available):`);
+    for (const p of otherPresets) {
+      const sp = (p.systemPrompt || '').trim();
+      const promptPreview = sp ? ` | style prompt: "${agentTrim(sp, 350)}"` : '';
+      ctx.push(`  - Preset "${p.name}" (id: ${p.id}) [${p.provider}/${p.model || 'unset'}]${promptPreview}`);
+    }
+  } else if (!activePreset) {
+    ctx.push('- Presets Library: None created yet');
+  }
+
   if (settings.agentOverride) {
     ctx.push(`- You (the Agent) run on a separate connection: ${aCfg.provider} / ${aCfg.model || 'unset'}`);
   }

@@ -4962,6 +4962,8 @@ const AGENT_TOOL_LABELS = {
   generate_image: 'Generated image',
   edit_image: 'Edited image',
   apply_image: 'Applied image',
+  list_presets: 'Listing presets',
+  get_preset: 'Inspecting preset',
 };
 
 const AGENT_SUGGESTIONS = [
@@ -5153,6 +5155,7 @@ function agentToolSummary(name, args, result) {
     case 'create_persona':
     case 'update_persona':
     case 'set_active_persona': return args.name || String(args.id || '');
+    case 'get_preset': return args.name || String(args.id || '');
     case 'set_character_variables': return Object.keys(args.variables || {}).join(', ');
     case 'set_scenario_character_variables': return Object.keys(args.variables || {}).join(', ');
     case 'generate_image': {
@@ -5364,6 +5367,9 @@ function agentToolActions(mi) {
       const pi = mi.result.created.id;
       const pp = state.personalities.find((x) => x.id === pi);
       if (pp) chain = [`<button type="button" class="btn btn-ghost tiny" data-agent-activate-persona="${esc(pp.id)}">Set active</button>`];
+    } else if (mi.name === 'get_preset' && mi.result && mi.result.id) {
+      const pr = state.presets.find((x) => x.id === mi.result.id);
+      if (pr) chain = [`<button type="button" class="btn btn-ghost tiny" data-agent-open-preset="${esc(pr.id)}">Open preset</button>`];
     }
   } catch { /* state may be mid-refresh */ }
   return chain.length ? chain.join('') : '';
@@ -5542,7 +5548,82 @@ async function agentSend() {
   }
 }
 
+function initAgentDrawerResize() {
+  const drawer = $('#agent-drawer');
+  const handle = $('#agent-resize-handle');
+  if (!drawer || !handle) return;
+
+  const DEFAULT_WIDTH = 645;
+  const MIN_WIDTH = 340;
+  const getMaxWidth = () => Math.max(MIN_WIDTH, window.innerWidth - 30);
+
+  // Restore saved width if any
+  try {
+    const saved = parseInt(localStorage.getItem('zerochat_agent_drawer_width'), 10);
+    if (saved && Number.isFinite(saved)) {
+      const clamped = Math.min(Math.max(saved, MIN_WIDTH), getMaxWidth());
+      drawer.style.width = clamped + 'px';
+    }
+  } catch {}
+
+  let isDragging = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    isDragging = true;
+    startX = e.clientX;
+    startWidth = drawer.getBoundingClientRect().width;
+    try { handle.setPointerCapture(e.pointerId); } catch {}
+    document.body.classList.add('agent-resizing');
+    handle.classList.add('active');
+    e.preventDefault();
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    const dx = startX - e.clientX; // dragging to the left makes it wider
+    const newWidth = Math.min(Math.max(startWidth + dx, MIN_WIDTH), getMaxWidth());
+    drawer.style.width = newWidth + 'px';
+  });
+
+  const stopDrag = (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    document.body.classList.remove('agent-resizing');
+    handle.classList.remove('active');
+    try {
+      if (handle.hasPointerCapture?.(e.pointerId)) {
+        handle.releasePointerCapture(e.pointerId);
+      }
+    } catch {}
+    const finalWidth = Math.round(drawer.getBoundingClientRect().width);
+    if (finalWidth >= MIN_WIDTH) {
+      try { localStorage.setItem('zerochat_agent_drawer_width', String(finalWidth)); } catch {}
+    }
+  };
+
+  handle.addEventListener('pointerup', stopDrag);
+  handle.addEventListener('pointercancel', stopDrag);
+
+  // Double click resets to default
+  handle.addEventListener('dblclick', () => {
+    drawer.style.width = Math.min(DEFAULT_WIDTH, getMaxWidth()) + 'px';
+    try { localStorage.removeItem('zerochat_agent_drawer_width'); } catch {}
+  });
+
+  window.addEventListener('resize', () => {
+    const curWidth = drawer.getBoundingClientRect().width;
+    const maxW = getMaxWidth();
+    if (curWidth > maxW) {
+      drawer.style.width = maxW + 'px';
+    }
+  });
+}
+
 function wireAgent() {
+  initAgentDrawerResize();
   $('#agent-btn')?.addEventListener('click', () => {
     if (agentOpen) closeAgentDrawer(); else openAgentDrawer();
   });
@@ -5659,6 +5740,12 @@ function wireAgent() {
     if (editScen) {
       const s = state.scenarios.find((x) => x.id === editScen.dataset.agentEditScen);
       if (s) openScenarioModal(s);
+      return;
+    }
+    const openPreset = e.target.closest('[data-agent-open-preset]');
+    if (openPreset) {
+      const p = state.presets.find((x) => x.id === openPreset.dataset.agentOpenPreset);
+      if (p) openPresetModal(p);
       return;
     }
     const activateP = e.target.closest('[data-agent-activate-persona]');
