@@ -1330,12 +1330,41 @@ async function agentCallOpenAI(cfg, system, messages, tools, signal) {
     throw new Error('AI provider' + (r.status ? ' ' + r.status + ': ' : ': ') + (typeof msg === 'string' ? msg : JSON.stringify(msg)));
   }
   const m0 = (r.json.choices && r.json.choices[0] && r.json.choices[0].message) || {};
+  const fin = (r.json.choices && r.json.choices[0] && r.json.choices[0].finish_reason) || '';
   const calls = (m0.tool_calls || []).map((tc, i) => ({
     id: tc.id || ('call_' + Date.now().toString(36) + '_' + i),
     name: tc.function && tc.function.name,
     args: agentParseArgs(tc.function && tc.function.arguments),
   })).filter((c) => c.name);
-  return { text: m0.content || '', toolCalls: calls };
+  let text = m0.content ?? '';
+  /* Some providers return content as an array of typed blocks instead of a
+     plain string (Gemini-style / OpenRouter routing quirks). */
+  if (Array.isArray(text)) text = text.map((b) => typeof b === 'string' ? b : (b && (b.text || b.content)) || '').join('');
+  text = String(text || '').trim();
+  /* Reasoning models (DeepSeek-R1 style `reasoning_content`, OpenRouter
+     `reasoning`) can spend a whole turn in reasoning and leave content empty
+     on non-tool turns — that is still the model's answer, so use it. */
+  if (!text && !calls.length) text = agentReasoningText(m0);
+  if (!text && !calls.length) {
+    throw new Error(`The model (${cfg.model || 'unknown'}) returned no text this turn` +
+      (fin ? ` (finish_reason: ${fin})` : '') +
+      '. It may be incompatible with tool calling for the Agent — pick another Agent model in Settings → AI Connection, or clear the Agent log.');
+  }
+  return { text, toolCalls: calls };
+}
+
+/* Collect reasoning-only output across the field names providers actually use. */
+function agentReasoningText(m0) {
+  const parts = [];
+  const push = (v) => {
+    if (!v) return;
+    if (Array.isArray(v)) v.forEach(push);
+    else if (typeof v === 'string') parts.push(v);
+    else if (typeof v === 'object') parts.push(typeof v.text === 'string' ? v.text : (typeof v.content === 'string' ? v.content : ''));
+  };
+  push(m0.reasoning_content);
+  push(m0.reasoning);
+  return parts.map((s) => s.trim()).filter(Boolean).join('\n').trim();
 }
 
 async function agentCallAnthropic(cfg, system, messages, tools, signal) {
@@ -1360,7 +1389,12 @@ async function agentCallAnthropic(cfg, system, messages, tools, signal) {
   }
   const blocks = r.json.content || [];
   const calls = blocks.filter((b) => b.type === 'tool_use').map((b) => ({ id: b.id, name: b.name, args: b.input || {} }));
-  const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+  let text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+  /* Extended-thinking turns can end with only thinking blocks and no text. */
+  if (!text && !calls.length) text = blocks.filter((b) => b.type === 'thinking').map((b) => b.thinking || '').join('\n').trim();
+  if (!text && !calls.length) {
+    throw new Error(`The model (${cfg.model || 'unknown'}) returned no text this turn. It may be incompatible with tool calling for the Agent — pick another Agent model in Settings → AI Connection, or clear the Agent log.`);
+  }
   return { text, toolCalls: calls };
 }
 
@@ -1526,7 +1560,9 @@ async function runAgentChat(body, emit, ctrl) {
       continue;
     }
 
-    const finalText = resp.text || '*…*';
+    /* agentCallOpenAI/agentCallAnthropic guarantee either tool calls or
+       non-empty text (empty responses raise a descriptive error instead). */
+    const finalText = resp.text;
     db.addAgentMessage({ role: 'assistant', content: finalText });
     emit({ type: 'done', text: finalText });
     return;
@@ -1939,9 +1975,11 @@ async function route(req, res, u) {
   }
 
   if (req.method === 'GET' && p === '/api/provider/models') {
-    const baseUrl = (u.searchParams.get('baseUrl') || '').trim().replace(/\/+$/, '');
+    let baseUrl = (u.searchParams.get('baseUrl') || '').trim().replace(/\/+$/, '');
     const apiKey = u.searchParams.get('apiKey') || '';
+    /* Accept provider roots without a version segment, same as chat calls. */
     if (!baseUrl) return send(res, 400, { error: 'Base URL is required' });
+    if (!/\/v\d+$/.test(baseUrl)) baseUrl += '/v1';
     try {
       const r = await fetchJson(baseUrl + '/models', {
         method: 'GET',

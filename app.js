@@ -2232,6 +2232,7 @@ function openSettings(tab = 'ai') {
   $('#agent-key').type = 'password';
   $('#agent-key-toggle').textContent = 'Show';
   $('#agent-model').value = s.agentModel || '';
+  setComboModels($('#agent-model').closest('.combo'), PROVIDERS[s.agentProvider || 'openrouter']?.models || []);
   $('#agent-image-model').value = s.agentImageModel || '';
   $('#agent-image-edit-model').value = s.agentImageEditModel || '';
   updateAgentConnUI();
@@ -2258,6 +2259,7 @@ function setAgentProviderUI(pv) {
   const meta = PROVIDERS[pv];
   if (!meta) return;
   $('#agent-url').value = meta.baseUrl || '';
+  setComboModels($('#agent-model').closest('.combo'), meta.models || []);
   $('#agent-model').value = (meta.models && meta.models[0]) || '';
 }
 
@@ -2464,7 +2466,10 @@ function setProviderUI(pv) {
   updateSettingsStatusCard();
 }
 
-async function fetchModelList(baseUrl, apiKey, combo, btn) {
+async function fetchModelList(baseUrl, apiKey, combo, btn, provSel = '#prov-grid .prov.selected') {
+  /* Empty base URL fields mean "provider default" — resolve it the same way the
+     AI calls do, so Fetch list works out of the box for OpenRouter & co. */
+  if (!baseUrl) baseUrl = PROVIDERS[$(provSel)?.dataset.pv || '']?.baseUrl || '';
   if (!baseUrl) { toast('Set a base URL first'); return; }
   const old = btn.textContent;
   btn.textContent = '…';
@@ -4218,14 +4223,17 @@ function wireEvents() {
     /* Same fallback the server does at generation time: an empty preset key
        means "use the global one", so the list fetch must send it too. */
     const key = $('#pr-key').value.trim() || state.settings.apiKey;
-    fetchModelList($('#pr-url').value.trim(), key, $('#pr-model').closest('.combo'), $('#pr-fetch-models'));
+    fetchModelList($('#pr-url').value.trim(), key, $('#pr-model').closest('.combo'), $('#pr-fetch-models'), '#pr-prov-grid .prov.selected');
   });
   $('#pr-save').addEventListener('click', presetFormSave);
   $('#pr-cancel').addEventListener('click', () => requestCloseModal('modal-preset'));
   $('#pr-delete').addEventListener('click', presetDelete);
 
   $('#set-fetch-models').addEventListener('click', () => {
-    fetchModelList($('#set-url').value.trim(), $('#set-key').value.trim(), $('#set-model').closest('.combo'), $('#set-fetch-models'));
+    fetchModelList($('#set-url').value.trim(), $('#set-key').value.trim(), $('#set-model').closest('.combo'), $('#set-fetch-models'), '#prov-grid .prov.selected');
+  });
+  $('#agent-fetch-models').addEventListener('click', () => {
+    fetchModelList($('#agent-url').value.trim(), $('#agent-key').value.trim(), $('#agent-model').closest('.combo'), $('#agent-fetch-models'), '#agent-prov-grid .prov.selected');
   });
   $('#set-bgop').addEventListener('input', (e) => {
     $('#bgop-val').textContent = e.target.value + '%';

@@ -365,8 +365,21 @@
             </div>
             <div class="field">
               <label>Agent model</label>
-              <input type="text" id="agent-model" placeholder="e.g. openai/gpt-4o-mini, gemini-2.0-flash, haiku..." spellcheck="false">
-              <p class="m-note" style="margin-top:6px">The Agent mostly picks tools and drafts text — a small model handles that fine.</p>
+              <div class="combo" data-combo>
+                <div class="key-row">
+                  <input type="text" id="agent-model" class="combo-value" placeholder="e.g. openai/gpt-4o-mini, gemini-2.0-flash, haiku..." autocomplete="off" spellcheck="false">
+                  <button id="agent-fetch-models" class="mini" type="button">Fetch list</button>
+                </div>
+                <div class="combo-pop" hidden>
+                  <input type="text" class="combo-search" placeholder="Search models…" autocomplete="off" spellcheck="false">
+                  <div class="combo-list" role="listbox"></div>
+                  <div class="combo-foot">
+                    <span class="combo-foot-label">Custom id</span>
+                    <code class="combo-custom">—</code>
+                  </div>
+                </div>
+              </div>
+              <p class="m-note" style="margin-top:6px">The Agent mostly picks tools and drafts text — a small model handles that fine. Type any custom model ID your provider supports.</p>
             </div>
             <div class="field">
               <label>Agent base URL (optional)</label>
