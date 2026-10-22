@@ -4995,41 +4995,89 @@ async function agentAttachFiles(files) {
     if (agentAttachments.length >= 6) { toast('Maximum 6 attachments per message'); break; }
     if (!/^image\//.test(f.type || '')) { toast('Only image files can be attached'); continue; }
     try {
-      let dataUrl = await new Promise((resolve, reject) => {
+      const dataUrl = await new Promise((resolve, reject) => {
         const fr = new FileReader();
         fr.onload = () => resolve(fr.result);
         fr.onerror = () => reject(new Error('Could not read that file'));
         fr.readAsDataURL(f);
       });
-      dataUrl = await downscaleImageDataUrl(dataUrl, 1536);
-      const r = await api('/agent/attach', { method: 'POST', body: JSON.stringify({ name: f.name, dataUrl }) });
-      agentAttachments.push({ id: r.id, name: r.name || f.name, dataUrl });
+      const normalized = await normalizeImageDataUrl(String(dataUrl));
+      if (normalized.length > 12 * 1024 * 1024) {
+        toast(`"${f.name}" is too large even after scaling (max ~9 MB)`);
+        continue;
+      }
+      const r = await api('/agent/attach', { method: 'POST', body: JSON.stringify({ name: f.name, dataUrl: normalized }) });
+      agentAttachments.push({ id: r.id, name: r.name || f.name, dataUrl: normalized });
     } catch (e) { toast(e.message || 'Attachment failed'); }
   }
   renderAgentAttachments();
 }
 
-/* Large photos are scaled down before upload so SQLite stays lean and
-   image-edit providers receive a sane payload. */
-function downscaleImageDataUrl(dataUrl, maxDim) {
-  return new Promise((resolve) => {
+/* Every attached image — png, jpg, webp, avif, gif, heic… — is decoded and
+   normalized before upload: oversized dimensions are scaled to ≤1536px and the
+   result is re-encoded into a compact, universally accepted format (WebP for
+   opaque content, PNG to preserve transparency). Small PNG/JPEG sources pass
+   through untouched. This keeps POST bodies far below the payload cap, where
+   re-encoding camera photos to PNG could blow past it. */
+function normalizeImageDataUrl(dataUrl, maxDim = 1536) {
+  const mime = (dataUrl.match(/^data:(image\/[a-z0-9.+-]+);/i) || [])[1] || '';
+  const draw = (source) => new Promise((resolve, reject) => {
+    const big = Math.max(source.width || 0, source.height || 0);
+    if (!big) return reject(new Error('Empty image'));
+    const k = big > maxDim ? maxDim / big : 1;
+    /* Small PNG/JPEG is compact and accepted by every provider as-is. */
+    if (k === 1 && /^image\/(png|jpeg)$/.test(mime)) return resolve(dataUrl);
+    const w = Math.max(1, Math.round(source.width * k));
+    const h = Math.max(1, Math.round(source.height * k));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(source, 0, 0, w, h);
+    /* Preserve transparency when present; otherwise pick the smallest encoder
+       the browser offers — WebP first, JPEG fallback (photos encode ~10x
+       smaller than PNG), PNG as the last resort. */
+    let hasAlpha = false;
+    try {
+      const d = ctx.getImageData(0, 0, w, h).data;
+      for (let i = 3; i < d.length; i += 16) { if (d[i] < 250) { hasAlpha = true; break; } }
+    } catch { hasAlpha = true; }
+    let out = '';
+    try {
+      if (!hasAlpha) {
+        out = canvas.toDataURL('image/webp', 0.9);
+        /* Safari has no WebP encoder and silently returns PNG data — fall back
+           to JPEG so opaque photos stay small. */
+        if (!out.startsWith('data:image/webp,')) out = canvas.toDataURL('image/jpeg', 0.92);
+      }
+      if (!out) out = canvas.toDataURL('image/png');
+    } catch { out = ''; }
+    if (!out) reject(new Error('Could not re-encode that image'));
+    else resolve(out);
+  });
+  const decodeViaImg = () => new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => {
-      const big = Math.max(img.naturalWidth, img.naturalHeight);
-      const k = big > maxDim ? maxDim / big : 1;
-      if (k === 1) return resolve(dataUrl);
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(img.naturalWidth * k));
-      canvas.height = Math.max(1, Math.round(img.naturalHeight * k));
-      const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = () => resolve(dataUrl);
+    img.onload = () => resolve(img);
+    img.onerror = reject;
     img.src = dataUrl;
   });
+  return decodeViaImg()
+    .then(draw, async () => {
+      /* Some browsers decode exotic formats (avif/heic) only through
+         createImageBitmap — try that before giving up. */
+      try {
+        const blob = await (await fetch(dataUrl)).blob();
+        return await draw(await createImageBitmap(blob));
+      } catch {
+        throw new Error(`This browser can't decode ${fMimeLabel(mime)} images — try converting it to PNG or JPEG`);
+      }
+    });
+}
+function fMimeLabel(mime) {
+  const m = String(mime || '').replace('image/', '').toUpperCase();
+  return m && m.length < 6 ? m : 'THAT';
 }
 let agentMessages = [];
 

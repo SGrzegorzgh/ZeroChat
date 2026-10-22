@@ -1760,12 +1760,12 @@ function agentMessageCount() {
 
 /* ---- Agent attachments (images the user gives the Agent) ------------------- */
 
-const ATTACH_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const ATTACH_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'];
 
 function addAgentAttachment({ name, dataUrl }) {
   const s = String(dataUrl || '');
-  const mm = s.match(/^data:(image\/(?:png|jpeg|webp|gif));base64,/);
-  if (!mm) throw new Error('Only PNG, JPEG, WebP or GIF images can be attached');
+  const mm = s.match(/^data:(image\/(?:png|jpeg|webp|gif|avif));base64,/);
+  if (!mm) throw new Error('Only PNG, JPEG, WebP, AVIF or GIF images can be attached');
   if (s.length > 12 * 1024 * 1024) throw new Error('Image too large (max ~9 MB encoded)');
   const a = {
     id: 'att-' + uid(),

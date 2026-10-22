@@ -31,7 +31,7 @@ function send(res, code, body, type = 'application/json') {
   res.end(data);
 }
 
-function readBody(req, limit = 6 * 1024 * 1024) {
+function readBody(req, limit = 12 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
@@ -101,7 +101,7 @@ async function fetchJson(url, opts, timeoutMs = 30000) {
 /* Split a data URL ("data:image/png;base64,....") into mime + raw bytes.
    Returns null when the string does not look like an image data URL. */
 function parseImageDataUrl(dataUrl) {
-  const m = String(dataUrl || '').match(/^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+  const m = String(dataUrl || '').match(/^data:(image\/(?:png|jpeg|webp|gif|avif));base64,([A-Za-z0-9+/=]+)$/);
   if (!m) return null;
   try { return { mime: m[1], buffer: Buffer.from(m[2], 'base64') }; } catch { return null; }
 }
