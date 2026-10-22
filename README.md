@@ -1,31 +1,40 @@
 # ZeroChat 🎭
 
-> **Lightweight, zero-dependency, self-hosted web application for roleplaying with AI characters.**
+> **A self-hosted AI roleplay app with zero npm dependencies — branch your story, direct the visuals, and let a built-in AI agent build the rest.**
 
-ZeroChat combines branching conversation trees, multi-persona management, decoupled scenario scenes, an AI-driven dynamic visual pose/expression director, and a built-in AI build Agent—all running locally with zero external npm dependencies.
+ZeroChat is a single lightweight web application for roleplaying with AI characters. Everything runs locally in one Node.js process: an embedded SQL database, a streaming server, and a vanilla-JS frontend. No `node_modules`, no build step, no tracking — clone and run.
 
 ---
 
 ## ✨ Features
 
-- **Zero External Dependencies**:
-  Runs purely on modern Node.js built-ins (`node:sqlite`, `http`, `crypto`, `fs`). No `node_modules`, no bundlers, no external ORMs.
-- **Dynamic Visual Pose Director**:
-  Characters change visual poses and expressions automatically based on the conversation, powered by the fast, low-cost **Jev** decision model. Visual poses revert accurately when switching or deleting branches.
-- **Branching Conversation Trees**:
-  Non-linear dialogue trees allow you to edit previous messages, regenerate replies, and seamlessly flip through alternative branch versions (`< 1 / 3 >`).
-- **Clean, Modern & Responsive UI**:
-  - **Consolidated Navigation**: Character profile and chat history drawer on the left; active persona switcher and settings on the right.
-  - **Tabbed Progressive Settings**: Clean tabs for AI Connection, Visuals & Poses, Presets, and Data Backup. Advanced settings stay neatly tucked behind friendly disclosures.
-  - **Personas in Sidebar**: Quickly switch identities or create new personas directly from the sidebar.
-  - **Plain-Language Steer Mode (OOC)**: Easily direct the scene out-of-character with a single toggle and clear directive alerts.
-  - **Touch-Friendly Auto-Expanding Textareas**: Input boxes automatically adjust to text length and provide smooth drag handles on mobile touchscreens.
-- **Built-In AI Build Agent**:
-  A side drawer assistant that sees your whole site — characters, scenarios, personas and the active AI preset — and can create and edit all of it directly with tools. It guides the complete workflow: character → scenario draft → scaffold + variables, always showing you a proposal and waiting for your approval at each step. Works with OpenAI-compatible providers and Anthropic. By default it runs on your active preset, but you can give it its own dedicated model & provider in Settings → AI Connection (handy for a fast, cheap model).
-- **Universal JSON Export & Import**:
-  Export or import complete backups, individual character cards (including artwork poses), scenarios, and custom variables in a clean, standard JSON format.
-- **Local-First & Data Durability**:
-  All conversations, characters, and assets are stored in an embedded SQLite database (`aichat.db`) with Write-Ahead Logging (WAL) and automated snapshot backups in `backups/`.
+### Roleplay core
+- **Branching conversation trees** — edit any previous message, regenerate replies, and flip through alternative branches (`< 1 / 3 >`). Every message node can fork; downstream replies fork with it. Trimming or switching branches is always reversible and re-parents safely.
+- **Shift the scene without leaving character (Steer / OOC)** — a dedicated OOC mode tints the composer and sends a waiting directive that the character's next reply incorporates, either automatically or on demand.
+- **Personas** — play as multiple identities of *yourself*; switch instantly from the header pill or the sidebar. Personas have their own avatar artwork, private notes and (optionally) an image standing next to your messages.
+- **Scenarios with `{{variables}}`** — scenarios are standalone scene texts you can attach to any chat. Concrete details (outfits, places, moods, numbers) become `{{tags}}`; every character can fill them with its own values (per-character values override character-wide defaults). Tags without a value stay visible so you never silently miss one.
+- **Reactive replies & memories** — characters can define up to 12 example lines that tell the model how they speak, plus a private note the roleplay model never sees.
+- **Markdown & safe rendering** — chat replies render markdown (bold, italics, quotes, code) with all input escaped; the agent drawer uses a richer renderer (tables, lists, code fences).
+
+### Visuals
+- **Dynamic pose director** — give a character multiple poses/images and a low-cost decision model (**Jev**) picks the matching shot live as the conversation moves: standing, sitting, close-up, leaning in... The background painterly view swaps along with it (adjustable opacity/blur/action dimming). Poses revert correctly when you walk branches back — each message stores the pose that was active.
+- **Built-in image cropper** — portraits and pose images are cropped, rotated and thumbnailed right in the browser (square avatar + full artwork with one flow, touch friendly).
+- **Composited backgrounds** — the active pose image becomes the chat backdrop with soft dimming for readability.
+
+### Built-in AI Build Agent (side drawer)
+A pocket product manager that sees your whole site and can *actually do the work*:
+- **Full-set workflow** — proposes a character → waits for approval → creates it → iterates with you → drafts the scenario as plain prose → splits it into a scaffold + `{{variables}}` and shows the table → creates everything and wires the values. Every step needs your OK.
+- **Runs everything with tools** — character/scenario/persona/preset CRUD, variable merging, live site overview. It never invents ids and never mutates without approval.
+- **Images end-to-end** — generate portraits and pose images (`generate_image`), edit them with instructions ("make it evening, warmer light") via `edit_image`, attach your own reference images with the paperclip and have the Agent apply them as portrait or poses (`apply_image`), or build a whole multi-pose character including art. Images show as cards in the drawer; oversized tool payloads degrade gracefully instead of corrupting model context.
+- **Its own model, if you want** — point the Agent at a separate provider/model (a fast, cheap one for tool calls), configurable per-field in Settings, while images can use their own generation/edit models.
+- **Markdown tool cards** — every action appears as an expandable card with shortcuts ("Open chat", "Poses", "Edit scenario").
+
+### Configuration & data
+- **AI presets** — bundle provider + model + temperature + system prompt into switchable presets and flip them live from the header (or the phone's ⋯ menu). Perfect for A/B-testing roleplay models.
+- **Providers** — OpenRouter, OpenAI, Anthropic, Ollama and any OpenAI-compatible `/v1` endpoint (LM Studio, vLLM, ...). Streaming replies, tool calling, image endpoints.
+- **Everything stays local** — conversations, trees, images and settings live in an embedded SQLite database (`aichat.db`) with WAL journaling. Automated snapshot backups (on startup and before every destructive action) go to `backups/`.
+- **Universal export & import** — one JSON format covers full backups, single character cards (including poses and artwork) and scenarios; imports run inside a transaction with a snapshot taken first.
+- **Responsive, dependency-free UI** — dark glassmorphism design that works equally well on a desktop and a phone: the mobile header folds persona, presets and editing into one ⋯ menu, drawers replace popups, textareas auto-grow with touch-friendly drag handles, and modals are always custom (no browser dialogs anywhere).
 
 ---
 
@@ -50,19 +59,26 @@ ZeroChat combines branching conversation trees, multi-persona management, decoup
    ```
 
 3. **Open in your browser**:
-   Navigate to [http://localhost:3000](http://localhost:3000) (or accessible across your local network via your machine's IP).
+   Navigate to [http://localhost:3000](http://localhost:3000) (or across your local network via your machine's IP).
+
+4. **Connect an AI (optional)** — open **Settings → AI Connection** and enter a key for your provider. Until then the app runs in simulated sample mode. For the Agent's image powers, an OpenAI-compatible provider with image support is needed (see below).
 
 ---
 
 ## ⚙️ Configuration & AI Providers
 
-ZeroChat works right out of the box with sample characters and simulated responses. When you are ready for live AI roleplay, open **Settings** (⚙️) to connect your favorite provider:
+| Provider | Chat | Agent | Images (generate / edit) |
+|---|---|---|---|
+| OpenRouter | ✅ | ✅ | ✅ via compatible image endpoints |
+| OpenAI | ✅ | ✅ | ✅ (`dall-e-3` / `gpt-image-1`) |
+| Anthropic | ✅ | ✅ | portrait/pose application only |
+| Ollama | ✅ | ✅ | depends on your models |
+| Custom OpenAI-compatible | ✅ | ✅ | ✅ if the endpoint implements it |
 
-- **OpenRouter** (Recommended): Access 400+ models with a single API key.
-- **OpenAI**: Compatible with `gpt-4o` and other OpenAI models.
-- **Anthropic**: Compatible with Claude models (`claude-3-5-sonnet`, etc.).
-- **Ollama**: Connect to local models running on your machine without an API key.
-- **Custom / Local**: Compatible with any OpenAI-compatible `/v1` endpoint (LM Studio, vLLM, text-generation-webui).
+- **Roleplay preset**: Settings → AI Connection (or create/edit presets in the AI Presets tab; switch them from the header pill).
+- **Agent connection**: Settings → AI Connection → *Give the Agent its own model & provider*.
+- **Agent image models**: Settings → AI Connection → *Agent images* — `Agent image model` (generation, default `dall-e-3`) and `Agent image-edit model` (editing, default `gpt-image-1`). Editing uses the standard `POST /images/edits` multipart endpoint.
+- **Visual director**: Settings → Visuals & Poses — enable it, tune the swap sensitivity, context window and (optionally) a dedicated Jev decision provider.
 
 ---
 
@@ -71,10 +87,10 @@ ZeroChat works right out of the box with sample characters and simulated respons
 ```text
 ZeroChat/
 ├── package.json         # Scripts and project metadata (0 npm dependencies)
-├── server.js            # Native HTTP server, REST & SSE streaming, pose director
-├── db.js                # SQLite database, tree operations, backups, export/import
+├── server.js            # Native HTTP server, REST & SSE streaming, pose director, agent tool loop
+├── db.js                # SQLite database, tree operations, backups, export/import, agent log
 ├── index.html           # SPA semantic layout, responsive drawers, tabbed modals
-├── app.js               # Client state, dynamic rendering, branch navigation
+├── app.js               # Client state, dynamic rendering, branch navigation, agent drawer
 ├── styles.css           # Dark theme design system, glassmorphism, responsive styles
 ├── AGENTS.md            # Architecture notes and guidelines for developers & agents
 └── README.md            # This documentation
@@ -84,7 +100,7 @@ ZeroChat/
 
 ## 🛠️ Development
 
-- **Syntax check**:
+- **Syntax check** (no build step — files run directly):
   ```bash
   node -c server.js db.js app.js
   ```
@@ -92,6 +108,7 @@ ZeroChat/
   ```bash
   PORT=8080 HOST=127.0.0.1 node server.js
   ```
+- **Conventions**: see `AGENTS.md` — zero-dependency rule, SQLite tree invariants, backup-before-destructive and custom-dialog rules.
 
 ---
 

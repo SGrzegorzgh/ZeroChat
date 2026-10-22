@@ -359,6 +359,12 @@ body.sidebar-open #scrim {
   flex: none;
 }
 
+/* The "⋯" overflow (persona / preset / edit / settings) is phone-only;
+   desktop shows those controls directly in the header. */
+#more-wrap {
+  display: none;
+}
+
 #menu-btn {
   display: none;
 }
@@ -1984,19 +1990,18 @@ input[type="range"] {
     max-width: 118px;
     padding: 8px 10px;
   }
-  #persona-wrap .pill .label,
-  #persona-wrap .pill .chev {
+  /* Slim the header on phones: persona switcher, preset pill and the edit
+     pencil move into the "⋯" overflow menu (#more-wrap) for clarity. */
+  #persona-wrap,
+  #edit-char-btn,
+  #preset-wrap {
     display: none;
   }
-  #persona-wrap .pill {
-    padding: 8px 9px;
+  #more-wrap {
+    display: inline-flex;
   }
-  #preset-wrap .pill .label,
-  #preset-wrap .pill .chev {
-    display: none;
-  }
-  #preset-wrap .pill {
-    padding: 8px 9px;
+  .header-right {
+    gap: 2px;
   }
   #chat-feed {
     padding: 14px 12px 20px;
@@ -4719,6 +4724,92 @@ body.agent-open #scrim {
   margin-top: 7px;
 }
 
+/* Paperclip: attach images to an agent turn (portrait / pose sources) */
+.agent-attach {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  border: 1px solid var(--border2);
+  background: var(--panel);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.agent-attach:hover {
+  color: var(--text);
+  border-color: #4a4f57;
+}
+.agent-attach:active {
+  transform: scale(0.94);
+}
+.agent-attach svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Pending attachments shown above the composer as small thumbs with remove */
+.agent-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 0 10px;
+}
+.agent-attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 200px;
+  padding: 4px 9px 4px 4px;
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.agent-attach-chip img {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  object-fit: cover;
+  background: #101216;
+}
+.agent-attach-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.agent-attach-chip .att-x {
+  border: none;
+  background: none;
+  color: var(--muted2);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 1px;
+  cursor: pointer;
+}
+.agent-attach-chip .att-x:hover {
+  color: var(--text);
+}
+
+/* Chips inside a sent user bubble (loaded from the persisted markers) */
+.agent-bubble .agent-attach-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.agent-bubble .agent-attach-chip {
+  max-width: 100%;
+}
+.agent-bubble .agent-attach-chip img {
+  cursor: pointer;
+}
+
 /* Welcome agent button */
 .welcome-agent-row {
   display: flex;
@@ -4769,6 +4860,15 @@ body.agent-open #scrim {
   .agent-send svg {
     width: 18px;
     height: 18px;
+  }
+  .agent-attach {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+  }
+  .agent-attach svg {
+    width: 17px;
+    height: 17px;
   }
 }
 @media (max-width: 560px) {

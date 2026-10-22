@@ -149,11 +149,20 @@
               <div class="menu" id="persona-menu"></div>
             </div>
 
-            <div class="menu-wrap hidden" id="preset-wrap">
-              <button id="preset-btn" class="pill" title="AI preset">
+            <div class="menu-wrap" id="preset-wrap">
+              <button id="preset-btn" class="pill header-preset-pill" title="AI preset (who the chat AI is)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="preset-ico" style="width:13px;height:13px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                 <span class="label" id="preset-label">AI</span>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
               </button>
               <div class="menu" id="preset-menu"></div>
+            </div>
+
+            <div class="menu-wrap" id="more-wrap">
+              <button id="more-btn" class="icon-btn" aria-label="More options" title="Persona, AI preset, edit &amp; settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+              </button>
+              <div class="menu" id="more-menu"></div>
             </div>
 
             <button id="edit-char-btn" class="icon-btn" aria-label="Edit character" title="Edit character">
@@ -227,13 +236,18 @@
   </div>
 
   <div id="agent-composer">
+    <div id="agent-attachments" class="agent-attachments hidden"></div>
     <div class="agent-composer-row">
+      <button type="button" id="agent-attach-btn" class="agent-attach" aria-label="Attach image" title="Attach images — apply them as a portrait or poses">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      </button>
+      <input type="file" id="agent-file-input" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
       <textarea id="agent-input" rows="1" placeholder="Describe what you want to build..."></textarea>
       <button id="agent-send-btn" class="agent-send" aria-label="Send to agent" title="Send">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
       </button>
     </div>
-    <div class="agent-hint" id="agent-hint">The Agent can create characters, scenarios, personas and variables for you.</div>
+    <div class="agent-hint" id="agent-hint">The Agent can create characters, scenarios and personas — including images: attach or let it generate portraits &amp; poses.</div>
   </div>
 </div>
 
@@ -359,6 +373,18 @@
               <input type="url" id="agent-url" placeholder="Leave empty for provider defaults">
               <p class="m-note">Set for custom or local OpenAI-compatible endpoints (e.g. LM Studio, Ollama).</p>
             </div>
+          </div>
+
+          <div class="settings-section-title">Agent images</div>
+          <div class="field">
+            <label>Agent image model</label>
+            <input type="text" id="agent-image-model" placeholder="dall-e-3" spellcheck="false">
+            <p class="m-note" style="margin-top:6px">Used by the Agent to generate character portraits and pose images (OpenAI-compatible <code>/images/generations</code> endpoints). Leave empty for <code>dall-e-3</code>.</p>
+          </div>
+          <div class="field">
+            <label>Agent image-edit model</label>
+            <input type="text" id="agent-image-edit-model" placeholder="gpt-image-1" spellcheck="false">
+            <p class="m-note" style="margin-top:6px">Used to edit existing images (portraits, poses or ones you attach) via <code>/images/edits</code> multipart endpoints. Leave empty for <code>gpt-image-1</code>.</p>
           </div>
         </div>
 

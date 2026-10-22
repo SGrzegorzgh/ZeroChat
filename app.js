@@ -1097,7 +1097,6 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
   }
 
   resize();
-  return resize;
 }
 
 function closeMenus() {
@@ -1113,6 +1112,7 @@ function toggleMenu(wrapId) {
     if (wrapId === 'persona-wrap') renderPersonaMenu();
     if (wrapId === 'chats-wrap') renderChatsMenu();
     if (wrapId === 'preset-wrap') renderPresetMenu();
+    if (wrapId === 'more-wrap') renderMoreMenu();
     menu.classList.add('open');
   }
 }
@@ -1981,10 +1981,10 @@ let poseCreating = false;
 let poseUploadId = null;
 let poseDelArm = null;
 
-async function openPosesModal() {
+async function openPosesModal(charIdOverride) {
   const charModalOpen = $('#modal-char').classList.contains('open');
   if (charModalOpen && ceMode !== 'edit') { toast('Save the character first'); return; }
-  const charId = (charModalOpen && ceId) ? ceId : ui.activeCharacterId;
+  const charId = (charModalOpen && ceId) ? ceId : (charIdOverride || ui.activeCharacterId);
   const c = charId && state.characters.find((x) => x.id === charId);
   if (!c) { toast('Save the character first'); return; }
   poseCharId = charId;
@@ -2200,7 +2200,7 @@ function updateSettingsStatusCard() {
        <div class="status-desc">No API key entered. AI replies are simulated samples until you add a key below.</div>`;
 }
 
-function openSettings() {
+function openSettings(tab = 'ai') {
   const s = state.settings;
   $('#prov-grid').innerHTML = provGridHtml(s.provider);
   $('#set-url').value = s.baseUrl;
@@ -2232,6 +2232,8 @@ function openSettings() {
   $('#agent-key').type = 'password';
   $('#agent-key-toggle').textContent = 'Show';
   $('#agent-model').value = s.agentModel || '';
+  $('#agent-image-model').value = s.agentImageModel || '';
+  $('#agent-image-edit-model').value = s.agentImageEditModel || '';
   updateAgentConnUI();
   const posePct = Math.round((Number.isFinite(+s.poseLikelihood) ? +s.poseLikelihood : 0.6) * 100);
   $('#set-poselike').value = posePct;
@@ -2240,7 +2242,7 @@ function openSettings() {
   $('#set-posecontext').value = poseCtx;
   $('#posecontext-val').textContent = poseCtx === 0 ? 'None (latest reply only)' : `${poseCtx} message${poseCtx === 1 ? '' : 's'}`;
   renderPresetList();
-  switchSettingsTab('ai');
+  switchSettingsTab(tab);
   updateSettingsStatusCard();
   openModal('modal-settings');
   takeModalSnapshot('modal-settings');
@@ -2532,6 +2534,8 @@ async function settingsSave() {
     agentBaseUrl: $('#agent-url').value.trim(),
     agentApiKey: $('#agent-key').value.trim(),
     agentModel: $('#agent-model').value.trim(),
+    agentImageModel: $('#agent-image-model').value.trim(),
+    agentImageEditModel: $('#agent-image-edit-model').value.trim(),
   };
   try {
     state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(body) });
@@ -2583,6 +2587,47 @@ function renderPresetMenu() {
       </button>`).join('')}
     <div class="menu-sep"></div>
     <button class="menu-item manage" id="ps-manage">${I.gear}<span>Manage presets</span></button>`;
+}
+
+/* Mobile overflow menu (the "⋯" header button): the persona + preset switchers
+   live here on phones so the header stays to two tidy buttons — see styles.css. */
+function renderMoreMenu() {
+  const menu = $('#more-menu');
+  const c = activeChar();
+  const pr = activePreset();
+  const pid = state.settings.activePersonalityId;
+  menu.innerHTML = `
+    <div class="menu-title">Playing as</div>
+    ${state.personalities.map((p) => `
+      <button class="menu-item ${p.id === pid ? 'active' : ''}" data-pid="${p.id}">
+        ${personaAvatarHtml(p, 'sm')}
+        <span class="mi-main">
+          <span class="mi-name">${esc(p.name)}</span>
+          <span class="mi-desc">${esc(p.note || p.description)}</span>
+        </span>
+        ${p.id === pid ? `<span class="mi-check">${I.check}</span>` : ''}
+      </button>`).join('')}
+    <div class="menu-sep"></div>
+    <div class="menu-title">AI preset</div>
+    <button class="menu-item ${!pr ? 'active' : ''}" data-pset="">
+      <span class="mi-main">
+        <span class="mi-name">Provider settings</span>
+        <span class="mi-desc">Uses the main Settings configuration</span>
+      </span>
+      ${!pr ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>
+    ${state.presets.map((p) => `
+      <button class="menu-item ${pr && p.id === pr.id ? 'active' : ''}" data-pset="${p.id}">
+        <span class="mi-main">
+          <span class="mi-name">${esc(p.name)}</span>
+          <span class="mi-desc">${esc(presetSummary(p))}</span>
+        </span>
+        ${pr && p.id === pr.id ? `<span class="mi-check">${I.check}</span>` : ''}
+      </button>`).join('')}
+    <div class="menu-sep"></div>
+    ${c ? `<button class="menu-item" id="mf-edit-char">${I.pencil}<span>Edit ${esc(c.name)}</span></button>` : ''}
+    <button class="menu-item" id="mf-manage-presets">${I.gear}<span>Manage presets</span></button>
+    <button class="menu-item" id="mf-settings">${I.gear}<span>Settings</span></button>`;
 }
 
 let prMode = 'new';
@@ -4106,13 +4151,29 @@ function wireEvents() {
   $('#persona-btn').addEventListener('click', () => toggleMenu('persona-wrap'));
   $('#chats-btn').addEventListener('click', () => toggleMenu('chats-wrap'));
   $('#preset-btn').addEventListener('click', () => toggleMenu('preset-wrap'));
+  $('#more-btn').addEventListener('click', () => toggleMenu('more-wrap'));
   $('#settings-btn').addEventListener('click', () => { closeMenus(); openSettings(); });
   $('#edit-char-btn').addEventListener('click', () => { closeMenus(); const c = activeChar(); if (c) openCharModal(c); });
+
+  $('#more-menu').addEventListener('click', (e) => {
+    const pid = e.target.closest('[data-pid]');
+    if (pid) { setPersona(pid.dataset.pid); closeMenus(); return; }
+    const pset = e.target.closest('[data-pset]');
+    if (pset) { setPreset(pset.dataset.pset); closeMenus(); return; }
+    if (e.target.closest('#mf-edit-char')) {
+      closeMenus();
+      const c = activeChar();
+      if (c) openCharModal(c);
+      return;
+    }
+    if (e.target.closest('#mf-manage-presets')) { closeMenus(); openSettings('presets'); return; }
+    if (e.target.closest('#mf-settings')) { closeMenus(); openSettings(); }
+  });
 
   $('#preset-menu').addEventListener('click', (e) => {
     const item = e.target.closest('[data-pset]');
     if (item) { setPreset(item.dataset.pset); closeMenus(); return; }
-    if (e.target.closest('#ps-manage')) { closeMenus(); openSettings(); }
+    if (e.target.closest('#ps-manage')) { closeMenus(); openSettings('presets'); }
   });
 
   $('#preset-list').addEventListener('click', async (e) => {
@@ -4764,19 +4825,77 @@ const AGENT_TOOL_LABELS = {
   update_persona: 'Updated persona',
   set_active_persona: 'Switched active persona',
   generate_image: 'Generated image',
+  edit_image: 'Edited image',
+  apply_image: 'Applied image',
 };
 
 const AGENT_SUGGESTIONS = [
   'Let\'s create a new character together — a full set with a scenario.',
+  'Create a character and generate a portrait plus two poses for her.',
+  'I attached an image — turn it into my character\'s avatar.',
   'What characters and scenarios do I have?',
-  'Write a scenario draft for my active persona.',
-  'Add a variable to one of my characters.',
 ];
 
 let agentOpen = false;
 let agentBusy = false;
 let agentStatus = '';
 let agentLoaded = false;
+let agentAttachments = []; // { id, name, dataUrl } surfaced as chips above the input
+
+function renderAgentAttachments() {
+  const row = agentEl('#agent-attachments');
+  if (!row) return;
+  if (!agentAttachments.length) { row.classList.add('hidden'); row.innerHTML = ''; return; }
+  row.classList.remove('hidden');
+  row.innerHTML = agentAttachments.map((a) => `
+    <span class="agent-attach-chip" title="${esc(a.name)}">
+      <img src="${esc(a.dataUrl)}" alt="${esc(a.name)}">
+      <span>${esc(a.name)}</span>
+      <button type="button" class="att-x" data-att-remove="${esc(a.id)}" aria-label="Remove attachment">×</button>
+    </span>`).join('');
+}
+
+async function agentAttachFiles(files) {
+  for (const f of Array.from(files || [])) {
+    if (agentAttachments.length >= 6) { toast('Maximum 6 attachments per message'); break; }
+    if (!/^image\//.test(f.type || '')) { toast('Only image files can be attached'); continue; }
+    try {
+      let dataUrl = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = () => reject(new Error('Could not read that file'));
+        fr.readAsDataURL(f);
+      });
+      dataUrl = await downscaleImageDataUrl(dataUrl, 1536);
+      const r = await api('/agent/attach', { method: 'POST', body: JSON.stringify({ name: f.name, dataUrl }) });
+      agentAttachments.push({ id: r.id, name: r.name || f.name, dataUrl });
+    } catch (e) { toast(e.message || 'Attachment failed'); }
+  }
+  renderAgentAttachments();
+}
+
+/* Large photos are scaled down before upload so SQLite stays lean and
+   image-edit providers receive a sane payload. */
+function downscaleImageDataUrl(dataUrl, maxDim) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const big = Math.max(img.naturalWidth, img.naturalHeight);
+      const k = big > maxDim ? maxDim / big : 1;
+      if (k === 1) return resolve(dataUrl);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * k));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * k));
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
 let agentMessages = [];
 
 function agentEl(sel) { return document.querySelector(sel); }
@@ -4842,7 +4961,21 @@ function agentToolSummary(name, args, result) {
     case 'set_active_persona': return args.name || String(args.id || '');
     case 'set_character_variables': return Object.keys(args.variables || {}).join(', ');
     case 'set_scenario_character_variables': return Object.keys(args.variables || {}).join(', ');
-    case 'generate_image': return agentTrimLocal(args.prompt, 60);
+    case 'generate_image': {
+      const p = agentTrimLocal(args.prompt, 60);
+      if (args.target === 'pose') return `${p} → pose ${args.pose_id ? '' : (args.pose_name || '(new)')}`;
+      if (args.pose_id) return `${p} → pose ${args.pose_id}`;
+      if (args.character_id && (args.target === 'portrait' || args.apply)) return `${p} → portrait`;
+      return p;
+    }
+    case 'edit_image': {
+      const src = args.source_type === 'last' ? 'last image' : args.source_type || 'image';
+      return `${agentTrimLocal(args.prompt, 50)} · from ${src}`;
+    }
+    case 'apply_image': {
+      const src = args.source_type === 'attachment' ? (args.source_id || 'attachment') : 'last image';
+      return `${src} → ${args.target === 'pose' ? ('pose ' + (args.pose_name || args.pose_id || '(new)')) : 'portrait'}`;
+    }
     default: return '';
   }
 }
@@ -4855,6 +4988,25 @@ function agentRoles(mi) {
   return mi.role;
 }
 
+/* User messages may carry [attached image: att-… — name] markers the server
+   stores for history replay. Render them as clickable thumbnails instead. */
+const AGENT_ATTACH_RE = /\[attached image:\s*(att-[\w-]+)\s*(?:—\s*([^\]]*))?\]/g;
+
+function agentUserHtml(content) {
+  const imgs = [];
+  const text = String(content || '').replace(AGENT_ATTACH_RE, (_m0, id, name) => {
+    imgs.push({ id, name: (name || 'image').trim() });
+    return '';
+  });
+  const chips = imgs.map((a) => `
+    <span class="agent-attach-chip" data-att-id="${esc(a.id)}" title="${esc(a.name)}">
+      <img src="/api/agent/${esc(a.id)}/file" alt="${esc(a.name)}" loading="lazy">
+      <span>${esc(a.name)}</span>
+    </span>`).join('');
+  const md = agentMd(text.trim());
+  return chips ? `${md}<div class="agent-attach-row">${chips}</div>` : md;
+}
+
 function agentToolCardHtml(mi) {
   // Loaded rows use toolName/toolArgs/toolResult/toolError; live events use name/args/result/ok.
   const name = mi.name || mi.toolName;
@@ -4862,7 +5014,11 @@ function agentToolCardHtml(mi) {
   const label = agentToolLabel(name);
   const sub = agentToolSummary(name, mi.args, mi.result) || (mi.ok === false && mi.error ? agentTrimLocal(mi.error, 70) : 'done');
   const okCls = mi.ok === false ? 'err' : (mi.pending ? 'pending' : '');
-  const hasImg = !!(mi.result && mi.result.image);
+  const img = mi.result && mi.result.image;
+  // Stored rows keep the sanitizer's placeholder instead of bytes; only real
+  // data URLs / http images can be shown.
+  const hasImg = !!img && typeof img === 'string' && img !== '[image data url, hidden from the model]' &&
+    (img.startsWith('data:image') || /^https?:\/\//.test(img));
   const acts = mi.pending ? '' : agentToolActions(mi);
   let html = `<div class="agent-tool ${okCls}" data-agent-tool="${mi.id || ''}">`;
   html += `<div class="agent-tool-row">`;
@@ -5000,9 +5156,16 @@ function agentToolActions(mi) {
       if (s) {
         chain = [`<button type="button" class="btn btn-ghost tiny" data-agent-edit-scen="${esc(s.id)}">Edit scenario</button>`];
       }
-    } else if (mi.name === 'generate_image' && mi.result && mi.result.image && mi.result.applied_to) {
-      const c = state.characters.find((x) => x.id === mi.result.applied_to);
-      if (c) chain = [`<button type="button" class="btn btn-ghost tiny" data-agent-edit-char="${esc(c.id)}">Edit character</button>`];
+    } else if (['generate_image', 'edit_image', 'apply_image'].includes(mi.name) && mi.result) {
+      const ap = mi.result.applied_to;
+      const cid = typeof ap === 'string' ? ap : ap && ap.character_id;
+      const c = cid && state.characters.find((x) => x.id === cid);
+      if (c) {
+        chain = [
+          `<button type="button" class="btn btn-ghost tiny" data-agent-open-char="${esc(c.id)}">Open chat</button>`,
+          `<button type="button" class="btn btn-ghost tiny" ${ap && ap.pose_id ? `data-agent-open-poses="${esc(c.id)}"` : `data-agent-edit-char="${esc(c.id)}"`}>${ap && ap.pose_id ? 'Poses' : 'Edit character'}</button>`,
+        ];
+      }
     } else if (mi.name === 'create_persona' && mi.result && mi.result.created) {
       const pi = mi.result.created.id;
       const pp = state.personalities.find((x) => x.id === pi);
@@ -5021,7 +5184,7 @@ function renderAgent() {
     html = `<div class="agent-msg agent empty"><div class="agent-empty">
       <svg class="ae-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.7-1.9a2 2 0 0 0 1.3-1.3Z"/></svg>
       <h4>Hi — I'm your build agent</h4>
-      <p>I can design characters, draft scenarios, split them into scaffolds + variables, and wire everything up — with your approval at each step. I can also answer anything about this site.</p>
+      <p>I can design characters, draft scenarios, split them into scaffolds + variables, and wire everything up — with your approval at each step. I can also generate, edit and place portraits &amp; pose images, or work with images you attach. And I can answer anything about this site.</p>
       <div class="ae-suggest">${suggestion}</div>
     </div></div>`;
   } else {
@@ -5030,7 +5193,7 @@ function renderAgent() {
       const role = agentRoles(mi);
       if (role !== 'tool' && openToolGroup) { html += '</div>'; openToolGroup = false; }
       if (role === 'user') {
-        html += `<div class="agent-msg user"><div class="agent-bubble agent-md">${agentMd(mi.content || '')}</div></div>`;
+        html += `<div class="agent-msg user"><div class="agent-bubble agent-md">${agentUserHtml(mi.content || '')}</div></div>`;
       } else if (role === 'agent') {
         if ((mi.content || '').trim()) {
           html += `<div class="agent-msg agent"><div class="agent-bubble agent-md">${agentMd(mi.content)}</div></div>`;
@@ -5112,12 +5275,16 @@ async function agentSend() {
   if (!text || agentBusy) return;
   ta.value = '';
   ta.style.height = 'auto';
-  agentMessages.push({ role: 'user', content: text });
+  const atts = agentAttachments.slice();
+  const markers = atts.map((a) => `[attached image: ${a.id} — ${a.name}]`).join('\n');
+  agentMessages.push({ role: 'user', content: text + (markers ? (text ? '\n\n' : '') + markers : '') });
+  agentAttachments = [];
+  renderAgentAttachments();
   agentBusy = true;
   setAgentStatus('thinking');
   renderAgent();
   try {
-    await streamAgent({ message: text }, (ev) => {
+    await streamAgent({ message: text, attachments: atts.map((a) => a.id) }, (ev) => {
       if (ev.type === 'status') {
         agentStatus = 'thinking';
       } else if (ev.type === 'tool_call') {
@@ -5168,6 +5335,8 @@ function wireAgent() {
     if (!clearOk) return;
     try { await api('/agent/clear', { method: 'POST' }); } catch (e) { /* ignore */ }
     agentMessages = [];
+    agentAttachments = [];
+    renderAgentAttachments();
     renderAgent();
   });
 
@@ -5183,6 +5352,19 @@ function wireAgent() {
     }
   });
   $('#agent-send-btn').addEventListener('click', agentSend);
+  $('#agent-attach-btn').addEventListener('click', () => $('#agent-file-input').click());
+  $('#agent-file-input').addEventListener('change', (e) => {
+    const files = e.target.files;
+    e.target.value = '';
+    if (files && files.length) agentAttachFiles(files);
+  });
+  $('#agent-attachments').addEventListener('click', (e) => {
+    const x = e.target.closest('[data-att-remove]');
+    if (x) {
+      agentAttachments = agentAttachments.filter((a) => a.id !== x.dataset.attRemove);
+      renderAgentAttachments();
+    }
+  });
 
   // Feed interactions: toggle tool details, run actions
   $('#agent-feed').addEventListener('click', (e) => {
@@ -5190,6 +5372,18 @@ function wireAgent() {
     if (actBtn) {
       closeAgentDrawer();
       openCharacter(actBtn.dataset.agentOpenChat);
+      return;
+    }
+    const openChar = e.target.closest('[data-agent-open-char]');
+    if (openChar) {
+      closeAgentDrawer();
+      openCharacter(openChar.dataset.agentOpenChar);
+      return;
+    }
+    const openPoses = e.target.closest('[data-agent-open-poses]');
+    if (openPoses) {
+      closeAgentDrawer();
+      openPosesModal(openPoses.dataset.agentOpenPoses);
       return;
     }
     const editChar = e.target.closest('[data-agent-edit-char]');
@@ -5216,6 +5410,8 @@ function wireAgent() {
       agentEl('#agent-input').focus();
       return;
     }
+    const chipImg = e.target.closest('.agent-attach-chip[data-att-id] img');
+    if (chipImg) { openViewer(chipImg.src); return; }
     const row = e.target.closest('.agent-tool-row');
     if (row) row.closest('.agent-tool').classList.toggle('open');
   });

@@ -155,6 +155,17 @@ CREATE TABLE IF NOT EXISTS agent_messages (
   tool_error INTEGER DEFAULT 0,
   created_at INTEGER NOT NULL
 );
+
+-- Images the user hands to the AI Agent in the drawer (paperclip).
+-- Stored as data URLs so they survive restarts; lives with the agent
+-- conversation and is wiped when the user clears it.
+CREATE TABLE IF NOT EXISTS agent_attachments (
+  id TEXT PRIMARY KEY,
+  name TEXT DEFAULT '',
+  mime TEXT DEFAULT 'image/png',
+  data_url TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
 `);
 
 db.exec(`
@@ -556,6 +567,7 @@ const SETTINGS_DEFAULTS = {
   poseRecheck: true,
   poseContextCount: 3,
   agentImageModel: '',
+  agentImageEditModel: '',
   agentOverride: false,
   agentProvider: 'openrouter',
   agentBaseUrl: '',
@@ -586,7 +598,7 @@ function getSettings() {
 }
 
 function updateSettings(patch) {
-  const allowed = ['provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId', 'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey', 'poseModel', 'poseLikelihood', 'poseRecheck', 'poseContextCount', 'agentImageModel', 'agentOverride', 'agentProvider', 'agentBaseUrl', 'agentApiKey', 'agentModel'];
+  const allowed = ['provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId', 'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey', 'poseModel', 'poseLikelihood', 'poseRecheck', 'poseContextCount', 'agentImageModel', 'agentImageEditModel', 'agentOverride', 'agentProvider', 'agentBaseUrl', 'agentApiKey', 'agentModel'];
   const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
   for (const k of allowed) {
     if (!(k in patch)) continue;
@@ -602,7 +614,7 @@ function updateSettings(patch) {
     if (k === 'poseBaseUrl' || k === 'poseApiKey' || k === 'poseModel') v = String(v ?? '');
     if (k === 'agentOverride') v = !!v;
     if (k === 'agentProvider') v = PROVIDER_IDS.includes(String(v)) ? String(v) : 'openrouter';
-    if (k === 'agentBaseUrl' || k === 'agentApiKey' || k === 'agentModel') v = String(v ?? '');
+    if (k === 'agentBaseUrl' || k === 'agentApiKey' || k === 'agentModel' || k === 'agentImageModel' || k === 'agentImageEditModel') v = String(v ?? '');
     if (k === 'activePresetId' || k === 'activePersonalityId') v = v || null;
     up.run(k, JSON.stringify(v));
   }
@@ -1694,8 +1706,7 @@ function importData(raw) {
 /* ---- Agent conversation log ---------------------------------------------- */
 /* The built-in AI Agent keeps one global conversation. Assistant rows may carry
    native tool_calls JSON; each executed call stores its result in a separate
-   'tool' row linked by call_id so history can be replayed provider-side. */
-function shapeAgentMessage(row) {
+   'tool' row linked by call_id so history can be replayed provider-side. */function shapeAgentMessage(row) {
   return {
     id: row.id,
     role: row.role,
@@ -1739,11 +1750,42 @@ function addAgentMessage(m) {
 function clearAgentMessages() {
   snapshotBeforeDestructive();
   db.prepare('DELETE FROM agent_messages').run();
+  db.prepare('DELETE FROM agent_attachments').run();
   return { ok: true };
 }
 
 function agentMessageCount() {
   return db.prepare('SELECT COUNT(*) AS n FROM agent_messages').get().n;
+}
+
+/* ---- Agent attachments (images the user gives the Agent) ------------------- */
+
+const ATTACH_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
+function addAgentAttachment({ name, dataUrl }) {
+  const s = String(dataUrl || '');
+  const mm = s.match(/^data:(image\/(?:png|jpeg|webp|gif));base64,/);
+  if (!mm) throw new Error('Only PNG, JPEG, WebP or GIF images can be attached');
+  if (s.length > 12 * 1024 * 1024) throw new Error('Image too large (max ~9 MB encoded)');
+  const a = {
+    id: 'att-' + uid(),
+    name: String(name || '').slice(0, 120) || 'image',
+    mime: mm[1],
+    dataUrl: s,
+    createdAt: Date.now(),
+  };
+  db.prepare('INSERT INTO agent_attachments (id, name, mime, data_url, created_at) VALUES (?,?,?,?,?)')
+    .run(a.id, a.name, a.mime, a.dataUrl, a.createdAt);
+  return { id: a.id, name: a.name, mime: a.mime };
+}
+
+function getAgentAttachment(id) {
+  const row = db.prepare('SELECT * FROM agent_attachments WHERE id = ?').get(id);
+  return row ? { id: row.id, name: row.name, mime: row.mime, dataUrl: row.data_url, createdAt: row.created_at } : null;
+}
+
+function countAgentAttachments() {
+  return db.prepare('SELECT COUNT(*) AS n FROM agent_attachments').get().n;
 }
 
 module.exports = {
@@ -1758,4 +1800,5 @@ module.exports = {
   getSettings, updateSettings,
   exportData, importData,
   getAgentMessages, addAgentMessage, clearAgentMessages, agentMessageCount,
+  addAgentAttachment, getAgentAttachment, countAgentAttachments,
 };

@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const db = require('./db');
 
 const PORT = process.env.PORT || 3000;
@@ -59,9 +60,9 @@ function truncTitle(s, n = 40) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
-async function fetchJson(url, opts) {
+async function fetchJson(url, opts, timeoutMs = 30000) {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 30000);
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     let r;
     try {
@@ -85,6 +86,35 @@ async function fetchJson(url, opts) {
   } finally {
     clearTimeout(t);
   }
+}
+
+/* Split a data URL ("data:image/png;base64,....") into mime + raw bytes.
+   Returns null when the string does not look like an image data URL. */
+function parseImageDataUrl(dataUrl) {
+  const m = String(dataUrl || '').match(/^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return null;
+  try { return { mime: m[1], buffer: Buffer.from(m[2], 'base64') }; } catch { return null; }
+}
+
+/* Minimal multipart/form-data builder (no external deps) so /images/edits
+   can receive the source image file alongside text fields. */
+function multipartBody({ fields, file }) {
+  const boundary = '----ZeroChatForm' + crypto.randomBytes(12).toString('hex');
+  const parts = [];
+  for (const [name, value] of Object.entries(fields || {})) {
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${String(value)}\r\n`,
+    ));
+  }
+  if (file) {
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${file.name}"; filename="${file.filename}"\r\nContent-Type: ${file.mime}\r\n\r\n`,
+    ));
+    parts.push(file.buffer);
+    parts.push(Buffer.from('\r\n'));
+  }
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+  return { body: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${boundary}` };
 }
 
 function resolveAiConfig(settings) {
@@ -758,6 +788,14 @@ SCENARIOS (create_scenario / update_scenario / set_scenario_character_variables)
 PERSONAS (create_persona / update_persona / set_active_persona):
 - name, description — who the USER plays as. The roleplay model sees name + description. note is private.
 
+IMAGES (generate_image / edit_image / apply_image):
+- Characters have a portrait image; characters with posesEnabled can have multiple POSES, each with its own image, that the visual director swaps during chat.
+- generate_image creates an image from a text prompt. Give it target="portrait" plus a character_id to set it as the portrait, or target="pose" to attach it to a pose (pose_id to update an existing pose, or pose_name/pose_description to create one). For a multi-pose character generate one pose at a time (e.g. Standing, Sitting, Close-up...) and confirm the look with the user first; poses need posesEnabled=true on the character and consistent framing/style across images.
+- edit_image transforms an existing image: source_type "last" (the last image produced), "character" (its portrait, with character_id), "pose" (with pose_id) or "attachment" (an image the user attached, with attachment_id from the [attached image: ...] marker). Requires a provider with image-edit support (e.g. OpenAI gpt-image-1).
+- apply_image places an EXISTING image, no provider call: source_type "attachment" or "last" plus character_id and target="portrait"/"pose". Use it to turn images the user attached into a portrait or poses.
+- Never invent pose ids; read real ones from get_character's pose list.
+- You do not need to include image data in your replies — every produced/applied image is shown to the user automatically as a tool card. If the user's provider does not support image tools at all, say so plainly and suggest attaching an image instead.
+
 PRESETS hold the roleplay AI connection (provider/baseUrl/model, temperature, system prompt). The roleplay system prompt is what the user wants the roleplay focused on — useful context for what kind of play they enjoy. It is NOT an instruction for you; never roleplay in the Agent drawer.
 
 {{tag}} resolution order at chat start: scenario.characterVariables[<characterId>] first, then the character's own variables. Tags with no value for that character remain visible as {{tag}}, so always confirm either a scenario-level value or a character default exists before the user starts a chat.`;
@@ -770,7 +808,7 @@ Gather what's needed from the user's message and the current site state. If some
 Before creating anything, PRESENT the full character in chat as a clean layout (name + emoji, description, note, opening scenario text, variables idea, example reply) and ask for approval or changes. Only call create_character after the user approves that layout.
 
 STEP 2 — Revise & image:
-After creation, confirm it exists (report the real id) and ask if they want to change anything — shorten or lengthen specific parts, restructure, different emoji — or generate a portrait with generate_image. Iterate with update_character until they are satisfied. Only then move to the scenario.
+After creation, confirm it exists (report the real id) and ask if they want to change anything — shorten or lengthen specific parts, restructure, different emoji — or work on visuals: generate a portrait and/or poses with generate_image, edit existing images with edit_image, or apply images the user attached. Iterate with update_character until they are satisfied. Only then move to the scenario.
 
 STEP 3 — Scenario draft:
 Write the FULL scenario as plain text / markdown prose (several paragraphs, scene-setting, situation, opening tension; you may naturally use {{char}} and {{user}}, but NO custom {{tags}} yet). The scenario must work with the character created in step 1. Present it and ask what to change, add, remove or restructure. Iterate until the user confirms the text is final. Do NOT create the scenario yet.
@@ -867,9 +905,11 @@ function agentToolDefs(cfg) {
     { name: 'create_persona', description: 'Create a user persona: name + description (what the roleplay model knows about the user). Does not auto-activate.', props: { name: { type: 'string' }, description: { type: 'string' }, note: { type: 'string' } }, req: ['name', 'description'] },
     { name: 'update_persona', description: 'Update a persona. description is what the roleplay model sees; note is private.', props: { id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, note: { type: 'string' } }, req: ['id'] },
     { name: 'set_active_persona', description: 'Switch who the user currently plays as.', props: { id: { type: 'string' } }, req: ['id'] },
-    { name: 'generate_image', description: `Generate an AI portrait image from a text prompt. Optionally apply it directly as the character's portrait (apply=true). Long-shot guidance works best when the prompt describes art style, framing and mood.`, props: { prompt: { type: 'string' }, character_id: { type: 'string' }, apply: { type: 'boolean', description: 'Set as the character portrait' }, size: { type: 'string', description: 'e.g. 1024x1024' } }, req: ['prompt'] },
+    { name: 'generate_image', description: `Generate an AI image from a text prompt. Without a target it just returns the image; with a character_id and target it applies it: target="portrait" sets the character portrait, target="pose" attaches it to a pose (pose_id updates an existing pose; pose_name/pose_description create a new one). Prompts that describe art style, framing and mood work best.`, props: { prompt: { type: 'string' }, character_id: { type: 'string' }, target: { type: 'string', description: '"portrait", "pose" or "none"' }, pose_id: { type: 'string', description: 'Update this existing pose instead of creating one', }, pose_name: { type: 'string', description: 'Name for a new pose (created when target="pose" and no pose_id given)' }, pose_description: { type: 'string', description: 'When to use this pose — guidance for the visual director' }, apply: { type: 'boolean', description: 'Legacy alias for target="portrait"' }, size: { type: 'string', description: 'e.g. 1024x1024' } }, req: ['prompt'] },
+    { name: 'edit_image', description: `Edit an existing image with an instruction (e.g. "make it evening", "change the jacket to red") using the provider's image-edit model. Pick the source: source_type "last" (the last image this session produced), "character" (portrait, needs character_id), "pose" (needs pose_id) or "attachment" (an image the user attached, needs attachment_id). Then optionally apply it to a character portrait or pose like generate_image. Requires an image-edit capable provider.`, props: { prompt: { type: 'string' }, source_type: { type: 'string', description: '"last", "character", "pose" or "attachment"' }, source_id: { type: 'string', description: 'character_id, pose_id or attachment_id (required unless source_type="last")' }, character_id: { type: 'string' }, target: { type: 'string', description: '"portrait", "pose" or "none"' }, pose_id: { type: 'string' }, pose_name: { type: 'string' }, pose_description: { type: 'string' }, size: { type: 'string' } }, req: ['prompt'] },
+    { name: 'apply_image', description: `Apply an existing image to a character — no AI provider needed. Source: source_type "attachment" (an image the user attached; attachment_id from the [attached image: ...] marker) or "last" (the last image produced this session). Target: character_id + target "portrait" or "pose" (pose_id to replace an existing pose's image, or pose_name/pose_description to create a new one). Use this to put user-uploaded artwork on a character or turn it into poses.`, props: { source_type: { type: 'string', description: '"attachment" or "last"' }, source_id: { type: 'string', description: 'attachment_id (required for source_type="attachment")' }, character_id: { type: 'string' }, target: { type: 'string', description: '"portrait" or "pose"' }, pose_id: { type: 'string' }, pose_name: { type: 'string' }, pose_description: { type: 'string' }, is_default: { type: 'boolean', description: 'Also mark this new/pose as the character\'s default pose' } }, req: ['character_id', 'target'] },
   ];
-  const tools = defs.filter((d) => !(d.name === 'generate_image' && cfg.provider === 'anthropic'));
+  const tools = defs.filter((d) => !['generate_image', 'edit_image'].includes(d.name) || cfg.provider !== 'anthropic');
   return tools.map((d) => ({
     type: 'function',
     function: { name: d.name, description: d.description, parameters: { type: 'object', properties: d.props, required: d.req || [] } },
@@ -894,7 +934,7 @@ function agentSiteOverview(settings, cfg) {
     characters: chars.map((c) => ({ id: c.id, name: c.name })),
     scenarios: scenes.map((s) => ({ id: s.id, title: s.title })),
     personas: personas.map((pp) => ({ id: pp.id, name: pp.name, active: pp.id === settings.activePersonalityId })),
-    image_generation: cfg.provider !== 'anthropic' ? 'available' : 'unavailable for anthropic presets',
+    image_generation: cfg.provider !== 'anthropic' ? 'available (generates, edits and applies images)' : 'unavailable for anthropic presets — image applying still works',
   };
 }
 
@@ -954,6 +994,117 @@ function agentToolResultText(r) {
     try { return JSON.stringify(r.toolResult); } catch { /* fall through */ }
   }
   return r.toolResultRaw || '';
+}
+
+/* ---- Agent image tooling --------------------------------------------------- */
+
+/* The most recent image produced by generate_image / edit_image this session
+   (data URL), so edit_image(source_type="last") and apply_image(source_type="last")
+   can chain image steps without the model ever holding image bytes. */
+let agentLastImage = null;
+
+function extractProviderImage(r, what) {
+  const item = r && r.data && r.data[0];
+  return item && (item.b64_json ? 'data:image/png;base64,' + item.b64_json : item.url) || null;
+}
+
+/* Resolve an image for edit_image / apply_image. Returns the data URL (or http
+   url for un-downloaded provider results) of the requested source. */
+function agentResolveImage(sourceType, sourceId) {
+  const type = String(sourceType || 'last').toLowerCase();
+  if (type === 'last') {
+    if (!agentLastImage) throw new Error('No image has been produced yet in this session — generate or attach one first.');
+    return agentLastImage;
+  }
+  if (type === 'attachment') {
+    if (!sourceId) throw new Error('source_id (the attachment id from the [attached image: ...] marker) is required for source_type="attachment"');
+    const a = db.getAgentAttachment(sourceId);
+    if (!a) throw new Error('No attached image found with id: ' + sourceId);
+    return a.dataUrl;
+  }
+  if (type === 'character') {
+    if (!sourceId) throw new Error('source_id (the character id) is required for source_type="character"');
+    const c = db.getCharacter(sourceId);
+    if (!c) throw new Error('Character not found: ' + sourceId);
+    if (!c.image) throw new Error('That character has no portrait image yet — generate one first.');
+    return c.image;
+  }
+  if (type === 'pose') {
+    if (!sourceId) throw new Error('source_id (the pose id) is required for source_type="pose"');
+    const pp = db.getPose(sourceId);
+    if (!pp) throw new Error('Pose not found: ' + sourceId);
+    if (!pp.image) throw new Error('That pose has no image yet — generate one first.');
+    return pp.image;
+  }
+  throw new Error('Unknown source_type: ' + sourceType);
+}
+
+/* Remote provider results may be http URLs; image editing needs the bytes.
+   Download and embed as a data URL (also caches into agentLastImage). */
+async function agentImageToDataUrl(src) {
+  if (typeof src !== 'string' || !src) return null;
+  if (src.startsWith('data:')) return src;
+  if (!/^https?:\/\//.test(src)) return null;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 60000);
+  try {
+    const r = await fetch(src, { signal: ctrl.signal });
+    const mime = (r.headers.get('content-type') || 'image/png').split(';')[0].trim();
+    if (!mime.startsWith('image/')) throw new Error('Source URL is not an image');
+    const buf = Buffer.from(await r.arrayBuffer());
+    return `data:${mime};base64,${buf.toString('base64')}`;
+  } finally { clearTimeout(t); }
+}
+
+/* Apply an image (data URL or http url) to a character portrait or pose per the
+   shared args shape: character_id, target ("portrait"/"pose"), pose_id,
+   pose_name, pose_description, is_default. `apply` (legacy bool) means portrait.
+   Returns a small descriptor of what was set, or null when target is "none". */
+function agentApplyImage(image, args) {
+  const target = String(args.target || (args.apply ? 'portrait' : 'none')).toLowerCase();
+  if (target === 'none' || (!args.character_id && !args.apply)) return null;
+  agentNeed(args, ['character_id'], 'image target');
+  const c = db.getCharacter(args.character_id);
+  if (!c) throw new Error('Character not found: ' + args.character_id);
+  if (target === 'portrait') {
+    db.updateCharacter(args.character_id, { image });
+    return { character_id: args.character_id, target: 'portrait' };
+  }
+  if (target === 'pose') {
+    let pose = null;
+    if (args.pose_id) {
+      pose = db.getPose(args.pose_id);
+      if (!pose || pose.characterId !== args.character_id) throw new Error('Pose not found for this character: ' + args.pose_id);
+      const update = { image };
+      if (args.pose_name) update.name = String(args.pose_name);
+      if (args.pose_description) update.description = String(args.pose_description);
+      if (args.is_default) update.isDefault = true;
+      pose = db.updatePose(pose.id, update);
+    } else {
+      // Re-use an existing pose with the same name (characters are seeded with
+      // a default pose set) instead of stacking duplicates.
+      const wanted = String(args.pose_name || '').trim().toLowerCase();
+      pose = wanted ? (db.getPoses(args.character_id).find((p) => (p.name || '').trim().toLowerCase() === wanted) || null) : null;
+      if (pose) {
+        const update = { image };
+        if (args.pose_description) update.description = String(args.pose_description);
+        if (args.is_default) update.isDefault = true;
+        pose = db.updatePose(pose.id, update);
+      } else {
+        const name = String(args.pose_name || '').trim() || 'Generated pose';
+        pose = db.createPose(args.character_id, {
+          name,
+          description: String(args.pose_description || ''),
+          image,
+          isDefault: !!args.is_default,
+        });
+      }
+    }
+    if (!c.posesEnabled) db.updateCharacter(args.character_id, { posesEnabled: true });
+    if (args.is_default && pose) db.setDefaultPose(args.character_id, pose.id);
+    return { character_id: args.character_id, target: 'pose', pose_id: pose.id, pose_name: pose.name };
+  }
+  throw new Error('Unknown target: ' + target);
 }
 
 async function runAgentTool(name, args, settings, cfg) {
@@ -1106,16 +1257,48 @@ async function runAgentTool(name, args, settings, cfg) {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(cfg.apiKey ? { authorization: 'Bearer ' + cfg.apiKey } : {}) },
         body: JSON.stringify({ model, prompt: String(args.prompt).slice(0, 4000), n: 1, size: args.size || '1024x1024' }),
-      });
-      const item = r && r.data && r.data[0];
-      const image = item && (item.b64_json ? 'data:image/png;base64,' + item.b64_json : item.url);
+      }, 120000);
+      const image = extractProviderImage(r);
       if (!image) throw new Error('Provider returned no image');
-      if (args.character_id && args.apply) {
-        const c = db.updateCharacter(args.character_id, { image });
-        if (!c) throw new Error('Character not found: ' + args.character_id);
-        return { image, applied_to: args.character_id, model };
-      }
-      return { image, model };
+      const embedded = await agentImageToDataUrl(image);
+      if (embedded) agentLastImage = embedded;
+      const applied = agentApplyImage(image, args);
+      return { image, model, ...(applied ? { applied_to: applied } : {}) };
+    }
+
+    case 'edit_image': {
+      agentNeed(args, ['prompt'], name);
+      if (cfg.provider === 'anthropic') throw new Error('Image editing is not wired for Anthropic presets — suggest connecting an OpenAI-compatible provider instead.');
+      const srcRaw = agentResolveImage(args.source_type, args.source_id);
+      const src = await agentImageToDataUrl(srcRaw);
+      const decoded = parseImageDataUrl(src);
+      if (!decoded) throw new Error('The source image could not be decoded — it may be a remote URL or an unsupported format.');
+      const base = agentNormBase(cfg.baseUrl);
+      const model = settings.agentImageEditModel || 'gpt-image-1';
+      const ext = decoded.mime === 'image/jpeg' ? 'jpeg' : decoded.mime === 'image/webp' ? 'webp' : 'png';
+      const mp = multipartBody({
+        fields: { prompt: String(args.prompt).slice(0, 4000), model, n: '1', ...(args.size ? { size: args.size } : {}) },
+        file: { name: 'image', filename: `source.${ext}`, mime: decoded.mime, buffer: decoded.buffer },
+      });
+      const r = await fetchJson(base + '/images/edits', {
+        method: 'POST',
+        headers: { ...(cfg.apiKey ? { authorization: 'Bearer ' + cfg.apiKey } : {}), 'content-type': mp.contentType },
+        body: mp.body,
+      }, 180000);
+      const image = extractProviderImage(r);
+      if (!image) throw new Error('Provider returned no image');
+      const embedded = await agentImageToDataUrl(image);
+      if (embedded) agentLastImage = embedded;
+      const applied = agentApplyImage(embedded || image, args);
+      return { image: embedded || image, model, ...(applied ? { applied_to: applied } : {}) };
+    }
+
+    case 'apply_image': {
+      agentNeed(args, ['character_id', 'target'], name);
+      const srcRaw = agentResolveImage(args.source_type, args.source_id);
+      const image = await agentImageToDataUrl(srcRaw) || srcRaw;
+      const applied = agentApplyImage(image, args);
+      return { image, applied_to: applied };
     }
 
     default:
@@ -1283,11 +1466,22 @@ async function runAgentChat(body, emit, ctrl) {
       : 'No AI connection configured for the Agent. Open Settings → AI Connection (or pick an AI preset in the header) and connect a provider first.');
   }
 
-  db.addAgentMessage({ role: 'user', content: text });
+  // Images the user attached in the drawer arrive as attachment ids. They are
+  // never put into the model context as bytes — just as markers the model can
+  // reference in apply_image / edit_image via their ids.
+  const attIds = Array.isArray(body.attachments) ? body.attachments.map(String).slice(0, 6) : [];
+  const markers = [];
+  for (const id of attIds) {
+    const a = db.getAgentAttachment(id);
+    if (a) markers.push(`[attached image: ${a.id} — ${a.name}]`);
+  }
+  const userText = text + (markers.length ? (text ? '\n\n' : '') + markers.join('\n') : '');
+
+  db.addAgentMessage({ role: 'user', content: userText });
 
   const rows = db.getAgentMessages().slice(-AGENT_HISTORY_LIMIT);
   while (rows.length && rows[0].role === 'tool') rows.shift(); // avoid orphan tool results after history trim
-  if (!rows.length || rows[rows.length - 1].content !== text || rows[rows.length - 1].role !== 'user') {
+  if (!rows.length || rows[rows.length - 1].content !== userText || rows[rows.length - 1].role !== 'user') {
     // never happens in practice (just persisted); guards against re-entry races
   }
 
@@ -1350,6 +1544,22 @@ async function route(req, res, u) {
 
   if (req.method === 'GET' && p === '/api/agent/messages') return send(res, 200, { messages: db.getAgentMessages(), activeFirst: db.agentMessageCount() === 0 });
   if (req.method === 'POST' && p === '/api/agent/clear') return send(res, 200, db.clearAgentMessages());
+  if (req.method === 'POST' && p === '/api/agent/attach') {
+    try {
+      const a = db.addAgentAttachment({ name: body.name, dataUrl: body.dataUrl ?? body.image });
+      return send(res, 200, a);
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+  if ((m = p.match(/^\/api\/agent\/([\w-]+)\/file$/)) && req.method === 'GET') {
+    const a = db.getAgentAttachment(m[1]);
+    if (!a) return send(res, 404, { error: 'Attachment not found' });
+    const dec = parseImageDataUrl(a.dataUrl);
+    if (!dec) return send(res, 404, { error: 'Attachment unreadable' });
+    res.writeHead(200, { 'Content-Type': dec.mime, 'Cache-Control': 'private, max-age=86400' });
+    return res.end(dec.buffer);
+  }
   if (req.method === 'POST' && p === '/api/agent/chat') {
     return startEventStream(res, (emit, ctrl) => runAgentChat(body, emit, ctrl));
   }
