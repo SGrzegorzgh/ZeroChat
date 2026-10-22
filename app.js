@@ -1041,7 +1041,7 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
 
   ta.addEventListener('input', resize);
 
-  // For composer, use the dedicated #composer-touch-handle below the row
+  // For composer, use the dedicated #composer-touch-handle above the row
   let bar = null;
   if (isComposer) {
     bar = document.getElementById('composer-touch-handle');
@@ -1060,8 +1060,9 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
 
     const onPointerMove = (e) => {
       const clientY = e.clientY != null ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
-      const dy = clientY - startY;
-      const newH = Math.max(min, startH + dy);
+      const dy = isComposer ? (startY - clientY) : (clientY - startY);
+      const maxH = isComposer ? Math.min(Math.round(window.innerHeight * 0.65), 550) : 600;
+      const newH = Math.min(maxH, Math.max(min, startH + dy));
       ta.style.height = newH + 'px';
       ta.style.overflowY = 'auto';
       ta.style.resize = 'vertical';
@@ -1092,6 +1093,14 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
     bar.addEventListener('touchstart', (e) => {
       if (e.touches && e.touches[0]) {
         startDrag(e.touches[0].clientY);
+      }
+    });
+
+    bar.addEventListener('dblclick', () => {
+      if (isComposer) {
+        msgInputManualHeight = 0;
+        ta.style.height = '';
+        autoGrow();
       }
     });
   }

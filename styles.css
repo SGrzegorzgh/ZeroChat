@@ -3967,6 +3967,9 @@ input[type="range"] {
   background: var(--muted);
   width: 56px;
 }
+#composer-touch-handle {
+  margin-bottom: 4px;
+}
 .settings-tab-pane {
   padding-top: 14px;
   display: flex;
