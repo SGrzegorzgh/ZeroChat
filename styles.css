@@ -4712,6 +4712,11 @@ body.agent-open #scrim {
   flex: none;
   padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
+  transition: background 0.15s, border-color 0.15s;
+}
+#agent-composer.drag-over {
+  background: rgba(224, 90, 70, 0.08);
+  border-top-color: var(--accent);
 }
 .agent-composer-row {
   display: flex;

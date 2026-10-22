@@ -1764,13 +1764,15 @@ const ATTACH_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'ima
 
 function addAgentAttachment({ name, dataUrl }) {
   const s = String(dataUrl || '');
-  const mm = s.match(/^data:(image\/(?:png|jpeg|webp|gif|avif));base64,/);
+  const mm = s.match(/^data:(image\/(?:png|jpe?g|webp|gif|avif));base64,/i);
   if (!mm) throw new Error('Only PNG, JPEG, WebP, AVIF or GIF images can be attached');
   if (s.length > 12 * 1024 * 1024) throw new Error('Image too large (max ~9 MB encoded)');
+  const rawMime = mm[1].toLowerCase();
+  const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
   const a = {
     id: 'att-' + uid(),
     name: String(name || '').slice(0, 120) || 'image',
-    mime: mm[1],
+    mime,
     dataUrl: s,
     createdAt: Date.now(),
   };

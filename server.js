@@ -101,9 +101,11 @@ async function fetchJson(url, opts, timeoutMs = 30000) {
 /* Split a data URL ("data:image/png;base64,....") into mime + raw bytes.
    Returns null when the string does not look like an image data URL. */
 function parseImageDataUrl(dataUrl) {
-  const m = String(dataUrl || '').match(/^data:(image\/(?:png|jpeg|webp|gif|avif));base64,([A-Za-z0-9+/=]+)$/);
+  const m = String(dataUrl || '').match(/^data:(image\/(?:png|jpe?g|webp|gif|avif));base64,([A-Za-z0-9+/=]+)$/i);
   if (!m) return null;
-  try { return { mime: m[1], buffer: Buffer.from(m[2], 'base64') }; } catch { return null; }
+  const rawMime = m[1].toLowerCase();
+  const mime = rawMime === 'image/jpg' ? 'image/jpeg' : rawMime;
+  try { return { mime, buffer: Buffer.from(m[2], 'base64') }; } catch { return null; }
 }
 
 /* Minimal multipart/form-data builder (no external deps) so /images/edits
@@ -1713,8 +1715,10 @@ async function runAgentChat(body, emit, ctrl) {
   const turnT0 = Date.now();
   const settings = db.getSettings();
   const cfg = resolveAgentConfig(settings);
-  const text = String((body && body.message) || '').trim();
-  if (!text) throw new Error('Message is empty');
+  const attIds = Array.isArray(body.attachments) ? body.attachments.map(String).slice(0, 6) : [];
+  let text = String((body && body.message) || '').trim();
+  if (!text && !attIds.length) throw new Error('Message is empty');
+  if (!text && attIds.length) text = 'Please take a look at the attached image(s).';
   if (!cfg.apiKey && cfg.provider !== 'ollama') {
     throw new Error(settings.agentOverride
       ? 'No AI connection configured for the Agent. Open Settings → AI Connection → Agent connection and connect a provider first.'
@@ -1724,7 +1728,6 @@ async function runAgentChat(body, emit, ctrl) {
   // Images the user attached in the drawer arrive as attachment ids. They are
   // never put into the model context as bytes — just as markers the model can
   // reference in apply_image / edit_image via their ids.
-  const attIds = Array.isArray(body.attachments) ? body.attachments.map(String).slice(0, 6) : [];
   const markers = [];
   for (const id of attIds) {
     const a = db.getAgentAttachment(id);

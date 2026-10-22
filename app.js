@@ -4983,7 +4983,7 @@ function renderAgentAttachments() {
   if (!agentAttachments.length) { row.classList.add('hidden'); row.innerHTML = ''; return; }
   row.classList.remove('hidden');
   row.innerHTML = agentAttachments.map((a) => `
-    <span class="agent-attach-chip" title="${esc(a.name)}">
+    <span class="agent-attach-chip" data-att-id="${esc(a.id)}" title="${esc(a.name)}">
       <img src="${esc(a.dataUrl)}" alt="${esc(a.name)}">
       <span>${esc(a.name)}</span>
       <button type="button" class="att-x" data-att-remove="${esc(a.id)}" aria-label="Remove attachment">×</button>
@@ -4991,9 +4991,12 @@ function renderAgentAttachments() {
 }
 
 async function agentAttachFiles(files) {
-  for (const f of Array.from(files || [])) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  for (const f of list) {
     if (agentAttachments.length >= 6) { toast('Maximum 6 attachments per message'); break; }
-    if (!/^image\//.test(f.type || '')) { toast('Only image files can be attached'); continue; }
+    const isImage = /^image\//i.test(f.type || '') || /\.(png|jpe?g|webp|avif|gif|bmp|heic|heif)$/i.test(f.name || '');
+    if (!isImage) { toast(`"${f.name || 'File'}" is not an image`); continue; }
     try {
       const dataUrl = await new Promise((resolve, reject) => {
         const fr = new FileReader();
@@ -5008,7 +5011,10 @@ async function agentAttachFiles(files) {
       }
       const r = await api('/agent/attach', { method: 'POST', body: JSON.stringify({ name: f.name, dataUrl: normalized }) });
       agentAttachments.push({ id: r.id, name: r.name || f.name, dataUrl: normalized });
-    } catch (e) { toast(e.message || 'Attachment failed'); }
+    } catch (e) {
+      console.error('[agent] attach failed:', e);
+      toast(e.message || 'Attachment failed');
+    }
   }
   renderAgentAttachments();
 }
@@ -5016,19 +5022,23 @@ async function agentAttachFiles(files) {
 /* Every attached image — png, jpg, webp, avif, gif, heic… — is decoded and
    normalized before upload: oversized dimensions are scaled to ≤1536px and the
    result is re-encoded into a compact, universally accepted format (WebP for
-   opaque content, PNG to preserve transparency). Small PNG/JPEG sources pass
+   opaque content, PNG to preserve transparency). Small PNG/JPEG/WebP sources pass
    through untouched. This keeps POST bodies far below the payload cap, where
    re-encoding camera photos to PNG could blow past it. */
 function normalizeImageDataUrl(dataUrl, maxDim = 1536) {
   const mime = (dataUrl.match(/^data:(image\/[a-z0-9.+-]+);/i) || [])[1] || '';
   const draw = (source) => new Promise((resolve, reject) => {
-    const big = Math.max(source.width || 0, source.height || 0);
+    const sw = source.naturalWidth || source.width || 0;
+    const sh = source.naturalHeight || source.height || 0;
+    const big = Math.max(sw, sh);
     if (!big) return reject(new Error('Empty image'));
     const k = big > maxDim ? maxDim / big : 1;
-    /* Small PNG/JPEG is compact and accepted by every provider as-is. */
-    if (k === 1 && /^image\/(png|jpeg)$/.test(mime)) return resolve(dataUrl);
-    const w = Math.max(1, Math.round(source.width * k));
-    const h = Math.max(1, Math.round(source.height * k));
+    /* Small PNG/JPEG/WEBP under cap is compact and accepted as-is. */
+    if (k === 1 && /^image\/(png|jpe?g|webp)$/i.test(mime) && dataUrl.length <= 4 * 1024 * 1024) {
+      return resolve(dataUrl);
+    }
+    const w = Math.max(1, Math.round(sw * k));
+    const h = Math.max(1, Math.round(sh * k));
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
@@ -5048,9 +5058,7 @@ function normalizeImageDataUrl(dataUrl, maxDim = 1536) {
     try {
       if (!hasAlpha) {
         out = canvas.toDataURL('image/webp', 0.9);
-        /* Safari has no WebP encoder and silently returns PNG data — fall back
-           to JPEG so opaque photos stay small. */
-        if (!out.startsWith('data:image/webp,')) out = canvas.toDataURL('image/jpeg', 0.92);
+        if (!out.startsWith('data:image/webp')) out = canvas.toDataURL('image/jpeg', 0.92);
       }
       if (!out) out = canvas.toDataURL('image/png');
     } catch { out = ''; }
@@ -5071,6 +5079,9 @@ function normalizeImageDataUrl(dataUrl, maxDim = 1536) {
         const blob = await (await fetch(dataUrl)).blob();
         return await draw(await createImageBitmap(blob));
       } catch {
+        if (/^data:image\/(?:png|jpe?g|webp|gif|avif);base64,/i.test(dataUrl) && dataUrl.length <= 12 * 1024 * 1024) {
+          return dataUrl;
+        }
         throw new Error(`This browser can't decode ${fMimeLabel(mime)} images — try converting it to PNG or JPEG`);
       }
     });
@@ -5463,13 +5474,14 @@ async function streamAgent(body, onEvent) {
 
 async function agentSend() {
   const ta = agentEl('#agent-input');
-  const text = (ta.value || '').trim();
-  if (!text || agentBusy) return;
+  let text = (ta.value || '').trim();
+  const atts = agentAttachments.slice();
+  if ((!text && !atts.length) || agentBusy) return;
+  if (!text && atts.length) text = 'Please take a look at the attached image(s).';
   ta.value = '';
   ta.style.height = 'auto';
-  const atts = agentAttachments.slice();
   const markers = atts.map((a) => `[attached image: ${a.id} — ${a.name}]`).join('\n');
-  agentMessages.push({ role: 'user', content: text + (markers ? (text ? '\n\n' : '') + markers : '') });
+  agentMessages.push({ role: 'user', content: text + (markers ? '\n\n' + markers : '') });
   agentAttachments = [];
   renderAgentAttachments();
   agentBusy = true;
@@ -5566,15 +5578,54 @@ function wireAgent() {
   $('#agent-send-btn').addEventListener('click', agentSend);
   $('#agent-attach-btn').addEventListener('click', () => $('#agent-file-input').click());
   $('#agent-file-input').addEventListener('change', (e) => {
-    const files = e.target.files;
+    const files = Array.from(e.target.files || []);
     e.target.value = '';
-    if (files && files.length) agentAttachFiles(files);
+    if (files.length) agentAttachFiles(files);
   });
+  ta.addEventListener('paste', (e) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imgFiles = items
+      .filter((it) => it.kind === 'file' && (it.type.startsWith('image/') || it.type === ''))
+      .map((it) => it.getAsFile())
+      .filter(Boolean);
+    if (imgFiles.length) {
+      e.preventDefault();
+      agentAttachFiles(imgFiles);
+    }
+  });
+
+  const drawer = $('#agent-drawer');
+  const composer = $('#agent-composer');
+  drawer.addEventListener('dragover', (e) => {
+    if (e.dataTransfer?.types?.includes('Files')) {
+      e.preventDefault();
+      composer.classList.add('drag-over');
+    }
+  });
+  drawer.addEventListener('dragleave', (e) => {
+    if (!drawer.contains(e.relatedTarget)) composer.classList.remove('drag-over');
+  });
+  drawer.addEventListener('drop', (e) => {
+    composer.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer?.files || []).filter((f) =>
+      /^image\//i.test(f.type || '') || /\.(png|jpe?g|webp|avif|gif|bmp|heic|heif)$/i.test(f.name || '')
+    );
+    if (files.length) {
+      e.preventDefault();
+      agentAttachFiles(files);
+    }
+  });
+
   $('#agent-attachments').addEventListener('click', (e) => {
     const x = e.target.closest('[data-att-remove]');
     if (x) {
       agentAttachments = agentAttachments.filter((a) => a.id !== x.dataset.attRemove);
       renderAgentAttachments();
+      return;
+    }
+    const chipImg = e.target.closest('.agent-attach-chip img');
+    if (chipImg && chipImg.src) {
+      openViewer(chipImg.src);
     }
   });
 
