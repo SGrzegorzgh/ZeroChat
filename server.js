@@ -1025,9 +1025,12 @@ function agentScenarioBrief(s) {
 /* Read one chat for the agent. mode "linear" = the conversation exactly as the
    user sees it (active branch only, as a transcript); mode "tree" = every node
    including all alternative versions/branches, with the active child marked.
-   Contents are trimmed per message — the sanitizer caps the overall tool
-   payload anyway, but per-message trims keep even huge chats useful. */
-function agentReadChat(chatId, mode) {
+   Both modes are PAGED: the tool result must stay under AGENT_TOOL_RESULT_CAP
+   (8000 chars) or it gets degraded to a stub, so each call returns a window
+   plus next_start / a note telling the agent how to keep reading. Content
+   length per message scales with the requested page size. */
+const AGENT_READ_BUDGET = 6800;
+function agentReadChat(chatId, mode, opts = {}) {
   const chat = db.getChat(chatId);
   if (!chat) return null;
   const char = db.getCharacter(chat.characterId);
@@ -1044,52 +1047,84 @@ function agentReadChat(chatId, mode) {
     scenario: chat.scenarioTitle || null,
     total_nodes: Object.keys(tree.nodes).length,
   };
+  const hasStart = opts.start !== undefined && opts.start !== null && String(opts.start).trim() !== '';
 
   if (mode === 'tree') {
-    const lines = [];
-    const MAX_LINES = 400;
-    let cut = false;
+    // Deterministic DFS render first, then page by line index.
+    const all = [];
     const walk = (id, depth) => {
-      if (cut) return;
       const node = tree.nodes[id];
       if (!node) return;
-      if (lines.length >= MAX_LINES) {
-        lines.push(`${'  '.repeat(depth)}… (tree truncated — use read_chat on smaller chats or ask the user)`);
-        cut = true;
-        return;
-      }
       const hasKids = node.children && node.children.length;
       const star = hasKids ? '*' : '';
       const extra = node.role === 'injection' && node.state ? ` [${node.state}]` : '';
-      lines.push(`${'  '.repeat(depth)}[${node.role}${star}] ${node.id}${extra} ${JSON.stringify(trim(node.content, 140))}`);
+      all.push(`${'  '.repeat(Math.min(depth, 24))}[${node.role}${star}] ${node.id}${extra} ${JSON.stringify(trim(node.content, 140))}`);
       for (const c of hasKids ? node.children : []) walk(c, depth + 1);
     };
     walk('root', 0);
-    return {
-      ...meta,
-      mode: 'tree',
-      tree: lines.join('\n'),
-      note: 'Indentation = conversation depth. A * after the role marks the ACTIVE child of its parent (the version currently on screen); unmarked siblings are alternative versions. Children are the messages that follow a node.',
-    };
+    const total = all.length;
+    const reqLimit = Math.max(10, Math.min(Number(opts.limit) || 100, 400));
+    let start = hasStart ? Math.max(0, Math.min(Math.floor(Number(opts.start)), Math.max(0, total - 1))) : 0;
+    const lines = [];
+    let used = 0;
+    let i = start;
+    while (i < total && lines.length < reqLimit) {
+      const w = all[i].length + 1;
+      if (used + w > AGENT_READ_BUDGET && lines.length > 0) break;
+      lines.push(all[i]);
+      used += w;
+      i++;
+    }
+    const end = i - 1;
+    const nextStart = i < total ? i : null;
+    let note;
+    if (nextStart != null) {
+      note = `Tree lines ${start}–${end} of ${total}. MORE LINES EXIST — call read_chat again (same chat_id + mode) with start=${nextStart} to continue.`;
+    } else if (start > 0) {
+      note = `Tree lines ${start}–${end} of ${total} — end of tree reached.`;
+    } else {
+      note = `Whole tree, ${total} lines. A * after a role marks the ACTIVE child of its parent (the version on screen); unmarked siblings are alternative versions. Children are the messages that follow a node.`;
+    }
+    return { ...meta, mode: 'tree', total_lines: total, start, end, next_start: nextStart, tree: lines.join('\n'), note };
   }
 
   const tip = db.treeTip(tree);
   const path = db.pathNodes(tree, tip).filter((n) => n.role !== 'root');
-  const MAX_MSGS = 80;
-  const dropped = Math.max(0, path.length - MAX_MSGS);
-  const messages = path.slice(-MAX_MSGS).map((n) => ({
-    id: n.id,
-    role: n.role,
-    content: trim(n.content, 700),
-  }));
+  const total = path.length;
+  const reqLimit = Math.max(1, Math.min(Number(opts.limit) || 20, 60));
+  // Scale per-message content length to the page size so the whole page fits
+  // the tool-result cap: big pages → terse previews, small pages → rich text.
+  const contentCap = Math.max(160, Math.min(700, Math.floor(6400 / (reqLimit + 2))));
+  const start = hasStart
+    ? Math.max(0, Math.min(Math.floor(Number(opts.start)), Math.max(0, total - 1)))
+    : Math.max(0, total - reqLimit); // default: the most recent page
+  const messages = [];
+  let used = 0;
+  let i = start;
+  while (i < total && messages.length < reqLimit) {
+    const m = { id: path[i].id, role: path[i].role, content: trim(path[i].content, contentCap) };
+    const w = JSON.stringify(m).length + 1;
+    if (used + w > AGENT_READ_BUDGET && messages.length > 0) break;
+    messages.push(m);
+    used += w;
+    i++;
+  }
+  const end = i - 1;
+  const nextStart = i < total ? i : null;
+  const hints = [];
+  if (nextStart != null) hints.push(`NEWER messages continue — call read_chat again (same chat_id + mode) with start=${nextStart}`);
+  if (start > 0) hints.push(`OLDER messages exist — lower start to page back (start=0 is the beginning)`);
   return {
     ...meta,
     mode: 'linear',
-    turns: messages.length,
+    total_turns: total,
+    start,
+    end,
+    next_start: nextStart,
     messages,
-    note: dropped > 0
-      ? `Showing the last ${messages.length} of ${path.length} messages on the active branch.`
-      : 'Active branch only — call again with mode="tree" to see alternative versions and branches.',
+    note: hints.length
+      ? `Messages ${start}–${end} of ${total}. ${hints.join('; ')}.`
+      : `Messages ${start}–${end} of ${total} — the whole active branch has been read. Call with mode="tree" for alternative versions and branches.`,
   };
 }
 
@@ -1115,10 +1150,12 @@ function agentToolDefs(cfg) {
     { name: 'get_scenario', description: 'Full scenario record: title, description, full content, special notes, and the per-character variable values.', props: { id: { type: 'string' } }, req: ['id'] },
     {
       name: 'read_chat',
-      description: 'Read a chat conversation. Without chat_id, reads the chat the user currently has open (its id is listed in your context). mode="linear" (default) returns the conversation as the user sees it — the active branch as a clean transcript with roles. mode="tree" returns the WHOLE tree: every message with ALL its alternative versions/branches, marking which version is active. Use tree mode when the user asks about versions, branches, regenerations, or what happened to older messages.',
+      description: 'Read a chat conversation. Without chat_id, reads the chat the user currently has open (its id is listed in your context). mode="linear" (default) returns the active branch as a transcript; mode="tree" returns every node with ALL its alternative versions/branches, marking which version is active (*). Long chats are PAGED: each result reports the range shown and next_start — call again with start=<next_start> to keep reading; lower start values reach older content (start=0 is the beginning). limit caps messages (linear) or tree lines (tree) per call (default 20; larger limits give terser previews).',
       props: {
         chat_id: { type: 'string', description: 'Chat id to read. Omit to read the currently open chat.' },
         mode: { type: 'string', description: '"linear" (active branch transcript) or "tree" (all versions and branches). Default "linear".' },
+        start: { type: 'integer', description: 'Page position: message index (linear) or tree-line index (tree). Omit for the most recent messages (linear) / the top of the tree (tree).' },
+        limit: { type: 'integer', description: 'Max messages (linear) or tree lines (tree) to return per call. Default 20, max 60 (linear) / 400 (tree).' },
       },
     },
     { name: 'create_scenario', description: `Create a scenario. content is the scene text injected at chat start; special_notes provides newline-separated important details for this scenario only; character_variables optionally seeds per-character values { "<characterId>": { "<tag>": "value" } }.`, props: { title: { type: 'string' }, description: { type: 'string' }, content: { type: 'string' }, special_notes: { type: 'string', description: 'Newline-separated details for this scenario only' }, character_variables: { type: 'object' } }, req: ['title', 'content'] },
@@ -1429,7 +1466,7 @@ async function runAgentTool(name, args, settings, cfg) {
     case 'read_chat': {
       const chatId = args.chat_id || cfg.activeChatId;
       if (!chatId) throw new Error('No chat_id given and the user has no chat open right now.');
-      const r = agentReadChat(chatId, args.mode === 'tree' ? 'tree' : 'linear');
+      const r = agentReadChat(chatId, args.mode === 'tree' ? 'tree' : 'linear', { start: args.start, limit: args.limit });
       if (!r) throw new Error('Chat not found: ' + chatId);
       return r;
     }

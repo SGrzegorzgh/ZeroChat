@@ -5470,7 +5470,12 @@ function agentTrimLocal(s, n) {
 /* read_chat tool results render as a readable transcript / tree in the card
    instead of raw JSON. */
 function agentReadChatDetailsHtml(r) {
-  const head = `${r.title || 'Chat'} · ${r.character || ''} · ${r.turns != null ? r.turns + ' messages' : (r.total_nodes || 0) + ' nodes'}`;
+  const windowed = (r.next_start != null || (r.start || 0) > 0) && (r.start != null && r.end != null);
+  const count = r.mode === 'tree'
+    ? `${r.total_lines != null ? r.total_lines : '?'} lines`
+    : `${r.total_turns != null ? r.total_turns : (r.turns != null ? r.turns : '?')} msgs`;
+  const range = windowed ? ` · showing ${r.start}–${r.end}` : '';
+  const head = `${r.title || 'Chat'} · ${r.character || ''} · ${count}${range}`;
   let html = `<div class="dt-label">${esc(head)}</div>`;
   if (r.tree) return html + `<pre class="agent-rc-tree">${esc(r.tree)}</pre>`;
   const roleCls = { user: 'u', char: 'c', injection: 'i', scenario: 's' };
