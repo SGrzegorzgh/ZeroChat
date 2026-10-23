@@ -194,13 +194,13 @@
             </div>
             <div class="touch-resize-handle" id="composer-touch-handle" title="Drag up to extend height, down to shrink"><span></span></div>
             <div class="composer-row">
-              <button type="button" id="steer-toggle-btn" class="steer-btn" title="Steer reply (OOC) — Tell the AI what should happen next without speaking as your character">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-              </button>
+              <div class="menu-wrap composer-actions-wrap" id="composer-actions-wrap">
+                <button type="button" id="composer-actions-btn" class="steer-btn" aria-label="Composer actions" title="Actions — Steer the scene (OOC) or respond as your persona">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                </button>
+                <div class="menu composer-actions-menu" id="composer-actions-menu"></div>
+              </div>
               <textarea id="msg-input" rows="1" placeholder="Say something..."></textarea>
-              <button type="button" id="respond-as-me-btn" class="comp-btn respond-me-btn" title="Respond as me — AI writes a message for your persona">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="m17 7 2 2 4-4"/></svg>
-              </button>
               <button id="inject-btn" class="comp-btn hidden" aria-label="Send as directive" disabled></button>
               <button id="generate-btn" class="comp-btn hidden" aria-label="Generate reply now" disabled></button>
               <button id="send-btn" aria-label="Send message" title="Send message">

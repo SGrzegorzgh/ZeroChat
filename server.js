@@ -1287,6 +1287,12 @@ function agentApplyImage(image, args) {
 }
 
 async function runAgentTool(name, args, settings, cfg) {
+  /* Snapshot BEFORE any tool can mutate. Handlers track changes after they
+     run (the created entity's id/name only exists once created), so a lazy
+     checkpoint at track time would capture post-mutation state and make the
+     Revert button restore the character it was meant to remove. Idempotent:
+     the first tracked change of a session pins the snapshot. */
+  db.ensureAgentSessionCheckpoint();
   switch (name) {
     case 'ask_user': {
       agentNeed(args, ['question'], name);

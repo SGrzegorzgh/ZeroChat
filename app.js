@@ -387,9 +387,10 @@ function setHint() {
   const live = ai.apiKey || ai.provider === 'ollama';
   const providerLabel = PROVIDERS[ai.provider]?.label || 'Custom';
   const who = ai.name ? `${ai.name} (${providerLabel})` : providerLabel;
+  const zapTip = `<span class="zap-hint">${I.zap}</span> menu for OOC &amp; respond-as-me`;
   $('#composer-hint').innerHTML = live
-    ? `<span class="live">Live · ${esc(who)} · ${esc(ai.model || 'no model set')}</span><span>·</span><span>Enter to send · Shift+Enter for a new line · <span class="zap-hint">${I.zap}</span> steers the next reply</span>`
-    : `<span class="sim">No API key — replies are simulated · set one in Settings</span><span>·</span><span>Enter to send · Shift+Enter for a new line · <span class="zap-hint">${I.zap}</span> steers the next reply</span>`;
+    ? `<span class="live">Live · ${esc(who)} · ${esc(ai.model || 'no model set')}</span><span>·</span><span>Enter to send · Shift+Enter for a new line · ${zapTip}</span>`
+    : `<span class="sim">No API key — replies are simulated · set one in Settings</span><span>·</span><span>Enter to send · Shift+Enter for a new line · ${zapTip}</span>`;
 }
 
 function msgMetaHtml(n, chat, opts, tag = '') {
@@ -646,7 +647,7 @@ let isSteerMode = false;
 
 function setSteerMode(active) {
   isSteerMode = active;
-  const btn = $('#steer-toggle-btn');
+  const btn = $('#composer-actions-btn');
   const input = $('#msg-input');
   const sendBtn = $('#send-btn');
   if (btn) btn.classList.toggle('active', isSteerMode);
@@ -671,7 +672,7 @@ function updateComposerButtons() {
   $('#send-btn').disabled = typing || !chat || !text;
   if ($('#inject-btn')) $('#inject-btn').disabled = typing || !chat || !text;
   if ($('#generate-btn')) $('#generate-btn').disabled = typing || !chat || !canReply;
-  if ($('#steer-toggle-btn')) $('#steer-toggle-btn').disabled = typing || !chat;
+  if ($('#composer-actions-btn')) $('#composer-actions-btn').disabled = typing || !chat;
 
   const bar = $('#composer-directive-bar');
   if (bar) {
@@ -1239,6 +1240,7 @@ function toggleMenu(wrapId) {
     if (wrapId === 'chats-wrap') renderChatsMenu();
     if (wrapId === 'preset-wrap') renderPresetMenu();
     if (wrapId === 'more-wrap') renderMoreMenu();
+    if (wrapId === 'composer-actions-wrap') renderComposerActionsMenu();
     menu.classList.add('open');
   }
 }
@@ -2890,6 +2892,29 @@ function renderMoreMenu() {
     <button class="menu-item" id="mf-agent">${I.sparkles}<span>AI Agent</span></button>
     <button class="menu-item" id="mf-manage-presets">${I.gear}<span>Manage presets</span></button>
     <button class="menu-item" id="mf-settings">${I.gear}<span>Settings</span></button>`;
+}
+
+/* Tiny popover above the composer's ⚡ button: the two "special send" actions
+   (OOC steering and writing as your persona) so the composer row itself only
+   ever carries one un-accidental button — see styles.css .composer-actions-*. */
+function renderComposerActionsMenu() {
+  $('#composer-actions-menu').innerHTML = `
+    <div class="menu-title">Composer actions</div>
+    <button class="menu-item ${isSteerMode ? 'active' : ''}" data-act="steer">
+      ${I.zap}
+      <span class="mi-main">
+        <span class="mi-name">Steer scene (OOC)</span>
+        <span class="mi-desc">Direct what happens next, without speaking as your character</span>
+      </span>
+      ${isSteerMode ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>
+    <button class="menu-item" data-act="respond-me">
+      ${I.user}
+      <span class="mi-main">
+        <span class="mi-name">Respond as me</span>
+        <span class="mi-desc">AI writes your next message${$('#msg-input').value.trim() ? ' — input text is used as a hint' : ''}</span>
+      </span>
+    </button>`;
 }
 
 let prMode = 'new';
@@ -4620,12 +4645,21 @@ function wireEvents() {
       sendUser();
     }
   });
-  $('#steer-toggle-btn')?.addEventListener('click', () => {
-    setSteerMode(!isSteerMode);
-    $('#msg-input').focus();
-  });
-  $('#respond-as-me-btn')?.addEventListener('click', () => {
-    respondAsMe();
+  $('#composer-actions-btn')?.addEventListener('click', () => toggleMenu('composer-actions-wrap'));
+  $('#composer-actions-menu')?.addEventListener('click', (e) => {
+    if (e.target.closest('[data-act="steer"]')) {
+      setSteerMode(!isSteerMode);
+      closeMenus();
+      if (isSteerMode) $('#msg-input').focus();
+      return;
+    }
+    if (e.target.closest('[data-act="respond-me"]')) {
+      closeMenus();
+      // The two modes are mutually exclusive: writing as your persona
+      // cancels an armed OOC directive styling.
+      if (isSteerMode) setSteerMode(false);
+      respondAsMe();
+    }
   });
   $('#cd-generate-btn')?.addEventListener('click', () => {
     const c = activeChar();
@@ -5895,6 +5929,8 @@ function wireAgent() {
       renderAgent();
     } catch (e) {
       console.error('Revert failed:', e.message);
+      agentMessages.push({ role: 'assistant', content: `✗ Revert failed: ${e.message}` });
+      renderAgent();
     }
   });
   $('#agent-clear-btn').addEventListener('click', async () => {

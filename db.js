@@ -1843,6 +1843,7 @@ const AGENT_CHECKPOINT_PATH = path.join(BACKUP_DIR, 'agent-session-checkpoint.db
 function createAgentCheckpoint(force = false) {
   if (!force && fs.existsSync(AGENT_CHECKPOINT_PATH)) return false;
   try {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     if (fs.existsSync(AGENT_CHECKPOINT_PATH)) {
       try { fs.unlinkSync(AGENT_CHECKPOINT_PATH); } catch {}
@@ -1863,9 +1864,21 @@ function revertAgentCheckpoint() {
   const tables = ['characters', 'poses', 'scenarios', 'personalities', 'presets', 'chats', 'settings'];
   try {
     db.exec(`ATTACH DATABASE '${AGENT_CHECKPOINT_PATH.replace(/'/g, "''")}' AS snap`);
+    /* Restore per column NAME (not INSERT SELECT *): the checkpoint may have
+       been taken under an older schema before ensureColumn upgrades, and a
+       raw * copy would then fail or misplace values. Columns added after the
+       snapshot fall back to their table defaults. */
+    const specs = {};
+    for (const t of tables) {
+      const dst = db.prepare(`PRAGMA table_info(${t})`).all().map((r) => r.name);
+      const src = db.prepare(`PRAGMA snap.table_info(${t})`).all().map((r) => r.name);
+      const cols = dst.filter((c) => src.includes(c));
+      if (cols.length) specs[t] = cols.map((c) => `"${c.replace(/"/g, '""')}"`).join(', ');
+    }
     db.exec('PRAGMA foreign_keys = OFF; BEGIN TRANSACTION;');
     for (const t of tables) {
-      db.exec(`DELETE FROM ${t}; INSERT INTO ${t} SELECT * FROM snap.${t};`);
+      if (!specs[t]) continue; // table absent from the snapshot entirely
+      db.exec(`DELETE FROM "${t}"; INSERT INTO "${t}" (${specs[t]}) SELECT ${specs[t]} FROM snap."${t}";`);
     }
     db.exec('COMMIT; PRAGMA foreign_keys = ON; DETACH DATABASE snap;');
     clearAgentChanges();
@@ -1877,8 +1890,24 @@ function revertAgentCheckpoint() {
   }
 }
 
-function addAgentChange({ action, entityType = '', entityId = '' }) {
+/* Called before every agent tool execution. Tool handlers record changes
+   AFTER the fact (a created character's real id/name is only known once it
+   exists), so the pre-mutation snapshot must be taken eagerly here — on the
+   first tool call of a session — or the checkpoint would capture a database
+   that already includes the change and "Revert" would appear to do nothing
+   (the created character would survive the revert). */
+function ensureAgentSessionCheckpoint() {
+  if (agentSessionChangeCount() > 0) return; // session already has its checkpoint
+  if (fs.existsSync(AGENT_CHECKPOINT_PATH)) return; // snapshot taken pre-anything else this session
   createAgentCheckpoint(false);
+}
+
+function agentSessionChangeCount() {
+  return db.prepare('SELECT COUNT(*) AS n FROM agent_session_changes').get().n;
+}
+
+function addAgentChange({ action, entityType = '', entityId = '' }) {
+  ensureAgentSessionCheckpoint();
   db.prepare('INSERT INTO agent_session_changes (action, entity_type, entity_id, created_at) VALUES (?, ?, ?, ?)')
     .run(String(action), String(entityType), String(entityId), Date.now());
 }
@@ -1907,5 +1936,5 @@ module.exports = {
   exportData, importData,
   getAgentMessages, addAgentMessage, clearAgentMessages, agentMessageCount,
   addAgentAttachment, getAgentAttachment, countAgentAttachments,
-  createAgentCheckpoint, revertAgentCheckpoint, addAgentChange, getAgentChanges, clearAgentChanges,
+  createAgentCheckpoint, revertAgentCheckpoint, ensureAgentSessionCheckpoint, addAgentChange, getAgentChanges, clearAgentChanges,
 };

@@ -1053,6 +1053,44 @@ body.sidebar-open #scrim {
   box-shadow: 0 0 12px rgba(217, 164, 65, 0.25);
 }
 
+/* Composer actions popover (OOC steer / respond-as-me) — anchored above the
+   ⚡ button with a springy upward pop and a slight stagger on the items. */
+.composer-actions-wrap:has(.menu.open) .steer-btn:not(.active) {
+  color: #e8eaed;
+  border-color: #4a4f57;
+  background: var(--panel2);
+}
+.steer-btn:active:not(:disabled) {
+  transform: scale(0.93);
+}
+.composer-actions-menu {
+  top: auto;
+  bottom: calc(100% + 12px);
+  left: 2px;
+  right: auto;
+  min-width: 320px;
+  max-width: min(340px, calc(100vw - 28px));
+  max-height: min(48vh, 340px);
+  transform-origin: 0 100%;
+  transform: translateY(8px) scale(0.94);
+  transition: opacity 0.16s ease, transform 0.24s cubic-bezier(0.22, 1.35, 0.36, 1);
+}
+.composer-actions-menu.open {
+  transform: none;
+}
+.composer-actions-menu .menu-item {
+  opacity: 0;
+  transform: translateY(7px) scale(0.97);
+}
+.composer-actions-menu.open .menu-item {
+  animation: composer-item-in 0.3s cubic-bezier(0.22, 1.35, 0.36, 1) forwards;
+}
+.composer-actions-menu.open .menu-item:nth-child(2) { animation-delay: 0.03s; }
+.composer-actions-menu.open .menu-item:nth-child(3) { animation-delay: 0.09s; }
+@keyframes composer-item-in {
+  to { opacity: 1; transform: none; }
+}
+
 #msg-input {
   flex: 1;
   background: var(--panel);
@@ -2038,6 +2076,17 @@ input[type="range"] {
     min-width: 0;
     max-width: none;
     max-height: 70dvh;
+  }
+  /* The composer popover stays anchored above its ⚡ button instead of
+     flying to the fixed top bar the header menus use on phones. */
+  .composer-actions-menu {
+    position: absolute;
+    top: auto;
+    left: 0;
+    right: auto;
+    bottom: calc(100% + 10px);
+    min-width: 234px;
+    max-width: min(340px, calc(100vw - 24px));
   }
   #chat-header {
     height: 58px;
@@ -5167,19 +5216,4 @@ body.agent-resizing * {
 }
 #agent-revert-btn.hidden {
   display: none !important;
-}
-
-/* Respond as me composer button */
-.respond-me-btn {
-  color: var(--muted);
-  border-color: var(--border);
-  background: var(--panel2);
-}
-.respond-me-btn:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.respond-me-btn svg {
-  width: 17px;
-  height: 17px;
 }
