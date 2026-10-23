@@ -964,7 +964,7 @@ Anti-loop guard: if the user goes back and forth many times on fine details, sum
 
 const AGENT_RULES = `## Ground rules
 - Never assume: draw facts from your tools (site_overview / list / get) and from what the user says. If a needed fact exists nowhere, ask.
-- ALWAYS use the ask_user tool when asking for permission, confirmation, approval to create/update/delete entities, or offering choices. Do NOT ask for permission in plain text alone. Call ask_user with the question, the button choice labels (e.g. ["Approve & create", "Change details", "Cancel"]), and allow_custom: true. The user will click a button or type custom feedback, which will be returned to you directly.
+- When you need permission, confirmation, approval to create/update/delete entities, or a decision from the user, ask the question in plain text and END your message there. The user types their answer as the next chat message — wait for it before acting.
 - Only call create / update / delete tools for a specific action the user has approved. Reading tools is always fine.
 - Always use real ids returned by tools. Never invent an id.
 - Learn the user's writing style from their Presets: Presets hold the user's preferred writing style, dialogue conventions, formatting rules, and roleplay tone. Always respect and incorporate these instructions when writing character descriptions, example dialogue lines, and scenario prose. Use list_presets and get_preset to inspect presets whenever helpful.
@@ -1024,32 +1024,6 @@ function agentScenarioBrief(s) {
 
 function agentToolDefs(cfg) {
   const defs = [
-    {
-      name: 'ask_user',
-      description: 'Ask the user for permission, approval, confirmation, or a decision by presenting interactive choice buttons and an optional custom answer input. Always use this instead of asking for permission in plain text.',
-      props: {
-        question: { type: 'string', description: 'The question or confirmation prompt to display to the user' },
-        buttons: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'List of button choice labels to display (e.g. ["Approve & create", "Change details", "Cancel"])'
-        },
-        options: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Alternative alias for buttons'
-        },
-        allow_custom: {
-          type: 'boolean',
-          description: 'Whether to show a text box allowing the user to type a custom answer (default true)'
-        },
-        custom_placeholder: {
-          type: 'string',
-          description: 'Placeholder text for the custom answer input'
-        }
-      },
-      req: ['question']
-    },
     { name: 'site_overview', description: 'Snapshot of the site: counts, ids of every entity, who the user plays as, which AI preset is active and whether image generation is available. Call this first whenever you are unsure about ids or the current state.', props: {} },
     { name: 'list_characters', description: 'List every character with id, name, a trimmed persona and variable keys. Full details need get_character.', props: {} },
     { name: 'get_character', description: 'Full record of one character: description (persona), note, scenario text, variables with values, example replies and pose list.', props: { id: { type: 'string', description: 'Character id' } }, req: ['id'] },
@@ -1293,19 +1267,6 @@ async function runAgentTool(name, args, settings, cfg) {
      the first tracked change of a session pins the snapshot. */
   db.ensureAgentSessionCheckpoint();
   switch (name) {
-    case 'ask_user': {
-      agentNeed(args, ['question'], name);
-      const rawButtons = Array.isArray(args.buttons) ? args.buttons : (Array.isArray(args.options) ? args.options : []);
-      const buttons = rawButtons.map((b) => (typeof b === 'object' && b !== null ? (b.label || b.text || JSON.stringify(b)) : String(b)));
-      if (!buttons.length) buttons.push('OK');
-      return {
-        question: args.question,
-        buttons,
-        allow_custom: args.allow_custom !== false,
-        custom_placeholder: args.custom_placeholder || 'Type your own answer...',
-      };
-    }
-
     case 'site_overview':
       return agentSiteOverview(settings, cfg);
 

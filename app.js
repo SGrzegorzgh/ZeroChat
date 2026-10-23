@@ -1187,6 +1187,11 @@ function makeElementResizable(el, { min = 110, max = 650, defaultHeight = null }
   bar.title = 'Drag to adjust height (double-click to reset)';
   bar.innerHTML = '<span></span>';
   el.parentNode.insertBefore(bar, el.nextSibling);
+  el._resizeBar = bar;
+  // Start in sync with the element's initial visibility — preview boxes boot
+  // hidden (Edit tab is the default), and a visible bar after a hidden box
+  // reads as a dead second handle under the editable textarea.
+  bar.classList.toggle('hidden', el.classList.contains('hidden'));
 
   let startY = 0;
   let startH = 0;
@@ -1708,6 +1713,12 @@ function switchCeDescTab(tab) {
   $('#ce-tab-preview').classList.toggle('active', !isEdit);
   $('#ce-desc-edit-wrap').classList.toggle('hidden', !isEdit);
   $('#ce-desc-prev-wrap').classList.toggle('hidden', isEdit);
+  // The preview box's resize handle sits AFTER the box in the DOM — it must
+  // never stay visible while the box itself is hidden (it would show up as a
+  // dead second bar under the description textarea in Edit mode).
+  if ($('#ce-desc-prev-wrap')._resizeBar) {
+    $('#ce-desc-prev-wrap')._resizeBar.classList.toggle('hidden', isEdit);
+  }
   if (!isEdit) renderCeDescPreview();
 }
 
@@ -3148,6 +3159,11 @@ function switchSeTab(tab) {
   $('#se-tab-preview').classList.toggle('active', !isEdit);
   $('#se-content-edit-wrap').classList.toggle('hidden', !isEdit);
   $('#se-content-prev-wrap').classList.toggle('hidden', isEdit);
+  // Same as the character description: hide the preview box's resize handle
+  // whenever the box is hidden, so Edit mode shows only the textarea's own bar.
+  if ($('#se-content-prev-wrap')._resizeBar) {
+    $('#se-content-prev-wrap')._resizeBar.classList.toggle('hidden', isEdit);
+  }
   const pill = $('#se-char-swap-wrap');
   if (pill) pill.classList.toggle('hidden', isEdit);
   if (!isEdit) {
@@ -5137,7 +5153,6 @@ function wireEvents() {
 /* ---- AI Agent drawer ------------------------------------------------------ */
 
 const AGENT_TOOL_LABELS = {
-  ask_user: 'Question for you',
   site_overview: 'Read the site',
   list_characters: 'Listing characters',
   get_character: 'Reading character',
@@ -5406,34 +5421,6 @@ function agentToolCardHtml(mi) {
   // Loaded rows use toolName/toolArgs/toolResult/toolError; live events use name/args/result/ok.
   const name = mi.name || mi.toolName;
   mi = { ...mi, name, args: (mi.args !== undefined ? mi.args : mi.toolArgs), result: (mi.result !== undefined ? mi.result : mi.toolResult), ok: (mi.ok !== undefined ? mi.ok : !mi.toolError) };
-
-  if (name === 'ask_user') {
-    const q = (mi.args && mi.args.question) || (mi.result && mi.result.question) || 'Please make a selection:';
-    const rawButtons = (mi.args && (mi.args.buttons || mi.args.options)) || (mi.result && mi.result.buttons) || ['Approve', 'Change', 'Cancel'];
-    const buttons = rawButtons.map((b) => (typeof b === 'object' && b !== null ? (b.label || b.text || JSON.stringify(b)) : String(b)));
-    const allowCustom = mi.args ? mi.args.allow_custom !== false : true;
-    const placeholder = (mi.args && mi.args.custom_placeholder) || 'Type your own answer...';
-    const isAnswered = Boolean(mi.chosen || (mi.result && mi.result.answered));
-
-    let askHtml = `<div class="agent-ask-card" data-ask-id="${mi.id || ''}">`;
-    askHtml += `<div class="agent-ask-question">${agentMd(q)}</div>`;
-    askHtml += `<div class="agent-ask-buttons">`;
-    for (let i = 0; i < buttons.length; i++) {
-      const b = buttons[i];
-      const isChosen = isAnswered && mi.chosen === b;
-      const isPrimary = i === 0 && !isAnswered;
-      askHtml += `<button type="button" class="agent-ask-btn ${isPrimary ? 'primary' : ''} ${isChosen ? 'selected' : ''}" data-ask-val="${esc(b)}" ${isAnswered ? 'disabled' : ''}>${esc(b)}</button>`;
-    }
-    askHtml += `</div>`;
-    if (allowCustom && !isAnswered) {
-      askHtml += `<div class="agent-ask-custom-row">
-        <input type="text" class="agent-ask-custom-input" placeholder="${esc(placeholder)}" autocomplete="off">
-        <button type="button" class="agent-ask-custom-submit">Submit</button>
-      </div>`;
-    }
-    askHtml += `</div>`;
-    return askHtml;
-  }
 
   const label = agentToolLabel(name);
   const sub = agentToolSummary(name, mi.args, mi.result) || (mi.ok === false && mi.error ? agentTrimLocal(mi.error, 70) : 'done');
@@ -6098,33 +6085,6 @@ function wireAgent() {
 
   // Feed interactions: toggle tool details, run actions
   $('#agent-feed').addEventListener('click', (e) => {
-    const askBtn = e.target.closest('.agent-ask-btn');
-    if (askBtn && !askBtn.disabled) {
-      const val = askBtn.dataset.askVal;
-      const card = askBtn.closest('.agent-ask-card');
-      if (card) {
-        card.querySelectorAll('.agent-ask-btn').forEach((b) => { b.disabled = true; });
-        card.querySelector('.agent-ask-custom-row')?.remove();
-        askBtn.classList.add('selected');
-      }
-      agentSendText(val);
-      return;
-    }
-    const submitBtn = e.target.closest('.agent-ask-custom-submit');
-    if (submitBtn) {
-      const row = submitBtn.closest('.agent-ask-custom-row');
-      const input = row?.querySelector('.agent-ask-custom-input');
-      const val = input ? input.value.trim() : '';
-      if (val) {
-        const card = submitBtn.closest('.agent-ask-card');
-        if (card) {
-          card.querySelectorAll('.agent-ask-btn').forEach((b) => { b.disabled = true; });
-          row.remove();
-        }
-        agentSendText(val);
-      }
-      return;
-    }
     const actBtn = e.target.closest('[data-agent-open-chat]');
     if (actBtn) {
       closeAgentDrawer();
@@ -6179,21 +6139,6 @@ function wireAgent() {
     if (chipImg) { openViewer(chipImg.src); return; }
     const row = e.target.closest('.agent-tool-row');
     if (row) row.closest('.agent-tool').classList.toggle('open');
-  });
-
-  $('#agent-feed')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && e.target.classList.contains('agent-ask-custom-input')) {
-      e.preventDefault();
-      const val = e.target.value.trim();
-      if (val) {
-        const card = e.target.closest('.agent-ask-card');
-        if (card) {
-          card.querySelectorAll('.agent-ask-btn').forEach((b) => { b.disabled = true; });
-          e.target.closest('.agent-ask-custom-row')?.remove();
-        }
-        agentSendText(val);
-      }
-    }
   });
 }
 
