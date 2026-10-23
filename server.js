@@ -1022,6 +1022,77 @@ function agentScenarioBrief(s) {
   };
 }
 
+/* Read one chat for the agent. mode "linear" = the conversation exactly as the
+   user sees it (active branch only, as a transcript); mode "tree" = every node
+   including all alternative versions/branches, with the active child marked.
+   Contents are trimmed per message — the sanitizer caps the overall tool
+   payload anyway, but per-message trims keep even huge chats useful. */
+function agentReadChat(chatId, mode) {
+  const chat = db.getChat(chatId);
+  if (!chat) return null;
+  const char = db.getCharacter(chat.characterId);
+  const tree = chat.tree;
+  const trim = (s, n) => {
+    const t = String(s || '');
+    return t.length > n ? t.slice(0, n) + '…' : t;
+  };
+  const meta = {
+    chat_id: chat.id,
+    title: chat.title,
+    character: char ? char.name : '(deleted character)',
+    character_id: chat.characterId,
+    scenario: chat.scenarioTitle || null,
+    total_nodes: Object.keys(tree.nodes).length,
+  };
+
+  if (mode === 'tree') {
+    const lines = [];
+    const MAX_LINES = 400;
+    let cut = false;
+    const walk = (id, depth) => {
+      if (cut) return;
+      const node = tree.nodes[id];
+      if (!node) return;
+      if (lines.length >= MAX_LINES) {
+        lines.push(`${'  '.repeat(depth)}… (tree truncated — use read_chat on smaller chats or ask the user)`);
+        cut = true;
+        return;
+      }
+      const hasKids = node.children && node.children.length;
+      const star = hasKids ? '*' : '';
+      const extra = node.role === 'injection' && node.state ? ` [${node.state}]` : '';
+      lines.push(`${'  '.repeat(depth)}[${node.role}${star}] ${node.id}${extra} ${JSON.stringify(trim(node.content, 140))}`);
+      for (const c of hasKids ? node.children : []) walk(c, depth + 1);
+    };
+    walk('root', 0);
+    return {
+      ...meta,
+      mode: 'tree',
+      tree: lines.join('\n'),
+      note: 'Indentation = conversation depth. A * after the role marks the ACTIVE child of its parent (the version currently on screen); unmarked siblings are alternative versions. Children are the messages that follow a node.',
+    };
+  }
+
+  const tip = db.treeTip(tree);
+  const path = db.pathNodes(tree, tip).filter((n) => n.role !== 'root');
+  const MAX_MSGS = 80;
+  const dropped = Math.max(0, path.length - MAX_MSGS);
+  const messages = path.slice(-MAX_MSGS).map((n) => ({
+    id: n.id,
+    role: n.role,
+    content: trim(n.content, 700),
+  }));
+  return {
+    ...meta,
+    mode: 'linear',
+    turns: messages.length,
+    messages,
+    note: dropped > 0
+      ? `Showing the last ${messages.length} of ${path.length} messages on the active branch.`
+      : 'Active branch only — call again with mode="tree" to see alternative versions and branches.',
+  };
+}
+
 function agentToolDefs(cfg) {
   const defs = [
     { name: 'site_overview', description: 'Snapshot of the site: counts, ids of every entity, who the user plays as, which AI preset is active and whether image generation is available. Call this first whenever you are unsure about ids or the current state.', props: {} },
@@ -1042,6 +1113,14 @@ function agentToolDefs(cfg) {
     { name: 'delete_character', description: 'Permanently delete a character, its chats and its poses. Only after the user explicitly asked for exactly this.', props: { id: { type: 'string' } }, req: ['id'] },
     { name: 'list_scenarios', description: 'List every scenario with id, title, required {{tags}} and which characters have values configured.', props: {} },
     { name: 'get_scenario', description: 'Full scenario record: title, description, full content, special notes, and the per-character variable values.', props: { id: { type: 'string' } }, req: ['id'] },
+    {
+      name: 'read_chat',
+      description: 'Read a chat conversation. Without chat_id, reads the chat the user currently has open (its id is listed in your context). mode="linear" (default) returns the conversation as the user sees it — the active branch as a clean transcript with roles. mode="tree" returns the WHOLE tree: every message with ALL its alternative versions/branches, marking which version is active. Use tree mode when the user asks about versions, branches, regenerations, or what happened to older messages.',
+      props: {
+        chat_id: { type: 'string', description: 'Chat id to read. Omit to read the currently open chat.' },
+        mode: { type: 'string', description: '"linear" (active branch transcript) or "tree" (all versions and branches). Default "linear".' },
+      },
+    },
     { name: 'create_scenario', description: `Create a scenario. content is the scene text injected at chat start; special_notes provides newline-separated important details for this scenario only; character_variables optionally seeds per-character values { "<characterId>": { "<tag>": "value" } }.`, props: { title: { type: 'string' }, description: { type: 'string' }, content: { type: 'string' }, special_notes: { type: 'string', description: 'Newline-separated details for this scenario only' }, character_variables: { type: 'object' } }, req: ['title', 'content'] },
     { name: 'update_scenario', description: `Update title/description/content/special_notes; character_variables REPLACES the whole per-character map (use set_scenario_character_variables to merge instead).`, props: { id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, content: { type: 'string' }, special_notes: { type: 'string' }, character_variables: { type: 'object' } }, req: ['id'] },
     { name: 'set_scenario_character_variables', description: `Set per-character {{tag}} values on one scenario. MERGES given map for that character; replace=true replaces that character's map only.`, props: { scenario_id: { type: 'string' }, character_id: { type: 'string' }, variables: { type: 'object' }, replace: { type: 'boolean' } }, req: ['scenario_id', 'character_id', 'variables'] },
@@ -1345,6 +1424,14 @@ async function runAgentTool(name, args, settings, cfg) {
       const s = db.getScenario(args.id);
       if (!s) throw new Error('Scenario not found: ' + args.id);
       return { ...s, charactersConfigured: Object.keys(s.characterVariables || {}) };
+    }
+
+    case 'read_chat': {
+      const chatId = args.chat_id || cfg.activeChatId;
+      if (!chatId) throw new Error('No chat_id given and the user has no chat open right now.');
+      const r = agentReadChat(chatId, args.mode === 'tree' ? 'tree' : 'linear');
+      if (!r) throw new Error('Chat not found: ' + chatId);
+      return r;
     }
 
     case 'create_scenario': {
@@ -1868,7 +1955,7 @@ function mapAgentHistoryAnthropic(rows) {
 
 /* ---- System prompt --------------------------------------------------------- */
 
-function buildAgentSystem(settings) {
+function buildAgentSystem(settings, activeChatId) {
   const cfg = resolveAiConfig(settings);
   const aCfg = resolveAgentConfig(settings);
   const persona = settings.activePersonalityId ? db.getPersona(settings.activePersonalityId) : null;
@@ -1879,6 +1966,15 @@ function buildAgentSystem(settings) {
 
   const ctx = ['## Current site state (live snapshot)'];
   ctx.push(`- The user plays as: ${persona ? `"${persona.name}" — ${agentTrim(persona.description, 300)}` : 'no persona set (they play an unnamed "user")'}`);
+  if (activeChatId) {
+    const ac = db.getChat(activeChatId);
+    if (ac) {
+      const acChar = db.getCharacter(ac.characterId);
+      ctx.push(`- Chat the user currently has OPEN in the UI: "${ac.title}" (id: ${ac.id}) — character "${acChar ? acChar.name : '?'}"${ac.scenarioTitle ? `, scenario "${ac.scenarioTitle}"` : ', no scenario'}. read_chat with no chat_id reads this one.`);
+    }
+  } else {
+    ctx.push('- No chat is currently open in the UI (welcome screen). read_chat needs an explicit chat_id.');
+  }
 
   if (activePreset) {
     ctx.push(`- Active Roleplay Preset (CURRENT USER WRITING STYLE & FORMATTING RULES):`);
@@ -1929,6 +2025,11 @@ async function runAgentChat(body, emit, ctrl) {
   const turnT0 = Date.now();
   const settings = db.getSettings();
   const cfg = resolveAgentConfig(settings);
+  /* The chat the user currently has open in the UI (client sends its id each
+     turn). Lets read_chat default to it and lets the system prompt tell the
+     agent which conversation the user is looking at right now. */
+  const activeChatId = body && body.activeChatId && db.getChat(String(body.activeChatId)) ? String(body.activeChatId) : null;
+  cfg.activeChatId = activeChatId;
   const attIds = Array.isArray(body.attachments) ? body.attachments.map(String).slice(0, 6) : [];
   let text = String((body && body.message) || '').trim();
   if (!text && !attIds.length) throw new Error('Message is empty');
@@ -1958,7 +2059,7 @@ async function runAgentChat(body, emit, ctrl) {
   while (rows.length && rows[0].role === 'tool') rows.shift(); // avoid orphan tool results after history trim
   tlog('agent', `history: ${rows.length} rows replayed (limit ${AGENT_HISTORY_LIMIT})`);
 
-  const system = buildAgentSystem(settings);
+  const system = buildAgentSystem(settings, activeChatId);
   const tools = agentToolDefs(cfg);
   tlog('agent', `system prompt ${system.length}ch, ${tools.length} tools${tools.length ? ' (' + tools.map((t) => t.function.name).join(', ') + ')' : ''}`);
 

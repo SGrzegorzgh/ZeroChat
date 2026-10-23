@@ -5158,6 +5158,7 @@ function wireEvents() {
 /* ---- AI Agent drawer ------------------------------------------------------ */
 
 const AGENT_TOOL_LABELS = {
+  read_chat: 'Reading chat',
   site_overview: 'Read the site',
   list_characters: 'Listing characters',
   get_character: 'Reading character',
@@ -5362,6 +5363,7 @@ function agentToolLabel(name) {
 function agentToolSummary(name, args, result) {
   args = args || {};
   switch (name) {
+    case 'read_chat': return (args.chat_id ? 'chat ' + String(args.chat_id) : 'open chat') + ' · ' + (args.mode === 'tree' ? 'full tree' : 'transcript');
     case 'create_character':
     case 'update_character':
     case 'delete_character':
@@ -5448,7 +5450,11 @@ function agentToolCardHtml(mi) {
     }
     html += `<div class="agent-tool-details">`;
     if (mi.args) html += `<div class="dt-label">Arguments</div><pre>${esc(JSON.stringify(mi.args, null, 2))}</pre>`;
-    if (mi.result !== null && mi.result !== undefined) html += `<div class="dt-label">${mi.ok === false ? 'Error' : 'Result'}</div><pre>${esc(JSON.stringify(mi.result, null, 2))}</pre>`;
+    if (name === 'read_chat' && mi.ok !== false && mi.result && (mi.result.messages || mi.result.tree)) {
+      html += agentReadChatDetailsHtml(mi.result);
+    } else if (mi.result !== null && mi.result !== undefined) {
+      html += `<div class="dt-label">${mi.ok === false ? 'Error' : 'Result'}</div><pre>${esc(JSON.stringify(mi.result, null, 2))}</pre>`;
+    }
     html += `</div>`;
     if (acts) html += `<div class="agent-tool-acts">${acts}</div>`;
   }
@@ -5459,6 +5465,19 @@ function agentToolCardHtml(mi) {
 function agentTrimLocal(s, n) {
   const t = String(s || '');
   return t.length > n ? t.slice(0, n - 1) + '…' : t;
+}
+
+/* read_chat tool results render as a readable transcript / tree in the card
+   instead of raw JSON. */
+function agentReadChatDetailsHtml(r) {
+  const head = `${r.title || 'Chat'} · ${r.character || ''} · ${r.turns != null ? r.turns + ' messages' : (r.total_nodes || 0) + ' nodes'}`;
+  let html = `<div class="dt-label">${esc(head)}</div>`;
+  if (r.tree) return html + `<pre class="agent-rc-tree">${esc(r.tree)}</pre>`;
+  const roleCls = { user: 'u', char: 'c', injection: 'i', scenario: 's' };
+  for (const m of r.messages || []) {
+    html += `<div class="agent-rc-row"><span class="agent-rc-role ${roleCls[m.role] || ''}">${esc(m.role)}</span><span class="agent-rc-text">${esc(m.content)}</span></div>`;
+  }
+  return html;
 }
 
 /* --- Agent markdown --------------------------------------------------------
@@ -5738,7 +5757,9 @@ async function agentSend() {
   setAgentStatus('thinking');
   renderAgent();
   try {
-    await streamAgent({ message: text, attachments: atts.map((a) => a.id) }, (ev) => {
+    const openChat = activeChar();
+    const openChatId = openChat ? (ui.activeChatIds[openChat.id] || null) : null;
+    await streamAgent({ message: text, attachments: atts.map((a) => a.id), activeChatId: openChatId }, (ev) => {
       if (ev.type === 'status') {
         agentStatus = 'thinking';
       } else if (ev.type === 'delta') {
