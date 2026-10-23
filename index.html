@@ -198,6 +198,9 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
               </button>
               <textarea id="msg-input" rows="1" placeholder="Say something..."></textarea>
+              <button type="button" id="respond-as-me-btn" class="comp-btn respond-me-btn" title="Respond as me — AI writes a message for your persona">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="m17 7 2 2 4-4"/></svg>
+              </button>
               <button id="inject-btn" class="comp-btn hidden" aria-label="Send as directive" disabled></button>
               <button id="generate-btn" class="comp-btn hidden" aria-label="Generate reply now" disabled></button>
               <button id="send-btn" aria-label="Send message" title="Send message">
@@ -221,6 +224,7 @@
       </div>
       <div class="agent-head-sub" id="agent-model-label"></div>
     </div>
+    <button id="agent-revert-btn" class="btn btn-ghost sm hidden" type="button" title="Revert all changes made by the agent in this session">Revert (0)</button>
     <button id="agent-clear-btn" class="btn btn-ghost sm" type="button" title="Clear conversation">Clear</button>
     <button id="agent-close-btn" class="icon-btn" aria-label="Close Agent" title="Close">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -884,6 +888,11 @@
             <div class="field">
               <label>Short description</label>
               <textarea id="se-desc" rows="2" placeholder="A one-line teaser or summary of the situation"></textarea>
+            </div>
+            <div class="field">
+              <label>Special scenario notes (sent to AI)</label>
+              <textarea id="se-notes" rows="3" placeholder="Small, newline-separated important details for this scenario only&#10;e.g. {{char}} has a secret crush on {{user}}&#10;e.g. Magic is forbidden in this realm"></textarea>
+              <p class="m-note">Important details for this scenario only, one per line. The roleplay AI receives these rules as authoritative for this scene.</p>
             </div>
             <div class="field">
               <div class="field-tab-header">

@@ -246,7 +246,7 @@ function expandPromptMacros(s, char, persona, chatOrScenario = null) {
   });
 }
 
-function buildTurns(pathNodes, char, persona, chatOrScenario = null) {
+function buildTurns(pathNodes, char, persona, chatOrScenario = null, asUser = false) {
   const turns = [];
   let hasInjection = false;
   for (const n of pathNodes) {
@@ -256,7 +256,12 @@ function buildTurns(pathNodes, char, persona, chatOrScenario = null) {
       hasInjection = true;
       content = `((OOC directive: ${content}))`;
     }
-    const role = n.role === 'char' ? 'assistant' : 'user';
+    let role;
+    if (asUser) {
+      role = n.role === 'user' ? 'assistant' : 'user';
+    } else {
+      role = n.role === 'char' ? 'assistant' : 'user';
+    }
     const last = turns[turns.length - 1];
     if (last && last.role === role) last.content += '\n\n' + content;
     else turns.push({ role, content });
@@ -286,24 +291,56 @@ const SIMULATED_FALLBACKS = [
    defines who is in the scene — the character's persona, the user's persona, the
    scenario and the example replies — is appended either way, so a custom prompt
    can steer the format without stripping the model of who it is writing about. */
-function buildSystemText(char, persona, hasInjection, cfg, scenarioText, chatOrScenario = null) {
+function buildSystemText(char, persona, hasInjection, cfg, scenarioText, chatOrScenario = null, asUser = false, guidance = '') {
   const userName = persona ? persona.name : 'the user';
   const ex = (s) => expandPromptMacros(s, char, persona, chatOrScenario);
   const custom = cfg.systemPrompt.trim();
-  const parts = [
-    custom ? ex(custom) : `Write "${char.name}'s" next reply in a fictional roleplay chat between "${userName}" and "${char.name}".`,
-    `"${char.name}'s" Persona:\n${ex(char.description) || 'A mysterious stranger.'}`,
-    persona
+  const parts = [];
+
+  if (asUser) {
+    parts.push(`Write "${userName}'s" next reply in a fictional roleplay chat between "${userName}" and "${char.name}". You are roleplaying exclusively as "${userName}".`);
+    parts.push(persona
+      ? `"${userName}'s" Persona (You):\n${ex(persona.description) || 'An ordinary person.'}`
+      : `"The user's" Persona (You):\nAn ordinary person.`);
+    parts.push(`"${char.name}'s" Persona (Partner):\n${ex(char.description) || 'A mysterious stranger.'}`);
+  } else {
+    parts.push(custom ? ex(custom) : `Write "${char.name}'s" next reply in a fictional roleplay chat between "${userName}" and "${char.name}".`);
+    parts.push(`"${char.name}'s" Persona:\n${ex(char.description) || 'A mysterious stranger.'}`);
+    parts.push(persona
       ? `"${userName}'s" Persona:\n${ex(persona.description) || 'An ordinary person.'}`
-      : `"The user's" Persona:\nAn ordinary person — the user plays themselves.`,
-  ];
+      : `"The user's" Persona:\nAn ordinary person — the user plays themselves.`);
+  }
+
   const sc = scenarioText !== undefined ? scenarioText : (char.scenario || '');
   if (sc) parts.push(`The scenario of the conversation:\n${ex(sc)}`);
-  const examples = (char.responses || []).filter((r) => r && !GENERIC_RESPONSE_SET.has(String(r).trim()));
-  if (examples.length) parts.push(`This is how "${char.name}" talks and acts:\n${examples.map((r) => '- ' + ex(r)).join('\n')}`);
-  parts.push(STYLE_LINE);
-  if (hasInjection) parts.push(OOC_LINE);
-  parts.push(`Then the roleplay chat between "${char.name}" and "${userName}" begins.`);
+
+  // Special scenario notes (newline separated important details)
+  const scObj = (chatOrScenario && chatOrScenario.scenarioId)
+    ? db.getScenario(chatOrScenario.scenarioId)
+    : (chatOrScenario && chatOrScenario.specialNotes ? chatOrScenario : null);
+  const rawNotes = (scObj && scObj.specialNotes) || '';
+  if (rawNotes.trim()) {
+    const lines = rawNotes.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.length) {
+      parts.push(`Important scenario details for this scene:\n${lines.map((l) => '- ' + ex(l)).join('\n')}`);
+    }
+  }
+
+  if (asUser) {
+    if (guidance && guidance.trim()) {
+      parts.push(`User directive / guidance for how you should reply:\n${guidance.trim()}`);
+    }
+    parts.push('Write actions and scene beats in *asterisks* and wrap all spoken dialogue in "double quotes". Stay fully in character as ' + userName + ': never break the fourth wall, never mention being an AI, and never write the other character\'s lines or actions for them.');
+    if (hasInjection) parts.push(OOC_LINE);
+    parts.push(`Now write "${userName}'s" next response:`);
+  } else {
+    const examples = (char.responses || []).filter((r) => r && !GENERIC_RESPONSE_SET.has(String(r).trim()));
+    if (examples.length) parts.push(`This is how "${char.name}" talks and acts:\n${examples.map((r) => '- ' + ex(r)).join('\n')}`);
+    parts.push(STYLE_LINE);
+    if (hasInjection) parts.push(OOC_LINE);
+    parts.push(`Then the roleplay chat between "${char.name}" and "${userName}" begins.`);
+  }
+
   return parts.join('\n\n');
 }
 
@@ -440,19 +477,25 @@ async function streamAnthropic(base, body, apiKey, onDelta, ctrl) {
   return full;
 }
 
-async function generateReplyStream(char, nodes, persona, settings, onDelta, signal, chatOrScenario = null) {
-  const built = buildTurns(nodes, char, persona, chatOrScenario);
+async function generateReplyStream(char, nodes, persona, settings, onDelta, signal, chatOrScenario = null, asUser = false, guidance = '') {
+  const built = buildTurns(nodes, char, persona, chatOrScenario, asUser);
   const history = built.turns.slice(-40);
   const cfg = resolveAiConfig(settings);
   const scenarioNode = (nodes || []).find((n) => n.role === 'scenario');
   const scenarioText = scenarioNode ? scenarioNode.content : (char.scenario || '');
-  const systemText = buildSystemText(char, persona, built.hasInjection, cfg, scenarioText, chatOrScenario);
+  const systemText = buildSystemText(char, persona, built.hasInjection, cfg, scenarioText, chatOrScenario, asUser, guidance);
 
   if (!cfg.apiKey && cfg.provider !== 'ollama') {
-    const pool = (char.responses || []).filter((r) => r && !GENERIC_RESPONSE_SET.has(String(r).trim()));
-    const candidates = pool.length ? pool : SIMULATED_FALLBACKS;
-    const picked = candidates[Math.floor(Math.random() * candidates.length)];
-    const text = expandPromptMacros(picked, char, persona, chatOrScenario) || '*They listen carefully, then nod.* Go on — I am curious where this goes.';
+    const userName = persona ? persona.name : 'the user';
+    let text;
+    if (asUser) {
+      text = `*${userName} considers carefully before responding.* "I hear you," they say, meeting ${char.name}'s gaze. "Let's see where this road leads."`;
+    } else {
+      const pool = (char.responses || []).filter((r) => r && !GENERIC_RESPONSE_SET.has(String(r).trim()));
+      const candidates = pool.length ? pool : SIMULATED_FALLBACKS;
+      const picked = candidates[Math.floor(Math.random() * candidates.length)];
+      text = expandPromptMacros(picked, char, persona, chatOrScenario) || '*They listen carefully, then nod.* Go on — I am curious where this goes.';
+    }
     for (const chunk of text.match(/[\s\S]{1,8}/g) || [text]) {
       if (signal && signal.aborted) throw new Error('Aborted');
       onDelta(chunk);
@@ -922,6 +965,7 @@ Anti-loop guard: if the user goes back and forth many times on fine details, sum
 
 const AGENT_RULES = `## Ground rules
 - Never assume: draw facts from your tools (site_overview / list / get) and from what the user says. If a needed fact exists nowhere, ask.
+- ALWAYS use the ask_user tool when asking for permission, confirmation, approval to create/update/delete entities, or offering choices. Do NOT ask for permission in plain text alone. Call ask_user with the question, the button choice labels (e.g. ["Approve & create", "Change details", "Cancel"]), and allow_custom: true. The user will click a button or type custom feedback, which will be returned to you directly.
 - Only call create / update / delete tools for a specific action the user has approved. Reading tools is always fine.
 - Always use real ids returned by tools. Never invent an id.
 - Learn the user's writing style from their Presets: Presets hold the user's preferred writing style, dialogue conventions, formatting rules, and roleplay tone. Always respect and incorporate these instructions when writing character descriptions, example dialogue lines, and scenario prose. Use list_presets and get_preset to inspect presets whenever helpful.
@@ -974,12 +1018,39 @@ function agentScenarioBrief(s) {
     title: s.title,
     description: agentTrim(s.description, 160),
     required_vars: req,
+    special_notes: s.specialNotes || '',
     characters_configured: Object.keys(configured),
   };
 }
 
 function agentToolDefs(cfg) {
   const defs = [
+    {
+      name: 'ask_user',
+      description: 'Ask the user for permission, approval, confirmation, or a decision by presenting interactive choice buttons and an optional custom answer input. Always use this instead of asking for permission in plain text.',
+      props: {
+        question: { type: 'string', description: 'The question or confirmation prompt to display to the user' },
+        buttons: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List of button choice labels to display (e.g. ["Approve & create", "Change details", "Cancel"])'
+        },
+        options: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Alternative alias for buttons'
+        },
+        allow_custom: {
+          type: 'boolean',
+          description: 'Whether to show a text box allowing the user to type a custom answer (default true)'
+        },
+        custom_placeholder: {
+          type: 'string',
+          description: 'Placeholder text for the custom answer input'
+        }
+      },
+      req: ['question']
+    },
     { name: 'site_overview', description: 'Snapshot of the site: counts, ids of every entity, who the user plays as, which AI preset is active and whether image generation is available. Call this first whenever you are unsure about ids or the current state.', props: {} },
     { name: 'list_characters', description: 'List every character with id, name, a trimmed persona and variable keys. Full details need get_character.', props: {} },
     { name: 'get_character', description: 'Full record of one character: description (persona), note, scenario text, variables with values, example replies and pose list.', props: { id: { type: 'string', description: 'Character id' } }, req: ['id'] },
@@ -997,9 +1068,9 @@ function agentToolDefs(cfg) {
     { name: 'set_character_variables', description: `Set the character's {{tag}} values. By default MERGES the given map into the existing variables; set replace=true to wipe and replace. Values must be short (a word or number).`, props: { id: { type: 'string' }, variables: { type: 'object' }, replace: { type: 'boolean' } }, req: ['id', 'variables'] },
     { name: 'delete_character', description: 'Permanently delete a character, its chats and its poses. Only after the user explicitly asked for exactly this.', props: { id: { type: 'string' } }, req: ['id'] },
     { name: 'list_scenarios', description: 'List every scenario with id, title, required {{tags}} and which characters have values configured.', props: {} },
-    { name: 'get_scenario', description: 'Full scenario record: title, description, full content and the per-character variable values.', props: { id: { type: 'string' } }, req: ['id'] },
-    { name: 'create_scenario', description: `Create a scenario. content is the scene text injected at chat start; it may use {{char}}, {{user}} and custom {{tags}}. character_variables optionally seeds per-character values { "<characterId>": { "<tag>": "value" } }.`, props: { title: { type: 'string' }, description: { type: 'string' }, content: { type: 'string' }, character_variables: { type: 'object' } }, req: ['title', 'content'] },
-    { name: 'update_scenario', description: `Update title/description/content; character_variables REPLACES the whole per-character map (use set_scenario_character_variables to merge instead).`, props: { id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, content: { type: 'string' }, character_variables: { type: 'object' } }, req: ['id'] },
+    { name: 'get_scenario', description: 'Full scenario record: title, description, full content, special notes, and the per-character variable values.', props: { id: { type: 'string' } }, req: ['id'] },
+    { name: 'create_scenario', description: `Create a scenario. content is the scene text injected at chat start; special_notes provides newline-separated important details for this scenario only; character_variables optionally seeds per-character values { "<characterId>": { "<tag>": "value" } }.`, props: { title: { type: 'string' }, description: { type: 'string' }, content: { type: 'string' }, special_notes: { type: 'string', description: 'Newline-separated details for this scenario only' }, character_variables: { type: 'object' } }, req: ['title', 'content'] },
+    { name: 'update_scenario', description: `Update title/description/content/special_notes; character_variables REPLACES the whole per-character map (use set_scenario_character_variables to merge instead).`, props: { id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, content: { type: 'string' }, special_notes: { type: 'string' }, character_variables: { type: 'object' } }, req: ['id'] },
     { name: 'set_scenario_character_variables', description: `Set per-character {{tag}} values on one scenario. MERGES given map for that character; replace=true replaces that character's map only.`, props: { scenario_id: { type: 'string' }, character_id: { type: 'string' }, variables: { type: 'object' }, replace: { type: 'boolean' } }, req: ['scenario_id', 'character_id', 'variables'] },
     { name: 'delete_scenario', description: 'Permanently delete a scenario (chats keep running without it).', props: { id: { type: 'string' } }, req: ['id'] },
     { name: 'list_personas', description: 'List the user personas ("who you play as"), with the active one marked.', props: {} },
@@ -1174,6 +1245,7 @@ function agentApplyImage(image, args) {
   if (!c) throw new Error('Character not found: ' + args.character_id);
   if (target === 'portrait') {
     db.updateCharacter(args.character_id, { image });
+    db.addAgentChange({ action: `Set portrait for character "${c.name}"`, entityType: 'character', entityId: c.id });
     return { character_id: args.character_id, target: 'portrait' };
   }
   if (target === 'pose') {
@@ -1208,6 +1280,7 @@ function agentApplyImage(image, args) {
     }
     if (!c.posesEnabled) db.updateCharacter(args.character_id, { posesEnabled: true });
     if (args.is_default && pose) db.setDefaultPose(args.character_id, pose.id);
+    db.addAgentChange({ action: `Set pose "${pose ? pose.name : 'pose'}" on character "${c.name}"`, entityType: 'character', entityId: c.id });
     return { character_id: args.character_id, target: 'pose', pose_id: pose.id, pose_name: pose.name };
   }
   throw new Error('Unknown target: ' + target);
@@ -1215,6 +1288,19 @@ function agentApplyImage(image, args) {
 
 async function runAgentTool(name, args, settings, cfg) {
   switch (name) {
+    case 'ask_user': {
+      agentNeed(args, ['question'], name);
+      const rawButtons = Array.isArray(args.buttons) ? args.buttons : (Array.isArray(args.options) ? args.options : []);
+      const buttons = rawButtons.map((b) => (typeof b === 'object' && b !== null ? (b.label || b.text || JSON.stringify(b)) : String(b)));
+      if (!buttons.length) buttons.push('OK');
+      return {
+        question: args.question,
+        buttons,
+        allow_custom: args.allow_custom !== false,
+        custom_placeholder: args.custom_placeholder || 'Type your own answer...',
+      };
+    }
+
     case 'site_overview':
       return agentSiteOverview(settings, cfg);
 
@@ -1249,6 +1335,7 @@ async function runAgentTool(name, args, settings, cfg) {
         responses: Array.isArray(args.reactive_replies) ? args.reactive_replies : [],
         posesEnabled: !!args.posesEnabled,
       });
+      db.addAgentChange({ action: `Created character "${c.name}"`, entityType: 'character', entityId: c.id });
       return { created: agentCharBrief(c), note: 'a first chat was opened for this character automatically' };
     }
 
@@ -1261,6 +1348,7 @@ async function runAgentTool(name, args, settings, cfg) {
       if (Array.isArray(args.reactive_replies)) fields.responses = args.reactive_replies.slice(0, 8);
       const c = db.updateCharacter(args.id, fields);
       if (!c) throw new Error('Character not found: ' + args.id);
+      db.addAgentChange({ action: `Updated character "${c.name}"`, entityType: 'character', entityId: c.id });
       return { updated: agentCharBrief(c), changed: Object.keys(fields) };
     }
 
@@ -1271,12 +1359,15 @@ async function runAgentTool(name, args, settings, cfg) {
       if (!c) throw new Error('Character not found: ' + args.id);
       const merged = args.replace ? { ...args.variables } : { ...(c.variables || {}), ...args.variables };
       db.updateCharacter(args.id, { variables: merged });
+      db.addAgentChange({ action: `Updated variables for character "${c.name}"`, entityType: 'character', entityId: c.id });
       return { character_id: args.id, variables: merged };
     }
 
     case 'delete_character': {
       agentNeed(args, ['id'], name);
+      const c = db.getCharacter(args.id);
       db.deleteCharacter(args.id);
+      db.addAgentChange({ action: `Deleted character "${c ? c.name : args.id}"`, entityType: 'character', entityId: args.id });
       return { deleted: args.id };
     }
 
@@ -1294,7 +1385,9 @@ async function runAgentTool(name, args, settings, cfg) {
       agentNeed(args, ['title', 'content'], name);
       let cv = args.character_variables;
       if (cv && (typeof cv !== 'object' || Array.isArray(cv))) cv = undefined;
-      const s = db.createScenario({ title: args.title, description: args.description || '', content: args.content, characterVariables: cv || undefined });
+      const sNotes = String(args.special_notes || args.specialNotes || '');
+      const s = db.createScenario({ title: args.title, description: args.description || '', content: args.content, specialNotes: sNotes, characterVariables: cv || undefined });
+      db.addAgentChange({ action: `Created scenario "${s.title}"`, entityType: 'scenario', entityId: s.id });
       return { created: agentScenarioBrief(s) };
     }
 
@@ -1304,9 +1397,13 @@ async function runAgentTool(name, args, settings, cfg) {
       for (const k of ['title', 'description', 'content']) {
         if (args[k] !== undefined && args[k] !== null) fields[k] = String(args[k]);
       }
+      if (args.special_notes !== undefined || args.specialNotes !== undefined) {
+        fields.specialNotes = String(args.special_notes !== undefined ? args.special_notes : args.specialNotes);
+      }
       if (args.character_variables && typeof args.character_variables === 'object') fields.characterVariables = args.character_variables;
       const s = db.updateScenario(args.id, fields);
       if (!s) throw new Error('Scenario not found: ' + args.id);
+      db.addAgentChange({ action: `Updated scenario "${s.title}"`, entityType: 'scenario', entityId: s.id });
       return { updated: agentScenarioBrief(s) };
     }
 
@@ -1317,12 +1414,15 @@ async function runAgentTool(name, args, settings, cfg) {
       const cv = { ...(s.characterVariables || {}) };
       cv[args.character_id] = args.replace ? { ...args.variables } : { ...(cv[args.character_id] || {}), ...args.variables };
       db.updateScenario(args.scenario_id, { characterVariables: cv });
+      db.addAgentChange({ action: `Updated scenario variables for character "${args.character_id}"`, entityType: 'scenario', entityId: args.scenario_id });
       return { scenario_id: args.scenario_id, character_id: args.character_id, variables: cv[args.character_id] };
     }
 
     case 'delete_scenario': {
       agentNeed(args, ['id'], name);
+      const s = db.getScenario(args.id);
       db.deleteScenario(args.id);
+      db.addAgentChange({ action: `Deleted scenario "${s ? s.title : args.id}"`, entityType: 'scenario', entityId: args.id });
       return { deleted: args.id };
     }
 
@@ -1334,6 +1434,7 @@ async function runAgentTool(name, args, settings, cfg) {
     case 'create_persona': {
       agentNeed(args, ['name', 'description'], name);
       const pp = db.createPersona({ name: args.name, description: args.description, note: args.note || '' });
+      db.addAgentChange({ action: `Created persona "${pp.name}"`, entityType: 'persona', entityId: pp.id });
       return { created: { id: pp.id, name: pp.name }, note: 'use set_active_persona to make it current' };
     }
 
@@ -1343,6 +1444,7 @@ async function runAgentTool(name, args, settings, cfg) {
       for (const k of ['name', 'description', 'note']) if (args[k] !== undefined && args[k] !== null) fields[k] = String(args[k]);
       const pp = db.updatePersona(args.id, fields);
       if (!pp) throw new Error('Persona not found: ' + args.id);
+      db.addAgentChange({ action: `Updated persona "${pp.name}"`, entityType: 'persona', entityId: pp.id });
       return { updated: { id: pp.id, name: pp.name }, changed: Object.keys(fields) };
     }
 
@@ -1351,6 +1453,7 @@ async function runAgentTool(name, args, settings, cfg) {
       const pp = db.getPersona(args.id);
       if (!pp) throw new Error('Persona not found: ' + args.id);
       db.updateSettings({ activePersonalityId: args.id });
+      db.addAgentChange({ action: `Set active persona to "${pp.name}"`, entityType: 'persona', entityId: pp.id });
       return { active_persona: { id: pp.id, name: pp.name } };
     }
 
@@ -1965,6 +2068,15 @@ async function route(req, res, u) {
   let m;
 
   if (req.method === 'GET' && p === '/api/agent/messages') return send(res, 200, { messages: db.getAgentMessages(), activeFirst: db.agentMessageCount() === 0 });
+  if (req.method === 'GET' && p === '/api/agent/changes') return send(res, 200, { changes: db.getAgentChanges() });
+  if (req.method === 'POST' && p === '/api/agent/revert') {
+    try {
+      const resu = db.revertAgentCheckpoint();
+      return send(res, 200, resu);
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
   if (req.method === 'POST' && p === '/api/agent/clear') return send(res, 200, db.clearAgentMessages());
   if (req.method === 'POST' && p === '/api/agent/attach') {
     try {
@@ -2051,6 +2163,7 @@ async function route(req, res, u) {
         title,
         description: (body.description || '').trim(),
         content,
+        specialNotes: body.specialNotes || body.special_notes || '',
         accessMode: 'all',
         characterIds: [],
         characterVariables: body.characterVariables || body.character_variables || {},
@@ -2220,6 +2333,8 @@ async function route(req, res, u) {
     if (!chat) return send(res, 404, { error: 'Chat not found' });
     const char = db.getCharacter(chat.characterId);
     if (!char) return send(res, 404, { error: 'Character not found' });
+    const asUser = Boolean(body.asUser);
+    const guidance = typeof body.guidance === 'string' ? body.guidance : '';
     const parentId = body.parentId && chat.tree.nodes[body.parentId] ? body.parentId : db.treeTip(chat.tree);
     if (parentId === 'root' || !parentId) return send(res, 400, { error: 'Nothing to reply to yet' });
     const settings = db.getSettings();
@@ -2229,7 +2344,7 @@ async function route(req, res, u) {
     const path = db.pathNodes(chat.tree, parentId);
     const poses = db.getPoses(chat.characterId, { withImages: false });
     const pcfg = poseCfg(settings);
-    const poseEnabled = pcfg.enabled && char.posesEnabled !== false;
+    const poseEnabled = !asUser && pcfg.enabled && char.posesEnabled !== false;
     const aiCfg = resolveAiConfig(settings);
     const simulated = !aiCfg.apiKey && aiCfg.provider !== 'ollama';
     // Re-generating from an earlier point throws away the reply that is on
@@ -2239,7 +2354,7 @@ async function route(req, res, u) {
     let resetPose = null;
     let didReset = false;
     const replaced = db.activeChildId(chat.tree, parentId);
-    if (replaced && parentId !== db.treeTip(chat.tree)) {
+    if (!asUser && replaced && parentId !== db.treeTip(chat.tree)) {
       try {
         resetPose = db.poseBefore(chat.id, replaced);
         db.setChatPose(chat.id, resetPose);
@@ -2251,7 +2366,7 @@ async function route(req, res, u) {
       let posePromise = null;
       let streamed = '';
       const rT0 = Date.now();
-      tlog('ai', `▶ regenerate stream — chat ${chat.id} (${char.name}), parent ${parentId}`);
+      tlog('ai', `▶ ${asUser ? 'respond-as-user' : 'regenerate'} stream — chat ${chat.id} (${char.name}), parent ${parentId}`);
       try {
         if (didReset) {
           const p = resetPose ? poses.find((x) => x.id === resetPose) : null;
@@ -2260,8 +2375,13 @@ async function route(req, res, u) {
         const text = await generateReplyStream(char, path, persona, settings, (d) => {
           streamed += d;
           emit({ type: 'delta', text: d });
-        }, ctrl.signal, chat);
-        tlog('ai', `✓ regenerate streamed ${streamed.length} chars in ${Date.now() - rT0}ms`);
+        }, ctrl.signal, chat, asUser, guidance);
+        tlog('ai', `✓ ${asUser ? 'respond-as-user' : 'regenerate'} streamed ${streamed.length} chars in ${Date.now() - rT0}ms`);
+        if (asUser) {
+          const reply = db.addNode(chat.id, 'user', text, parentId);
+          emit({ type: 'done', chat: db.getChat(chat.id), node: reply });
+          return;
+        }
         if (poseEnabled && text && text.trim().length > 0) {
           try {
             posePromise = runPoseAgent({ char, persona, chat, poses, currentPoseId: chat.poseId, replyText: text, settings, signal: ctrl.signal });
@@ -2277,6 +2397,11 @@ async function route(req, res, u) {
       } catch (e) {
         console.error('[ai] generation failed:', e.message);
         if (e.partial) {
+          if (asUser) {
+            const reply = db.addNode(chat.id, 'user', e.partial, parentId);
+            emit({ type: 'done', chat: db.getChat(chat.id), node: reply });
+            return;
+          }
           let p = null;
           try { p = await Promise.race([posePromise || Promise.resolve(null), new Promise((r) => setTimeout(() => r(null), 1500))]); } catch {}
           if (p && p.changed) {
@@ -2289,6 +2414,19 @@ async function route(req, res, u) {
       }
     });
     return;
+  }
+
+  if ((m = p.match(/^\/api\/chats\/([\w-]+)\/nodes\/([\w-]+)\/insert-ooc$/)) && req.method === 'POST') {
+    const chatId = m[1];
+    const nodeId = m[2];
+    const chat = db.getChat(chatId);
+    if (!chat) return send(res, 404, { error: 'Chat not found' });
+    try {
+      const node = db.insertOocNode(chatId, nodeId, body.content || '');
+      return send(res, 200, { ok: true, node, chat: db.getChat(chatId) });
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
   }
 
   if ((m = p.match(/^\/api\/chats\/([\w-]+)\/nodes\/([\w-]+)$/))) {

@@ -18,6 +18,7 @@ const I = {
   sparkles: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>',
   chevl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
   chevr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
   star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
   starFilled: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
 };
@@ -260,11 +261,7 @@ function poseTagHtml(p) {
 }
 
 function toast(msg) {
-  const t = $('#toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+  // Silent: toast popups removed to prevent obstruction
 }
 
 function showWelcome() {
@@ -403,8 +400,11 @@ function msgMetaHtml(n, chat, opts, tag = '') {
   const nav = total > 1
     ? `<span class="vnav"><button data-nav="prev" title="Previous version" ${idx <= 0 ? 'disabled' : ''}>${I.chevl}</button><span class="v-count">${idx + 1}/${total}</span><button data-nav="next" title="Next version" ${idx >= total - 1 ? 'disabled' : ''}>${I.chevr}</button></span>`
     : '';
+  const isChar = n.role === 'char';
   const acts = `<span class="m-acts">
+    <button data-act="copy" title="Copy message text">${I.copy}</button>
     <button data-act="edit" title="Edit message">${I.pencil}</button>
+    ${isChar ? `<button data-act="ooc" title="Insert OOC directive after this message">${I.zap}</button>` : ''}
     ${opts.regen ? `<button data-act="regen" title="Regenerate this reply">${I.rotr}</button>` : ''}
     <button data-act="del" class="danger" title="Delete this message and everything after it">${I.trash}</button>
   </span>`;
@@ -712,11 +712,19 @@ function renderChat(opts = {}) {
   const nodes = chat ? pathOf(chat.tree, typing && typingAt ? typingAt : null) : [];
   let html = nodes.map((n) => msgHtml(c, p, n, chat)).join('');
   if (typing) {
-    const cp = currentPose(chat);
-    const live = streaming && chat && streaming.chatId === chat.id && streaming.text;
-    html += live
-      ? `<div class="msg char streaming">${avatarHtml(c, 'sm', true, cp && cp.thumb)}<div class="msg-main"><div class="bubble">${md(streaming.text)}</div></div></div>`
-      : `<div class="msg char"><span class="avatar sm emoji">${esc(c.emoji)}</span><div class="bubble dots"><span></span><span></span><span></span></div></div>`;
+    const isUserStream = streaming && streaming.role === 'user';
+    if (isUserStream) {
+      const live = streaming && chat && streaming.chatId === chat.id && streaming.text;
+      html += live
+        ? `<div class="msg user streaming"><div class="msg-main"><div class="bubble">${md(streaming.text)}</div></div>${personaAvatarHtml(p, 'sm', true)}</div>`
+        : `<div class="msg user"><div class="msg-main"><div class="bubble dots"><span></span><span></span><span></span></div></div>${personaAvatarHtml(p, 'sm', true)}</div>`;
+    } else {
+      const cp = currentPose(chat);
+      const live = streaming && chat && streaming.chatId === chat.id && streaming.text;
+      html += live
+        ? `<div class="msg char streaming">${avatarHtml(c, 'sm', true, cp && cp.thumb)}<div class="msg-main"><div class="bubble">${md(streaming.text)}</div></div></div>`
+        : `<div class="msg char"><span class="avatar sm emoji">${esc(c.emoji)}</span><div class="bubble dots"><span></span><span></span><span></span></div></div>`;
+    }
   }
   feed.innerHTML = html;
   sc.scrollTop = opts.keepScroll ? prevScroll : sc.scrollHeight;
@@ -922,9 +930,9 @@ async function delMsg(id) {
   const chat = c && activeChat(c);
   if (!chat || !chat.tree.nodes[id]) return;
   const ok = await customConfirm({
-    title: 'Delete message branch?',
-    message: 'Delete this message and everything after it on this branch? This cannot be undone.',
-    confirmText: 'Delete branch',
+    title: 'Delete message turn?',
+    message: 'Delete this message box (including all alternative versions you can switch to) and everything after it? This cannot be undone.',
+    confirmText: 'Delete message',
     danger: true,
   });
   if (!ok) return;
@@ -937,6 +945,60 @@ async function delMsg(id) {
   saveUi();
   renderChat({ keepScroll: true });
   renderChatsMenu();
+}
+
+async function insertOocAt(id) {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || !chat.tree.nodes[id]) return;
+  try {
+    const r = await api(`/chats/${chat.id}/nodes/${id}/insert-ooc`, { method: 'POST', body: JSON.stringify({ content: '' }) });
+    mergeChat(chat, r.chat);
+    editingId = r.node.id;
+    saveUi();
+    renderChat({ keepScroll: true });
+    const ta = $('#edit-ta');
+    if (ta) {
+      makeTextareaAutoResize(ta, { min: 60, max: 280 });
+      ta.focus();
+    }
+  } catch (e) {
+    console.error('Insert OOC failed:', e.message);
+  }
+}
+
+async function respondAsMe() {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || typing) return;
+  const ta = $('#msg-input');
+  const guidance = ta ? ta.value.trim() : '';
+  if (ta) {
+    ta.value = '';
+    ta.style.height = '';
+    msgInputManualHeight = 0;
+  }
+  const tip = tipNode(chat);
+  const parentId = tip ? tip.id : null;
+  if (!parentId || parentId === 'root') return;
+  typing = true;
+  typingAt = parentId;
+  streaming = { chatId: chat.id, text: '', role: 'user' };
+  renderChat();
+  try {
+    const r = await streamGenerate(`/chats/${chat.id}/generate`, { parentId, asUser: true, guidance }, (full) => {
+      if (streaming) streaming.text = full;
+      liveStreamUpdate();
+    });
+    if (r && r.chat) mergeChat(chat, r.chat);
+  } catch (e) {
+    console.error('Respond as me failed:', e.message);
+  }
+  typing = false;
+  typingAt = null;
+  streaming = null;
+  saveUi();
+  renderChat();
 }
 
 async function saveEdit(id) {
@@ -1114,6 +1176,53 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
   }
 
   resize();
+}
+
+function makeElementResizable(el, { min = 110, max = 650, defaultHeight = null } = {}) {
+  if (!el || el.dataset.hasResizeBar || !el.parentNode) return;
+  el.dataset.hasResizeBar = '1';
+  const bar = document.createElement('div');
+  bar.className = 'touch-resize-handle';
+  bar.title = 'Drag to adjust height (double-click to reset)';
+  bar.innerHTML = '<span></span>';
+  el.parentNode.insertBefore(bar, el.nextSibling);
+
+  let startY = 0;
+  let startH = 0;
+
+  const onPointerMove = (e) => {
+    const clientY = e.clientY != null ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    const dy = clientY - startY;
+    const newH = Math.min(max, Math.max(min, startH + dy));
+    el.style.height = newH + 'px';
+    el.style.maxHeight = 'none';
+    if (e.cancelable) e.preventDefault();
+  };
+
+  const onPointerUp = () => {
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+    document.removeEventListener('touchmove', onPointerMove);
+    document.removeEventListener('touchend', onPointerUp);
+  };
+
+  const startDrag = (clientY) => {
+    startY = clientY;
+    startH = el.offsetHeight;
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('touchmove', onPointerMove, { passive: false });
+    document.addEventListener('touchend', onPointerUp);
+  };
+
+  bar.addEventListener('pointerdown', (e) => startDrag(e.clientY));
+  bar.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches[0]) startDrag(e.touches[0].clientY);
+  });
+  bar.addEventListener('dblclick', () => {
+    el.style.height = defaultHeight ? defaultHeight + 'px' : '';
+    el.style.maxHeight = '';
+  });
 }
 
 function closeMenus() {
@@ -1917,6 +2026,9 @@ function updateCeScenPanelUI() {
         `;
       }
       varsList.innerHTML = html;
+      varsList.querySelectorAll('.ce-scen-var-input').forEach((input) => {
+        makeTextareaAutoResize(input, { min: 38, max: 240 });
+      });
     }
   }
 
@@ -3262,6 +3374,9 @@ function renderSeVarsForm() {
   }
 
   form.innerHTML = html;
+  form.querySelectorAll('.se-var-input').forEach((input) => {
+    makeTextareaAutoResize(input, { min: 38, max: 240 });
+  });
 }
 
 function openScenarioModal(sc = null) {
@@ -3272,6 +3387,7 @@ function openScenarioModal(sc = null) {
   $('#se-title-text').textContent = sc ? 'Edit scenario' : 'New scenario';
   $('#se-title').value = sc ? sc.title : '';
   $('#se-desc').value = sc ? sc.description : '';
+  $('#se-notes').value = sc ? (sc.specialNotes || '') : '';
   $('#se-content').value = sc ? sc.content : '';
 
   const initialCharId = pickScenarioChar ? pickScenarioChar.id : (ui.activeCharacterId || (state.characters[0] ? state.characters[0].id : null));
@@ -3321,6 +3437,7 @@ async function scenarioFormSave() {
     title,
     description: $('#se-desc').value.trim(),
     content,
+    specialNotes: $('#se-notes')?.value || '',
     accessMode: 'all',
     characterIds: [],
     characterVariables: seCharacterVariables,
@@ -3947,13 +4064,20 @@ function wireEvents() {
     { id: '#ce-note', min: 54, max: 180 },
     { id: '#se-content', min: 120, max: 340 },
     { id: '#se-desc', min: 54, max: 180 },
+    { id: '#se-notes', min: 60, max: 240 },
     { id: '#pf-desc', min: 70, max: 220 },
     { id: '#pf-note', min: 54, max: 160 },
+    { id: '#pr-sys', min: 80, max: 300 },
+    { id: '#pose-desc', min: 54, max: 180 },
   ];
   for (const item of autoTextareas) {
     const el = $(item.id);
     if (el) makeTextareaAutoResize(el, item);
   }
+
+  makeElementResizable($('#se-content-prev-wrap'), { min: 110, max: 550, defaultHeight: 180 });
+  makeElementResizable($('#ce-scen-preview-text'), { min: 110, max: 550, defaultHeight: 220 });
+  makeElementResizable($('#ce-desc-prev-wrap'), { min: 110, max: 550, defaultHeight: 180 });
 
   $('#persona-sidebar-list')?.addEventListener('click', (e) => {
     const editBtn = e.target.closest('[data-edit-persona]');
@@ -4429,6 +4553,21 @@ function wireEvents() {
         renderChat({ keepScroll: true });
       } else if (act.dataset.act === 'esave') {
         saveEdit(id);
+      } else if (act.dataset.act === 'copy') {
+        const c = activeChar();
+        const chat = c && activeChat(c);
+        const node = chat && chat.tree.nodes[id];
+        if (node && node.content) {
+          navigator.clipboard.writeText(node.content);
+          act.innerHTML = I.check;
+          act.classList.add('copied');
+          setTimeout(() => {
+            act.innerHTML = I.copy;
+            act.classList.remove('copied');
+          }, 1200);
+        }
+      } else if (act.dataset.act === 'ooc') {
+        insertOocAt(id);
       } else if (act.dataset.act === 'regen') {
         regenMsg(id);
       } else if (act.dataset.act === 'del') {
@@ -4484,6 +4623,9 @@ function wireEvents() {
   $('#steer-toggle-btn')?.addEventListener('click', () => {
     setSteerMode(!isSteerMode);
     $('#msg-input').focus();
+  });
+  $('#respond-as-me-btn')?.addEventListener('click', () => {
+    respondAsMe();
   });
   $('#cd-generate-btn')?.addEventListener('click', () => {
     const c = activeChar();
@@ -4961,6 +5103,7 @@ function wireEvents() {
 /* ---- AI Agent drawer ------------------------------------------------------ */
 
 const AGENT_TOOL_LABELS = {
+  ask_user: 'Question for you',
   site_overview: 'Read the site',
   list_characters: 'Listing characters',
   get_character: 'Reading character',
@@ -5121,6 +5264,7 @@ async function loadAgent() {
     agentMessages = r.messages || [];
     agentLoaded = true;
     renderAgent();
+    refreshAgentChanges();
   } catch { /* agent log is optional */ }
 }
 
@@ -5129,6 +5273,7 @@ function openAgentDrawer() {
   agentOpen = true;
   closeMenus(); closeSidebar();
   agentEl('#agent-model-label').textContent = agentModelLabel();
+  refreshAgentChanges();
   if (!agentLoaded) loadAgent(); else renderAgent();
   setTimeout(() => agentEl('#agent-input')?.focus(), 240);
 }
@@ -5227,6 +5372,35 @@ function agentToolCardHtml(mi) {
   // Loaded rows use toolName/toolArgs/toolResult/toolError; live events use name/args/result/ok.
   const name = mi.name || mi.toolName;
   mi = { ...mi, name, args: (mi.args !== undefined ? mi.args : mi.toolArgs), result: (mi.result !== undefined ? mi.result : mi.toolResult), ok: (mi.ok !== undefined ? mi.ok : !mi.toolError) };
+
+  if (name === 'ask_user') {
+    const q = (mi.args && mi.args.question) || (mi.result && mi.result.question) || 'Please make a selection:';
+    const rawButtons = (mi.args && (mi.args.buttons || mi.args.options)) || (mi.result && mi.result.buttons) || ['Approve', 'Change', 'Cancel'];
+    const buttons = rawButtons.map((b) => (typeof b === 'object' && b !== null ? (b.label || b.text || JSON.stringify(b)) : String(b)));
+    const allowCustom = mi.args ? mi.args.allow_custom !== false : true;
+    const placeholder = (mi.args && mi.args.custom_placeholder) || 'Type your own answer...';
+    const isAnswered = Boolean(mi.chosen || (mi.result && mi.result.answered));
+
+    let askHtml = `<div class="agent-ask-card" data-ask-id="${mi.id || ''}">`;
+    askHtml += `<div class="agent-ask-question">${agentMd(q)}</div>`;
+    askHtml += `<div class="agent-ask-buttons">`;
+    for (let i = 0; i < buttons.length; i++) {
+      const b = buttons[i];
+      const isChosen = isAnswered && mi.chosen === b;
+      const isPrimary = i === 0 && !isAnswered;
+      askHtml += `<button type="button" class="agent-ask-btn ${isPrimary ? 'primary' : ''} ${isChosen ? 'selected' : ''}" data-ask-val="${esc(b)}" ${isAnswered ? 'disabled' : ''}>${esc(b)}</button>`;
+    }
+    askHtml += `</div>`;
+    if (allowCustom && !isAnswered) {
+      askHtml += `<div class="agent-ask-custom-row">
+        <input type="text" class="agent-ask-custom-input" placeholder="${esc(placeholder)}" autocomplete="off">
+        <button type="button" class="agent-ask-custom-submit">Submit</button>
+      </div>`;
+    }
+    askHtml += `</div>`;
+    return askHtml;
+  }
+
   const label = agentToolLabel(name);
   const sub = agentToolSummary(name, mi.args, mi.result) || (mi.ok === false && mi.error ? agentTrimLocal(mi.error, 70) : 'done');
   const okCls = mi.ok === false ? 'err' : (mi.pending ? 'pending' : '');
@@ -5456,8 +5630,32 @@ function setAgentStatus(status) {
   }
 }
 
+async function refreshAgentChanges() {
+  const revBtn = $('#agent-revert-btn');
+  if (!revBtn) return;
+  try {
+    const r = await api('/agent/changes');
+    const changes = r.changes || [];
+    revBtn.textContent = `Revert (${changes.length})`;
+    if (changes.length > 0) {
+      revBtn.classList.remove('hidden');
+    } else {
+      revBtn.classList.add('hidden');
+    }
+  } catch {
+    revBtn.classList.add('hidden');
+  }
+}
+
+async function agentSendText(text) {
+  const ta = agentEl('#agent-input');
+  if (ta) ta.value = text;
+  return agentSend();
+}
+
 async function refreshDataAfterAgent() {
   try { await bootstrap(); } catch { return; }
+  await refreshAgentChanges();
   renderSidebar();
   renderSidebarScenarios();
   renderSidebarPersonas();
@@ -5677,6 +5875,28 @@ function wireAgent() {
   });
   $('#welcome-agent-btn')?.addEventListener('click', () => { openAgentDrawer(); setTimeout(() => agentEl('#agent-input')?.focus(), 240); });
   $('#agent-close-btn').addEventListener('click', closeAgentDrawer);
+  $('#agent-revert-btn')?.addEventListener('click', async () => {
+    try {
+      const r = await api('/agent/changes');
+      const changes = r.changes || [];
+      if (!changes.length) return;
+      const list = changes.map((c) => '• ' + c.action).join('\n');
+      const ok = await customConfirm({
+        title: 'Revert agent session changes?',
+        message: `The agent made the following changes in this session:\n\n${list}\n\nReverting will restore the website state to before this whole agent session. This cannot be undone.`,
+        confirmText: 'Revert website state',
+        danger: true,
+      });
+      if (!ok) return;
+      await api('/agent/revert', { method: 'POST' });
+      await refreshDataAfterAgent();
+      await refreshAgentChanges();
+      agentMessages.push({ role: 'assistant', content: '✓ Website state has been reverted to the checkpoint before this session.' });
+      renderAgent();
+    } catch (e) {
+      console.error('Revert failed:', e.message);
+    }
+  });
   $('#agent-clear-btn').addEventListener('click', async () => {
     if (!agentMessages.length) return;
     const clearOk = await customConfirm({
@@ -5691,6 +5911,7 @@ function wireAgent() {
     agentAttachments = [];
     renderAgentAttachments();
     renderAgent();
+    await refreshAgentChanges();
   });
 
   const ta = $('#agent-input');
@@ -5761,6 +5982,33 @@ function wireAgent() {
 
   // Feed interactions: toggle tool details, run actions
   $('#agent-feed').addEventListener('click', (e) => {
+    const askBtn = e.target.closest('.agent-ask-btn');
+    if (askBtn && !askBtn.disabled) {
+      const val = askBtn.dataset.askVal;
+      const card = askBtn.closest('.agent-ask-card');
+      if (card) {
+        card.querySelectorAll('.agent-ask-btn').forEach((b) => { b.disabled = true; });
+        card.querySelector('.agent-ask-custom-row')?.remove();
+        askBtn.classList.add('selected');
+      }
+      agentSendText(val);
+      return;
+    }
+    const submitBtn = e.target.closest('.agent-ask-custom-submit');
+    if (submitBtn) {
+      const row = submitBtn.closest('.agent-ask-custom-row');
+      const input = row?.querySelector('.agent-ask-custom-input');
+      const val = input ? input.value.trim() : '';
+      if (val) {
+        const card = submitBtn.closest('.agent-ask-card');
+        if (card) {
+          card.querySelectorAll('.agent-ask-btn').forEach((b) => { b.disabled = true; });
+          row.remove();
+        }
+        agentSendText(val);
+      }
+      return;
+    }
     const actBtn = e.target.closest('[data-agent-open-chat]');
     if (actBtn) {
       closeAgentDrawer();
@@ -5815,6 +6063,21 @@ function wireAgent() {
     if (chipImg) { openViewer(chipImg.src); return; }
     const row = e.target.closest('.agent-tool-row');
     if (row) row.closest('.agent-tool').classList.toggle('open');
+  });
+
+  $('#agent-feed')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.classList.contains('agent-ask-custom-input')) {
+      e.preventDefault();
+      const val = e.target.value.trim();
+      if (val) {
+        const card = e.target.closest('.agent-ask-card');
+        if (card) {
+          card.querySelectorAll('.agent-ask-btn').forEach((b) => { b.disabled = true; });
+          e.target.closest('.agent-ask-custom-row')?.remove();
+        }
+        agentSendText(val);
+      }
+    }
   });
 }
 

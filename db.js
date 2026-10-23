@@ -140,7 +140,18 @@ ensureColumn('chats', 'tree', 'TEXT');
 ensureColumn('chats', 'pose_id', 'TEXT');
 ensureColumn('chats', 'scenario_id', 'TEXT');
 ensureColumn('scenarios', 'character_variables', "TEXT DEFAULT '{}'");
+ensureColumn('scenarios', 'special_notes', "TEXT DEFAULT ''");
 ensureColumn('poses', 'thumb', 'TEXT');
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS agent_session_changes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+`);
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS agent_messages (
@@ -716,6 +727,7 @@ function shapeScenario(row) {
     title: row.title,
     description: row.description || '',
     content: row.content,
+    specialNotes: row.special_notes || '',
     accessMode: row.access_mode || 'all',
     characterIds: safeParse(row.character_ids, []),
     characterVariables: safeParse(row.character_variables, {}),
@@ -738,17 +750,18 @@ function getScenario(id) {
   return shapeScenario(row);
 }
 
-function createScenario({ title, description, content, accessMode, characterIds, characterVariables, character_variables }) {
+function createScenario({ title, description, content, specialNotes, special_notes, accessMode, characterIds, characterVariables, character_variables }) {
   const id = 'sc-' + uid();
   const now = Date.now();
   const mode = ['all', 'whitelist', 'blacklist'].includes(accessMode) ? accessMode : 'all';
   const cids = Array.isArray(characterIds) ? JSON.stringify(characterIds) : (typeof characterIds === 'string' ? characterIds : '[]');
   const rawVars = characterVariables !== undefined ? characterVariables : character_variables;
   const cvars = (rawVars && typeof rawVars === 'object') ? JSON.stringify(rawVars) : (typeof rawVars === 'string' ? rawVars : '{}');
+  const sNotes = String(specialNotes !== undefined ? specialNotes : (special_notes || ''));
   db.prepare(`
-    INSERT INTO scenarios (id, title, description, content, access_mode, character_ids, character_variables, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, String(title || 'Untitled scenario').slice(0, 120), String(description || ''), String(content || ''), mode, cids, cvars, now, now);
+    INSERT INTO scenarios (id, title, description, content, special_notes, access_mode, character_ids, character_variables, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, String(title || 'Untitled scenario').slice(0, 120), String(description || ''), String(content || ''), sNotes, mode, cids, cvars, now, now);
   return getScenario(id);
 }
 
@@ -760,6 +773,10 @@ function updateScenario(id, fields) {
   if (fields.title !== undefined) { sets.push('title = ?'); vals.push(String(fields.title).slice(0, 120)); }
   if (fields.description !== undefined) { sets.push('description = ?'); vals.push(String(fields.description)); }
   if (fields.content !== undefined) { sets.push('content = ?'); vals.push(String(fields.content)); }
+  if (fields.specialNotes !== undefined || fields.special_notes !== undefined) {
+    sets.push('special_notes = ?');
+    vals.push(String(fields.specialNotes !== undefined ? fields.specialNotes : fields.special_notes));
+  }
   if (fields.accessMode !== undefined && ['all', 'whitelist', 'blacklist'].includes(fields.accessMode)) {
     sets.push('access_mode = ?'); vals.push(fields.accessMode);
   }
@@ -1049,18 +1066,45 @@ function deleteNode(chatId, nodeId) {
   const node = tree.nodes[nodeId];
   if (!node || nodeId === 'root') throw new Error('Message not found');
   snapshotBeforeDestructive();
-  const ids = [nodeId];
+  const parent = tree.nodes[node.parent];
+  // Delete all messages you can switch to in this box (all sibling variants) and their entire subtrees
+  const siblingIds = parent ? [...parent.children] : [nodeId];
+  const ids = [...siblingIds];
   for (let i = 0; i < ids.length; i++) {
-    for (const c of tree.nodes[ids[i]].children || []) ids.push(c);
+    for (const c of tree.nodes[ids[i]]?.children || []) ids.push(c);
   }
   for (const id of ids) delete tree.nodes[id];
-  const parent = tree.nodes[node.parent];
   if (parent) {
-    parent.children = parent.children.filter((x) => x !== nodeId);
-    parent.active = Math.max(0, Math.min(parent.active, parent.children.length - 1));
+    parent.children = [];
+    parent.active = 0;
   }
   saveTree(chatId, tree);
   return { ok: true, removed: ids.length };
+}
+
+function insertOocNode(chatId, charNodeId, content = '') {
+  const tree = getTree(chatId);
+  const charNode = tree.nodes[charNodeId];
+  if (!charNode) throw new Error('Message not found');
+  snapshotBeforeDestructive();
+  const oocNode = {
+    id: uid(),
+    role: 'injection',
+    content: String(content),
+    parent: charNode.id,
+    children: (charNode.children || []).slice(),
+    active: charNode.active || 0,
+    state: (charNode.children && charNode.children.length) ? 'delivered' : 'pending',
+    createdAt: Date.now(),
+  };
+  tree.nodes[oocNode.id] = oocNode;
+  for (const c of oocNode.children) {
+    if (tree.nodes[c]) tree.nodes[c].parent = oocNode.id;
+  }
+  charNode.children = [oocNode.id];
+  charNode.active = 0;
+  saveTree(chatId, tree);
+  return oocNode;
 }
 
 function switchNode(chatId, nodeId) {
@@ -1539,6 +1583,7 @@ function importData(raw) {
       const title = String(item.title || 'Untitled scenario').trim().slice(0, 120);
       const desc = String(item.description || '');
       const content = String(item.content || item.scenario || '');
+      const sNotes = String(item.specialNotes || item.special_notes || '');
       if (!content && !title) continue;
 
       let scenId = (item.id && typeof item.id === 'string') ? item.id.trim() : null;
@@ -1567,15 +1612,15 @@ function importData(raw) {
         }
         db.prepare(`
           UPDATE scenarios
-          SET title = ?, description = ?, content = ?, access_mode = ?, character_ids = ?, character_variables = ?, updated_at = ?
+          SET title = ?, description = ?, content = ?, special_notes = COALESCE(?, special_notes), access_mode = ?, character_ids = ?, character_variables = ?, updated_at = ?
           WHERE id = ?
-        `).run(title, desc, content, mode, cids, JSON.stringify(mergedCv), now, scenId);
+        `).run(title, desc, content, sNotes || null, mode, cids, JSON.stringify(mergedCv), now, scenId);
       } else {
         if (!scenId) scenId = 'sc-' + uid();
         db.prepare(`
-          INSERT INTO scenarios (id, title, description, content, access_mode, character_ids, character_variables, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(scenId, title, desc, content, mode, cids, JSON.stringify(cvars), now, now);
+          INSERT INTO scenarios (id, title, description, content, special_notes, access_mode, character_ids, character_variables, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(scenId, title, desc, content, sNotes, mode, cids, JSON.stringify(cvars), now, now);
       }
 
       counts.scenarios++;
@@ -1751,6 +1796,7 @@ function clearAgentMessages() {
   snapshotBeforeDestructive();
   db.prepare('DELETE FROM agent_messages').run();
   db.prepare('DELETE FROM agent_attachments').run();
+  clearAgentChanges();
   return { ok: true };
 }
 
@@ -1790,12 +1836,70 @@ function countAgentAttachments() {
   return db.prepare('SELECT COUNT(*) AS n FROM agent_attachments').get().n;
 }
 
+/* ---- Agent Session Checkpoint & Changes Tracking -------------------------- */
+
+const AGENT_CHECKPOINT_PATH = path.join(BACKUP_DIR, 'agent-session-checkpoint.db');
+
+function createAgentCheckpoint(force = false) {
+  if (!force && fs.existsSync(AGENT_CHECKPOINT_PATH)) return false;
+  try {
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    if (fs.existsSync(AGENT_CHECKPOINT_PATH)) {
+      try { fs.unlinkSync(AGENT_CHECKPOINT_PATH); } catch {}
+    }
+    db.exec(`VACUUM INTO '${AGENT_CHECKPOINT_PATH.replace(/'/g, "''")}'`);
+    return true;
+  } catch (e) {
+    console.error('Failed to create agent checkpoint:', e.message);
+    return false;
+  }
+}
+
+function revertAgentCheckpoint() {
+  if (!fs.existsSync(AGENT_CHECKPOINT_PATH)) {
+    throw new Error('No agent session checkpoint found to revert to');
+  }
+  snapshotBeforeDestructive();
+  const tables = ['characters', 'poses', 'scenarios', 'personalities', 'presets', 'chats', 'settings'];
+  try {
+    db.exec(`ATTACH DATABASE '${AGENT_CHECKPOINT_PATH.replace(/'/g, "''")}' AS snap`);
+    db.exec('PRAGMA foreign_keys = OFF; BEGIN TRANSACTION;');
+    for (const t of tables) {
+      db.exec(`DELETE FROM ${t}; INSERT INTO ${t} SELECT * FROM snap.${t};`);
+    }
+    db.exec('COMMIT; PRAGMA foreign_keys = ON; DETACH DATABASE snap;');
+    clearAgentChanges();
+    return { ok: true };
+  } catch (e) {
+    try { db.exec('ROLLBACK;'); } catch {}
+    try { db.exec('PRAGMA foreign_keys = ON; DETACH DATABASE snap;'); } catch {}
+    throw new Error('Failed to revert agent checkpoint: ' + e.message);
+  }
+}
+
+function addAgentChange({ action, entityType = '', entityId = '' }) {
+  createAgentCheckpoint(false);
+  db.prepare('INSERT INTO agent_session_changes (action, entity_type, entity_id, created_at) VALUES (?, ?, ?, ?)')
+    .run(String(action), String(entityType), String(entityId), Date.now());
+}
+
+function getAgentChanges() {
+  return db.prepare('SELECT * FROM agent_session_changes ORDER BY created_at ASC').all();
+}
+
+function clearAgentChanges() {
+  db.exec('DELETE FROM agent_session_changes');
+  if (fs.existsSync(AGENT_CHECKPOINT_PATH)) {
+    try { fs.unlinkSync(AGENT_CHECKPOINT_PATH); } catch {}
+  }
+}
+
 module.exports = {
   bootstrap: () => ({ characters: getCharacters(), personalities: getPersonalities(), settings: getSettings(), presets: getPresets(), scenarios: getScenarios() }),
   getCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter,
   getScenarios, getScenario, createScenario, updateScenario, deleteScenario, isCharacterAllowedForScenario,
   createChat, getChat, deleteChat, renameChat,
-  getTree, treeTip, pathNodes, addNode, addReply, editNode, deleteNode, switchNode, poseBefore, poseAtTip, activeChildId,
+  getTree, treeTip, pathNodes, addNode, addReply, editNode, deleteNode, switchNode, poseBefore, poseAtTip, activeChildId, insertOocNode,
   getPersonalities, getPersona, createPersona, updatePersona, deletePersona,
   getPresets, getPreset, createPreset, updatePreset, deletePreset,
   getPoses, getPose, createPose, updatePose, deletePose, setChatPose, ensureDefaultPoses, getDefaultPose, setDefaultPose,
@@ -1803,4 +1907,5 @@ module.exports = {
   exportData, importData,
   getAgentMessages, addAgentMessage, clearAgentMessages, agentMessageCount,
   addAgentAttachment, getAgentAttachment, countAgentAttachments,
+  createAgentCheckpoint, revertAgentCheckpoint, addAgentChange, getAgentChanges, clearAgentChanges,
 };
