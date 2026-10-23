@@ -83,7 +83,9 @@ svg {
 
 #app {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  /* The first column moves via --sidebar-w (see initSidebarResize in app.js);
+     plain default keeps the site perfectly usable without JS. */
+  grid-template-columns: var(--sidebar-w, 300px) 1fr;
   height: 100%;
 }
 
@@ -107,7 +109,9 @@ body.sidebar-open #scrim {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   z-index: 90;
+  position: relative;
 }
 
 .brand {
@@ -1979,6 +1983,10 @@ input[type="range"] {
 @media (max-width: 940px) {
   #app {
     grid-template-columns: 1fr;
+  }
+  /* Phone sidebar is a fixed slide-over; the width drag is desktop-only. */
+  .sidebar-resize-handle {
+    display: none !important;
   }
   #sidebar {
     position: fixed;
@@ -4430,6 +4438,45 @@ body.agent-resizing {
   user-select: none !important;
 }
 body.agent-resizing * {
+  user-select: none !important;
+}
+
+/* Resize drag pill on the right edge of the left sidebar (desktop only) —
+   mirrors the agent drawer handle (`.agent-resize-handle` above). */
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -6px;
+  bottom: 0;
+  width: 12px;
+  cursor: ew-resize;
+  z-index: 25;
+  touch-action: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: opacity 0.15s ease;
+}
+.sidebar-resize-handle span {
+  width: 4px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--border2);
+  transition: background 0.15s ease, height 0.15s ease;
+}
+.sidebar-resize-handle:hover span,
+.sidebar-resize-handle.active span,
+body.sidebar-resizing .sidebar-resize-handle span {
+  background: var(--muted);
+  height: 56px;
+}
+body.sidebar-resizing {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+body.sidebar-resizing * {
   user-select: none !important;
 }
 

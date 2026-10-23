@@ -122,6 +122,8 @@ Characters have multiple poses (`poses` table) containing an image and descripti
 ### 4.3 Clean Composer & Steer Scene (OOC)
 - Normal chat input sends messages directly to the character (`sendUser`).
 - The composer's single ⚡ button (`#composer-actions-btn`) opens a small popover (`renderComposerActionsMenu`) above it with the two special send actions: **Steer scene (OOC)** (toggles `setSteerMode` — tinted input, `sendInjection`) and **Respond as me** (`respondAsMe`, placeholder text acts as guidance). The menu pops upward with a springy animation and staggered items; when steer mode is armed the ⚡ button itself lights amber.
+- "Respond as me" prompts (`asUser` in `buildSystemText`) explicitly require FIRST-person writing ("I", "me", "my") for both actions `*…*` and dialogue — the reply must read as if the user typed it personally, never third-person narration ("*{{user}} smiles*") or second person. The no-API-key simulated fallback line is first-person too.
+- **Sidebar resize**: the left bar is resizable on desktop via a drag pill on its right edge (`#sidebar-resize-handle`, >=940px only) — `initSidebarResize` drives the `--sidebar-w` grid variable of `#app`, persists the width in `localStorage` (`zerochat_sidebar_width`), and double-click reverts to 300px; phones keep the fixed slide-over (handle hidden). Mirrors the agent drawer's resize handle.
 - When a directive is pending, a clear banner alerts the user with a direct button to trigger the reply (`generateReplyAt`).
 - Textareas automatically grow to fit text up to a threshold, and provide a dedicated touch-drag handle for effortless resizing on mobile touchscreens.
 

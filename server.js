@@ -298,7 +298,7 @@ function buildSystemText(char, persona, hasInjection, cfg, scenarioText, chatOrS
   const parts = [];
 
   if (asUser) {
-    parts.push(`Write "${userName}'s" next reply in a fictional roleplay chat between "${userName}" and "${char.name}". You are roleplaying exclusively as "${userName}".`);
+    parts.push(`Write "${userName}'s" next reply in a fictional roleplay chat between "${userName}" and "${char.name}". You ARE "${userName}" — roleplay exclusively in first person ("I", "me", "my"), so the message reads as if ${userName} typed it personally. Never narrate "${userName}" from the outside (third person like "*${userName} smiles*") and never in second person.`);
     parts.push(persona
       ? `"${userName}'s" Persona (You):\n${ex(persona.description) || 'An ordinary person.'}`
       : `"The user's" Persona (You):\nAn ordinary person.`);
@@ -330,7 +330,7 @@ function buildSystemText(char, persona, hasInjection, cfg, scenarioText, chatOrS
     if (guidance && guidance.trim()) {
       parts.push(`User directive / guidance for how you should reply:\n${guidance.trim()}`);
     }
-    parts.push('Write actions and scene beats in *asterisks* and wrap all spoken dialogue in "double quotes". Stay fully in character as ' + userName + ': never break the fourth wall, never mention being an AI, and never write the other character\'s lines or actions for them.');
+    parts.push(`Write actions and scene beats in *asterisks* and wrap all spoken dialogue in "double quotes". Everything — actions and speech — is first person ("I", "me", "my"): "*I lean on the wall*" and "Fine by me," I say — never "*${userName} leans on the wall*" and never "you ${userName}". Stay fully in character as ${userName}: never break the fourth wall, never mention being an AI, and never write the other character's lines or actions for them.`);
     if (hasInjection) parts.push(OOC_LINE);
     parts.push(`Now write "${userName}'s" next response:`);
   } else {
@@ -486,10 +486,9 @@ async function generateReplyStream(char, nodes, persona, settings, onDelta, sign
   const systemText = buildSystemText(char, persona, built.hasInjection, cfg, scenarioText, chatOrScenario, asUser, guidance);
 
   if (!cfg.apiKey && cfg.provider !== 'ollama') {
-    const userName = persona ? persona.name : 'the user';
     let text;
     if (asUser) {
-      text = `*${userName} considers carefully before responding.* "I hear you," they say, meeting ${char.name}'s gaze. "Let's see where this road leads."`;
+      text = `*I take a breath, meeting ${char.name}'s gaze.* "I hear you," I say. "Let's see where this road leads, then."`;
     } else {
       const pool = (char.responses || []).filter((r) => r && !GENERIC_RESPONSE_SET.has(String(r).trim()));
       const candidates = pool.length ? pool : SIMULATED_FALLBACKS;

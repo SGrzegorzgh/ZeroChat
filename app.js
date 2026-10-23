@@ -5902,6 +5902,86 @@ function initAgentDrawerResize() {
   }, { passive: true });
 }
 
+/* Resize the left sidebar by dragging its right edge, mirroring the agent
+   drawer handle. The width lives in the `--sidebar-w` grid variable of #app
+   and persists in localStorage; double-click reverts to the 300px default.
+   Phones (≤940px) use the fixed slide-over instead, so the handle is hidden
+   there and calls are guarded out. */
+function initSidebarResize() {
+  const app = $('#app');
+  const sidebar = $('#sidebar');
+  const handle = $('#sidebar-resize-handle');
+  if (!app || !sidebar || !handle) return;
+
+  const DEFAULT_WIDTH = 300;
+  const MIN_WIDTH = 230;
+  const getMaxWidth = () => Math.min(640, Math.max(MIN_WIDTH, window.innerWidth - 380));
+
+  // Restore saved width if any
+  try {
+    const saved = parseInt(localStorage.getItem('zerochat_sidebar_width'), 10);
+    if (saved && Number.isFinite(saved) && window.innerWidth > 940) {
+      app.style.setProperty('--sidebar-w', Math.min(Math.max(saved, MIN_WIDTH), getMaxWidth()) + 'px');
+    }
+  } catch {}
+
+  let isDragging = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    isDragging = true;
+    startX = e.clientX;
+    startWidth = sidebar.getBoundingClientRect().width;
+    try { handle.setPointerCapture(e.pointerId); } catch {}
+    document.body.classList.add('sidebar-resizing');
+    handle.classList.add('active');
+    e.preventDefault();
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX; // dragging to the right makes it wider
+    const newWidth = Math.min(Math.max(startWidth + dx, MIN_WIDTH), getMaxWidth());
+    app.style.setProperty('--sidebar-w', newWidth + 'px');
+  });
+
+  const stopDrag = (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    document.body.classList.remove('sidebar-resizing');
+    handle.classList.remove('active');
+    try {
+      if (handle.hasPointerCapture?.(e.pointerId)) {
+        handle.releasePointerCapture(e.pointerId);
+      }
+    } catch {}
+    const finalWidth = Math.round(sidebar.getBoundingClientRect().width);
+    if (finalWidth >= MIN_WIDTH) {
+      try { localStorage.setItem('zerochat_sidebar_width', String(finalWidth)); } catch {}
+    }
+  };
+
+  handle.addEventListener('pointerup', stopDrag);
+  handle.addEventListener('pointercancel', stopDrag);
+
+  // Double click resets to default
+  handle.addEventListener('dblclick', () => {
+    app.style.setProperty('--sidebar-w', DEFAULT_WIDTH + 'px');
+    try { localStorage.removeItem('zerochat_sidebar_width'); } catch {}
+  });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth <= 940) return;
+    const curWidth = sidebar.getBoundingClientRect().width;
+    const maxW = getMaxWidth();
+    if (curWidth > maxW) {
+      app.style.setProperty('--sidebar-w', maxW + 'px');
+    }
+  });
+}
+
 function wireAgent() {
   initAgentDrawerResize();
   $('#agent-btn')?.addEventListener('click', () => {
@@ -6119,6 +6199,7 @@ function wireAgent() {
 
 (async function init() {
   wireEvents();
+  initSidebarResize();
   try {
     await bootstrap();
   } catch (e) {
