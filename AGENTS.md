@@ -109,7 +109,7 @@ Chats are not flat message lists; each chat contains a tree represented as JSON 
 - **Branch Operations**:
   - **Edit**: Creates a new sibling node, re-parents downstream subtree to the new variant, and updates `parent.active`.
   - **Regenerate**: Attaches a new child variant to the parent prompt and sets it as active.
-  - **Delete**: Prunes the target node and its entire subtree, re-adjusting parent active bounds.
+  - **Delete**: Prunes the target node and its entire subtree, re-adjusting parent active bounds. Exception: **directives** (`injection` nodes) are spliced out instead — their children (the conversation that came after) re-attach to the parent, since a directive is a one-off steering note, not a conversation turn. Sibling directive variants are removed with it; normal message deletion still prunes everything after.
   - **Switch**: Changes `parent.active` index between alternative variants.
 
 ### 4.2 Dynamic Pose Director Agent (Jev Decision Model)

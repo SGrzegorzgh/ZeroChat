@@ -1067,6 +1067,32 @@ function deleteNode(chatId, nodeId) {
   if (!node || nodeId === 'root') throw new Error('Message not found');
   snapshotBeforeDestructive();
   const parent = tree.nodes[node.parent];
+
+  /* Directives (OOC) are one-off steering notes inserted mid-conversation, not
+     conversation turns — deleting one must not take the messages after it with
+     it. Splice the whole directive box out instead: every sibling variant's
+     children re-attach to the parent, so only the directive(s) disappear and
+     the conversation keeps flowing from the message it was attached to.
+     (Only the active variant can hold children — editNode moves the subtree to
+     the newest variant — but all siblings are collected defensively.) */
+  if (node.role === 'injection') {
+    const boxIds = parent ? parent.children.filter((id) => tree.nodes[id] && tree.nodes[id].role === 'injection') : [nodeId];
+    const kept = [];
+    for (const id of boxIds) {
+      for (const c of tree.nodes[id]?.children || []) {
+        if (tree.nodes[c] && !kept.includes(c)) kept.push(c);
+      }
+      delete tree.nodes[id];
+    }
+    if (parent) {
+      parent.children = kept;
+      parent.active = kept.length ? Math.min(node.active != null ? node.active : 0, kept.length - 1) : 0;
+      for (const c of kept) tree.nodes[c].parent = parent.id;
+    }
+    saveTree(chatId, tree);
+    return { ok: true, removed: boxIds.length, spliced: true };
+  }
+
   // Delete all messages you can switch to in this box (all sibling variants) and their entire subtrees
   const siblingIds = parent ? [...parent.children] : [nodeId];
   const ids = [...siblingIds];

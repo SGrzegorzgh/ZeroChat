@@ -402,12 +402,14 @@ function msgMetaHtml(n, chat, opts, tag = '') {
     ? `<span class="vnav"><button data-nav="prev" title="Previous version" ${idx <= 0 ? 'disabled' : ''}>${I.chevl}</button><span class="v-count">${idx + 1}/${total}</span><button data-nav="next" title="Next version" ${idx >= total - 1 ? 'disabled' : ''}>${I.chevr}</button></span>`
     : '';
   const isChar = n.role === 'char';
+  const isInj = n.role === 'injection';
+  const delTitle = isInj ? 'Remove this directive (messages after it stay)' : 'Delete this message and everything after it';
   const acts = `<span class="m-acts">
     <button data-act="copy" title="Copy message text">${I.copy}</button>
     <button data-act="edit" title="Edit message">${I.pencil}</button>
     ${isChar ? `<button data-act="ooc" title="Insert OOC directive after this message">${I.zap}</button>` : ''}
     ${opts.regen ? `<button data-act="regen" title="Regenerate this reply">${I.rotr}</button>` : ''}
-    <button data-act="del" class="danger" title="Delete this message and everything after it">${I.trash}</button>
+    <button data-act="del" class="danger" title="${delTitle}">${I.trash}</button>
   </span>`;
   return `<div class="msg-meta">${tag}${nav}<span class="m-acts-wrap">${acts}</span></div>`;
 }
@@ -930,10 +932,13 @@ async function delMsg(id) {
   const c = activeChar();
   const chat = c && activeChat(c);
   if (!chat || !chat.tree.nodes[id]) return;
+  const isInj = chat.tree.nodes[id].role === 'injection';
   const ok = await customConfirm({
-    title: 'Delete message turn?',
-    message: 'Delete this message box (including all alternative versions you can switch to) and everything after it? This cannot be undone.',
-    confirmText: 'Delete message',
+    title: isInj ? 'Remove directive?' : 'Delete message turn?',
+    message: isInj
+      ? 'Remove this directive? The messages after it stay in the chat. This cannot be undone.'
+      : 'Delete this message box (including all alternative versions you can switch to) and everything after it? This cannot be undone.',
+    confirmText: isInj ? 'Remove directive' : 'Delete message',
     danger: true,
   });
   if (!ok) return;
