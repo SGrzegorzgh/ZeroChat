@@ -49,6 +49,46 @@ let typing = false;
 let typingAt = null;
 let streaming = null;
 let editingId = null;
+let chatStickToBottom = true;
+let agentStickToBottom = true;
+
+async function recoverChatGeneration(chatId) {
+  const maxWait = 90000;
+  const start = Date.now();
+  while (Date.now() - start < maxWait) {
+    try {
+      const r = await fetch(`/api/chats/${chatId}/generation`);
+      if (r.ok) {
+        const data = await r.json();
+        if (data.active) {
+          if (data.text && streaming && streaming.chatId === chatId) {
+            streaming.text = data.text;
+            liveStreamUpdate();
+          }
+          await new Promise((res) => setTimeout(res, 800));
+          continue;
+        }
+        if (data.done || data.chat) {
+          if (data.error) return { error: data.error, chat: data.chat };
+          return { done: true, chat: data.chat, node: data.node };
+        }
+      }
+    } catch {
+      await new Promise((res) => setTimeout(res, 1200));
+    }
+    // Also check if character data already has the new reply node
+    try {
+      const c = activeChar();
+      if (c) {
+        const charData = await api(`/characters/${c.id}`);
+        const found = charData.chats && charData.chats.find((x) => x.id === chatId);
+        if (found) return { done: true, chat: found };
+      }
+    } catch {}
+    break;
+  }
+  return null;
+}
 
 async function streamGenerate(path, body, onDelta) {
   const r = await fetch('/api' + path, {
@@ -66,45 +106,62 @@ async function streamGenerate(path, body, onDelta) {
   let buf = '';
   let full = '';
   let result = null;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf('\n\n')) !== -1) {
-      const chunk = buf.slice(0, i);
-      buf = buf.slice(i + 2);
-      const line = chunk.split('\n').find((l) => l.startsWith('data: '));
-      if (!line) continue;
-      let ev;
-      try { ev = JSON.parse(line.slice(6)); } catch { continue; }
-      if (ev.type === 'pose') {
-        const chat = activeChat(activeChar());
-        if (ev.reset) {
-          // Revert (delete / edit / re-generate): repaint the shot that was on
-          // screen before the removed message, but leave the last message's own
-          // avatar alone — it is stamped with its own pose, not the current one.
-          if (chat) chat.poseId = ev.poseId || null;
-          applyChatBg();
-          renderHeader();
-          toast(ev.poseName ? 'Back to: ' + ev.poseName : 'Image cleared');
-        } else {
-          applyPoseLive(ev.poseId, ev.poseName);
-          toast('Pose: ' + ev.poseName);
+  const chatIdMatch = path.match(/\/chats\/([\w-]+)/);
+  const chatId = chatIdMatch ? chatIdMatch[1] : null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n\n')) !== -1) {
+        const chunk = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+        if (!line) continue;
+        let ev;
+        try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+        if (ev.type === 'pose') {
+          const chat = activeChat(activeChar());
+          if (ev.reset) {
+            // Revert (delete / edit / re-generate): repaint the shot that was on
+            // screen before the removed message, but leave the last message's own
+            // avatar alone — it is stamped with its own pose, not the current one.
+            if (chat) chat.poseId = ev.poseId || null;
+            applyChatBg();
+            renderHeader();
+            toast(ev.poseName ? 'Back to: ' + ev.poseName : 'Image cleared');
+          } else {
+            applyPoseLive(ev.poseId, ev.poseName);
+            toast('Pose: ' + ev.poseName);
+          }
+          continue;
         }
-        continue;
-      }
-      if (ev.type === 'delta') {
-        full += ev.text;
-        onDelta(full);
-      } else if (ev.type === 'done') {
-        result = ev;
-      } else if (ev.type === 'error') {
-        return ev;
+        if (ev.type === 'delta') {
+          full += ev.text;
+          onDelta(full);
+        } else if (ev.type === 'done') {
+          result = ev;
+        } else if (ev.type === 'error') {
+          return ev;
+        }
       }
     }
+  } catch (err) {
+    if (chatId) {
+      const rec = await recoverChatGeneration(chatId);
+      if (rec) return rec;
+    }
+    throw err;
   }
-  if (!result) throw new Error('Stream ended unexpectedly');
+  if (!result) {
+    if (chatId) {
+      const rec = await recoverChatGeneration(chatId);
+      if (rec) return rec;
+    }
+    throw new Error('Stream ended unexpectedly');
+  }
   return result;
 }
 
@@ -692,12 +749,12 @@ function liveStreamUpdate() {
   const sc = $('#chat-scroll');
   let bubble = document.querySelector('#chat-feed .msg.streaming .bubble');
   if (!bubble) {
-    renderChat();
+    renderChat({ keepScroll: !chatStickToBottom });
     bubble = document.querySelector('#chat-feed .msg.streaming .bubble');
   }
   if (bubble) {
     bubble.innerHTML = md(streaming.text);
-    if (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 160) sc.scrollTop = sc.scrollHeight;
+    if (chatStickToBottom) sc.scrollTop = sc.scrollHeight;
   }
 }
 
@@ -730,11 +787,16 @@ function renderChat(opts = {}) {
     }
   }
   feed.innerHTML = html;
-  sc.scrollTop = opts.keepScroll ? prevScroll : sc.scrollHeight;
+  if (opts.keepScroll || !chatStickToBottom) {
+    sc.scrollTop = prevScroll;
+  } else {
+    sc.scrollTop = sc.scrollHeight;
+  }
   updateComposerButtons();
 }
 
 async function openCharacter(id, chatId) {
+  chatStickToBottom = true;
   const c = state.characters.find((x) => x.id === id);
   if (!c) return;
   ui.activeCharacterId = id;
@@ -837,6 +899,7 @@ async function sendUser() {
   const tmp = pushOptimistic(chat, 'user', text);
   typing = true;
   typingAt = tmp.id;
+  chatStickToBottom = true;
   streaming = { chatId: chat.id, text: '' };
   renderChat();
   try {
@@ -894,6 +957,7 @@ async function generateReplyAt(parentId) {
   if (!chat || typing || !parentId || parentId === 'root') return;
   typing = true;
   typingAt = parentId;
+  chatStickToBottom = true;
   streaming = { chatId: chat.id, text: '' };
   renderChat();
   try {
@@ -989,6 +1053,7 @@ async function respondAsMe() {
   if (!parentId || parentId === 'root') return;
   typing = true;
   typingAt = parentId;
+  chatStickToBottom = true;
   streaming = { chatId: chat.id, text: '', role: 'user' };
   renderChat();
   try {
@@ -5326,6 +5391,7 @@ async function loadAgent() {
 function openAgentDrawer() {
   document.body.classList.add('agent-open');
   agentOpen = true;
+  agentStickToBottom = true;
   closeMenus(); closeSidebar();
   agentEl('#agent-model-label').textContent = agentModelLabel();
   refreshAgentChanges();
@@ -5618,9 +5684,11 @@ function agentToolActions(mi) {
   return chain.length ? chain.join('') : '';
 }
 
-function renderAgent() {
+function renderAgent(opts = {}) {
   const feed = agentEl('#agent-feed');
   if (!feed) return;
+  const sc = agentEl('#agent-scroll');
+  const prevScroll = sc ? sc.scrollTop : 0;
   let html = '';
   if (!agentMessages.length) {
     const suggestion = AGENT_SUGGESTIONS.map((s) => `<button type="button" class="btn btn-ghost tiny" data-agent-suggest="${esc(s)}">${esc(s)}</button>`).join('');
@@ -5636,12 +5704,24 @@ function renderAgent() {
       const role = agentRoles(mi);
       if (role !== 'tool' && openToolGroup) { html += '</div>'; openToolGroup = false; }
       if (role === 'user') {
-        html += `<div class="agent-msg user"><div class="agent-bubble agent-md">${agentUserHtml(mi.content || '')}</div></div>`;
+        const idAttr = mi.id ? ` data-id="${mi.id}"` : '';
+        html += `<div class="agent-msg user"${idAttr}><div class="agent-bubble agent-md">${agentUserHtml(mi.content || '')}</div>
+          <div class="agent-msg-meta"><span class="m-acts-wrap"><span class="m-acts">
+            <button data-agent-act="copy" title="Copy message text">${I.copy}</button>
+            <button data-agent-act="del" class="danger" title="Delete this message and everything after it">${I.trash}</button>
+          </span></span></div>
+        </div>`;
       } else if (role === 'agent') {
+        const idAttr = mi.id ? ` data-id="${mi.id}"` : '';
         if ((mi.content || '').trim()) {
-          html += `<div class="agent-msg agent"><div class="agent-bubble agent-md${mi.streaming ? ' streaming' : ''}">${agentMd(mi.content)}</div></div>`;
+          const acts = !mi.streaming ? `<div class="agent-msg-meta"><span class="m-acts-wrap"><span class="m-acts">
+            <button data-agent-act="copy" title="Copy message text">${I.copy}</button>
+            <button data-agent-act="regen" title="Regenerate this reply">${I.rotr}</button>
+            <button data-agent-act="del" class="danger" title="Delete this reply and everything after it">${I.trash}</button>
+          </span></span></div>` : '';
+          html += `<div class="agent-msg agent"${idAttr}><div class="agent-bubble agent-md${mi.streaming ? ' streaming' : ''}">${agentMd(mi.content)}</div>${acts}</div>`;
         } else if (mi.streaming) {
-          html += `<div class="agent-msg agent"><div class="agent-bubble agent-md streaming"></div></div>`;
+          html += `<div class="agent-msg agent"${idAttr}><div class="agent-bubble agent-md streaming"></div></div>`;
         }
       } else if (role === 'tool') {
         if (!openToolGroup) { html += `<div class="agent-msg agent tool-group">`; openToolGroup = true; }
@@ -5653,8 +5733,13 @@ function renderAgent() {
     if (openToolGroup) html += '</div>';
   }
   feed.innerHTML = html;
-  const sc = agentEl('#agent-scroll');
-  if (sc) sc.scrollTop = sc.scrollHeight;
+  if (sc) {
+    if (opts.keepScroll || !agentStickToBottom) {
+      sc.scrollTop = prevScroll;
+    } else {
+      sc.scrollTop = sc.scrollHeight;
+    }
+  }
   const sendBtn = agentEl('#agent-send-btn');
   if (sendBtn) sendBtn.disabled = agentBusy;
 }
@@ -5715,6 +5800,32 @@ async function refreshDataAfterAgent() {
   else showWelcome();
 }
 
+async function recoverAgentGeneration() {
+  const maxWait = 120000;
+  const start = Date.now();
+  while (Date.now() - start < maxWait) {
+    try {
+      const r = await fetch('/api/agent/generation');
+      if (r.ok) {
+        const data = await r.json();
+        if (data.active) {
+          await new Promise((res) => setTimeout(res, 1000));
+          continue;
+        }
+        if (data.done) {
+          if (data.error) throw new Error(data.error);
+          return { done: true, text: data.text || '' };
+        }
+      }
+    } catch (e) {
+      if (e.message && !e.message.includes('fetch')) throw e;
+      await new Promise((res) => setTimeout(res, 1500));
+    }
+    break;
+  }
+  return null;
+}
+
 async function streamAgent(body, onEvent) {
   const r = await fetch('/api/agent/chat', {
     method: 'POST',
@@ -5728,20 +5839,29 @@ async function streamAgent(body, onEvent) {
   const reader = r.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf('\n\n')) !== -1) {
-      const chunk = buf.slice(0, i);
-      buf = buf.slice(i + 2);
-      const line = chunk.split('\n').find((l) => l.startsWith('data: '));
-      if (!line) continue;
-      let ev;
-      try { ev = JSON.parse(line.slice(6)); } catch { continue; }
-      onEvent(ev);
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n\n')) !== -1) {
+        const chunk = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+        if (!line) continue;
+        let ev;
+        try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+        onEvent(ev);
+      }
     }
+  } catch (err) {
+    const rec = await recoverAgentGeneration();
+    if (rec) {
+      onEvent({ type: 'done', text: rec.text });
+      return;
+    }
+    throw err;
   }
 }
 
@@ -5759,6 +5879,7 @@ async function agentSend() {
   agentAttachments = [];
   renderAgentAttachments();
   agentBusy = true;
+  agentStickToBottom = true;
   setAgentStatus('thinking');
   renderAgent();
   try {
@@ -5814,6 +5935,75 @@ async function agentSend() {
   renderAgent();
   if (!agentBusy) {
     await refreshDataAfterAgent();
+    await loadAgent();
+    renderAgent();
+  }
+}
+
+async function agentRegenerate(msgId) {
+  if (agentBusy) return;
+  agentBusy = true;
+  agentStickToBottom = true;
+  setAgentStatus('thinking');
+  const idx = agentMessages.findIndex((m) => m.id === msgId);
+  if (idx !== -1) {
+    let userIdx = idx;
+    while (userIdx >= 0 && agentMessages[userIdx].role !== 'user') userIdx--;
+    if (userIdx >= 0) {
+      agentMessages = agentMessages.slice(0, userIdx + 1);
+    }
+  }
+  renderAgent();
+  try {
+    const openChat = activeChar();
+    const openChatId = openChat ? (ui.activeChatIds[openChat.id] || null) : null;
+    await streamAgent({ regenerateMessageId: msgId, activeChatId: openChatId }, (ev) => {
+      if (ev.type === 'status') {
+        agentStatus = 'thinking';
+      } else if (ev.type === 'delta') {
+        let cur = agentMessages[agentMessages.length - 1];
+        if (!cur || cur.role !== 'assistant' || !cur.streaming) {
+          cur = { role: 'assistant', content: '', streaming: true };
+          agentMessages.push(cur);
+        }
+        cur.content += ev.text;
+      } else if (ev.type === 'tool_call') {
+        agentStatus = 'running_tool:' + ev.name;
+        closeAgentStreamingRow();
+        agentMessages.push({ kind: 'tool', pending: true, id: ev.id, name: ev.name, args: ev.args });
+      } else if (ev.type === 'tool_result') {
+        agentStatus = 'thinking';
+        const t = agentMessages.find((m) => m.kind === 'tool' && m.pending && m.id === ev.id);
+        if (t) { t.pending = false; t.ok = ev.ok; t.error = ev.error; t.result = ev.result; }
+      } else if (ev.type === 'done') {
+        const cur = agentMessages[agentMessages.length - 1];
+        if (cur && cur.role === 'assistant' && cur.streaming) {
+          cur.content = ev.text || '';
+          cur.streaming = false;
+        } else {
+          agentMessages.push({ role: 'assistant', content: ev.text || '' });
+        }
+        agentBusy = false;
+        agentStatus = '';
+      } else if (ev.type === 'error') {
+        closeAgentStreamingRow();
+        agentMessages.push({ kind: 'error', text: ev.error || 'Agent failed' });
+        agentBusy = false;
+        agentStatus = '';
+      }
+      renderAgent();
+    });
+  } catch (e) {
+    closeAgentStreamingRow();
+    agentMessages.push({ kind: 'error', text: e.message || 'Agent failed' });
+    agentBusy = false;
+    agentStatus = '';
+  }
+  setAgentStatus('');
+  renderAgent();
+  if (!agentBusy) {
+    await refreshDataAfterAgent();
+    await loadAgent();
     renderAgent();
   }
 }
@@ -6115,7 +6305,98 @@ function wireAgent() {
   });
 
   // Feed interactions: toggle tool details, run actions
-  $('#agent-feed').addEventListener('click', (e) => {
+  $('#agent-feed').addEventListener('click', async (e) => {
+    const act = e.target.closest('[data-agent-act]');
+    if (act) {
+      const msgEl = act.closest('.agent-msg[data-id]');
+      const id = msgEl && msgEl.dataset.id ? Number(msgEl.dataset.id) : null;
+      const action = act.dataset.agentAct;
+      if (action === 'copy') {
+        const mi = id ? agentMessages.find((m) => m.id === id) : null;
+        let text = mi ? (mi.content || '') : '';
+        if (!text && msgEl) {
+          const bubble = msgEl.querySelector('.agent-bubble');
+          if (bubble) text = bubble.innerText;
+        }
+        if (text) {
+          text = text.replace(AGENT_ATTACH_RE, '').trim();
+          const markCopied = () => {
+            act.innerHTML = I.check;
+            act.classList.add('copied');
+            setTimeout(() => {
+              act.innerHTML = I.copy;
+              act.classList.remove('copied');
+            }, 1200);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(markCopied).catch(() => {
+              try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                markCopied();
+              } catch {}
+            });
+          } else {
+            try {
+              const ta = document.createElement('textarea');
+              ta.value = text;
+              ta.style.position = 'fixed';
+              ta.style.opacity = '0';
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+              markCopied();
+            } catch {}
+          }
+        }
+        return;
+      }
+      if (action === 'del') {
+        if (!id || agentBusy) return;
+        const ok = await customConfirm({
+          title: 'Delete agent message?',
+          message: 'Delete this message and everything after it? Any changes made by the agent in these messages will be rolled back.',
+          confirmText: 'Delete message',
+          danger: true,
+        });
+        if (!ok) return;
+        try {
+          const r = await api('/agent/messages/' + id, { method: 'DELETE' });
+          if (r.rolledBack) toast('Message deleted and website state rolled back');
+          else toast('Message deleted');
+          await refreshDataAfterAgent();
+          await loadAgent();
+        } catch (err) {
+          toast(err.message);
+        }
+        return;
+      }
+      if (action === 'regen') {
+        if (!id || agentBusy) return;
+        let hasChanges = false;
+        try {
+          const cr = await api('/agent/changes');
+          hasChanges = cr && cr.changes && cr.changes.length > 0;
+        } catch {}
+        if (hasChanges) {
+          const ok = await customConfirm({
+            title: 'Regenerate agent reply?',
+            message: 'Regenerating will roll back any changes made by the agent in this reply and generate a new response.',
+            confirmText: 'Regenerate reply',
+          });
+          if (!ok) return;
+        }
+        await agentRegenerate(id);
+        return;
+      }
+    }
     const actBtn = e.target.closest('[data-agent-open-chat]');
     if (actBtn) {
       closeAgentDrawer();
@@ -6170,6 +6451,51 @@ function wireAgent() {
     if (chipImg) { openViewer(chipImg.src); return; }
     const row = e.target.closest('.agent-tool-row');
     if (row) row.closest('.agent-tool').classList.toggle('open');
+  });
+
+  const chatSc = $('#chat-scroll');
+  if (chatSc) {
+    chatSc.addEventListener('scroll', () => {
+      const atBottom = chatSc.scrollHeight - chatSc.scrollTop - chatSc.clientHeight <= 40;
+      chatStickToBottom = atBottom;
+    }, { passive: true });
+  }
+  const agentSc = agentEl('#agent-scroll');
+  if (agentSc) {
+    agentSc.addEventListener('scroll', () => {
+      const atBottom = agentSc.scrollHeight - agentSc.scrollTop - agentSc.clientHeight <= 40;
+      agentStickToBottom = atBottom;
+    }, { passive: true });
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      const c = activeChar();
+      const chat = c && activeChat(c);
+      if (typing && chat) {
+        api(`/chats/${chat.id}/generation`).then((g) => {
+          if (g && !g.active && g.chat) {
+            mergeChat(chat, g.chat);
+            typing = false;
+            typingAt = null;
+            streaming = null;
+            saveUi();
+            renderChat();
+            renderChatsMenu();
+          }
+        }).catch(() => {});
+      }
+      if (agentBusy) {
+        api('/agent/generation').then((ag) => {
+          if (ag && !ag.active) {
+            agentBusy = false;
+            setAgentStatus('');
+            loadAgent();
+            refreshDataAfterAgent();
+          }
+        }).catch(() => {});
+      }
+    }
   });
 }
 

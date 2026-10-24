@@ -4616,6 +4616,32 @@ body.sidebar-resizing * {
   background: rgba(224,108,108,0.08);
 }
 
+.agent-msg-meta {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 2px 0;
+}
+.agent-msg.user .agent-msg-meta {
+  justify-content: flex-end;
+}
+.agent-msg.agent .agent-msg-meta {
+  justify-content: flex-start;
+}
+.agent-msg .m-acts-wrap {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.agent-msg:hover .m-acts-wrap,
+.agent-msg:focus-within .m-acts-wrap {
+  opacity: 1;
+}
+@media (hover: none) {
+  .agent-msg .m-acts-wrap {
+    opacity: 1;
+  }
+}
+
 /* Markdown rendering inside agent bubbles */
 .agent-bubble.agent-md {
   white-space: normal;

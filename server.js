@@ -872,7 +872,10 @@ function startEventStream(res, fn, tag = 'stream') {
   const ctrl = new AbortController();
   let closed = false;
   let ended = false;
-  res.on('close', () => { closed = true; ctrl.abort(); });
+  res.on('close', () => {
+    closed = true;
+    if (!ended) tlog('http', `SSE ⚡ ${tag} — client disconnected after ${Date.now() - t0}ms (generation continues on server)`);
+  });
   const emit = (obj) => {
     if (closed) return;
     try { res.write(`data: ${JSON.stringify(obj)}\n\n`); } catch {}
@@ -887,10 +890,13 @@ function startEventStream(res, fn, tag = 'stream') {
       ended = true;
       try { res.end(); } catch {}
     });
-  /* A close before our normal end means the client hung up mid-stream —
-     that is the classic "response never finished" signature. */
-  res.on('close', () => { if (!ended) tlog('http', `SSE ⚡ ${tag} — client disconnected after ${Date.now() - t0}ms`); });
 }
+
+/* In-flight and recently finished generation tracking.
+   Allows mobile clients that disconnected or suspended mid-stream (e.g. app switch, screen lock)
+   to recover the completed response from the server instead of failing with "Error in input stream". */
+const activeChatGens = new Map(); // chatId -> { active, done, text, chat, node, error, startedAt }
+let activeAgentGen = null; // { active, done, text, error, startedAt }
 
 /* ==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-=== */
 /* AI Agent — a built-in assistant that can inspect and edit the whole site.  */
@@ -2067,30 +2073,52 @@ async function runAgentChat(body, emit, ctrl) {
      agent which conversation the user is looking at right now. */
   const activeChatId = body && body.activeChatId && db.getChat(String(body.activeChatId)) ? String(body.activeChatId) : null;
   cfg.activeChatId = activeChatId;
-  const attIds = Array.isArray(body.attachments) ? body.attachments.map(String).slice(0, 6) : [];
-  let text = String((body && body.message) || '').trim();
-  if (!text && !attIds.length) throw new Error('Message is empty');
-  if (!text && attIds.length) text = 'Please take a look at the attached image(s).';
   if (!cfg.apiKey && cfg.provider !== 'ollama') {
     throw new Error(settings.agentOverride
       ? 'No AI connection configured for the Agent. Open Settings → AI Connection → Agent connection and connect a provider first.'
       : 'No AI connection configured for the Agent. Open Settings → AI Connection (or pick an AI preset in the header) and connect a provider first.');
   }
 
-  // Images the user attached in the drawer arrive as attachment ids. They are
-  // never put into the model context as bytes — just as markers the model can
-  // reference in apply_image / edit_image via their ids.
-  const markers = [];
-  for (const id of attIds) {
-    const a = db.getAgentAttachment(id);
-    if (a) markers.push(`[attached image: ${a.id} — ${a.name}]`);
+  let userText = '';
+  let userMsgId = 0;
+  if (body && body.regenerateMessageId) {
+    const prep = db.prepareRegenerateAgentTurn(body.regenerateMessageId);
+    userText = prep.userMessage.content;
+    userMsgId = prep.userMessage.id;
+    db.setCurrentAgentTurnMsgId(userMsgId);
+    tlog('agent', `▼ regenerate turn — user prompt ${userText.length}ch: "${truncTitle(userText, 90)}" | ${cfg.provider}/${cfg.model || 'unset'}`);
+  } else {
+    const attIds = Array.isArray(body.attachments) ? body.attachments.map(String).slice(0, 6) : [];
+    let text = String((body && body.message) || '').trim();
+    if (!text && !attIds.length) throw new Error('Message is empty');
+    if (!text && attIds.length) text = 'Please take a look at the attached image(s).';
+
+    // Images the user attached in the drawer arrive as attachment ids. They are
+    // never put into the model context as bytes — just as markers the model can
+    // reference in apply_image / edit_image via their ids.
+    const markers = [];
+    for (const id of attIds) {
+      const a = db.getAgentAttachment(id);
+      if (a) markers.push(`[attached image: ${a.id} — ${a.name}]`);
+    }
+    userText = text + (markers.length ? (text ? '\n\n' : '') + markers.join('\n') : '');
+
+    tlog('agent', `▼ turn — user ${text.length}ch: "${truncTitle(userText, 90)}" | ${cfg.provider}/${cfg.model || 'unset'}` +
+      ` | ${settings.agentOverride ? 'own agent connection' : 'follows active preset'} | ${attIds.length} image(s) attached`);
+
+    const userRow = db.addAgentMessage({ role: 'user', content: userText });
+    userMsgId = userRow.id;
+    db.setCurrentAgentTurnMsgId(userMsgId);
+    db.createAgentTurnCheckpoint(userMsgId);
   }
-  const userText = text + (markers.length ? (text ? '\n\n' : '') + markers.join('\n') : '');
 
-  tlog('agent', `▼ turn — user ${text.length}ch: "${truncTitle(userText, 90)}" | ${cfg.provider}/${cfg.model || 'unset'}` +
-    ` | ${settings.agentOverride ? 'own agent connection' : 'follows active preset'} | ${attIds.length} image(s) attached`);
-
-  db.addAgentMessage({ role: 'user', content: userText });
+  activeAgentGen = {
+    active: true,
+    done: false,
+    text: '',
+    error: null,
+    startedAt: Date.now(),
+  };
 
   const rows = db.getAgentMessages().slice(-AGENT_HISTORY_LIMIT);
   while (rows.length && rows[0].role === 'tool') rows.shift(); // avoid orphan tool results after history trim
@@ -2101,69 +2129,94 @@ async function runAgentChat(body, emit, ctrl) {
   tlog('agent', `system prompt ${system.length}ch, ${tools.length} tools${tools.length ? ' (' + tools.map((t) => t.function.name).join(', ') + ')' : ''}`);
 
   /* Text deltas stream straight through to the drawer as they arrive. */
-  const onDelta = (t) => emit({ type: 'delta', text: t });
+  const onDelta = (t) => {
+    if (activeAgentGen) activeAgentGen.text += t;
+    emit({ type: 'delta', text: t });
+  };
   let toolRuns = 0;
 
-  for (let iter = 0; iter < AGENT_MAX_ITERATIONS; iter++) {
-    emit({ type: 'status', status: 'thinking' });
-    const llmT0 = Date.now();
-    tlog('agent', `── LLM call #${iter + 1}/${AGENT_MAX_ITERATIONS}`);
-    let resp;
-    if (cfg.provider === 'anthropic') {
-      resp = await agentCallAnthropic(cfg, system, mapAgentHistoryAnthropic(rows), tools, ctrl.signal, onDelta);
-    } else {
-      resp = await agentCallOpenAI(cfg, system, mapAgentHistoryOpenAI(rows), tools, ctrl.signal, onDelta);
-    }
-    tlog('agent', `── LLM call #${iter + 1} answered in ${Date.now() - llmT0}ms — ` +
-      `${resp.text ? resp.text.length + 'ch of text' : 'no text'}${resp.finishReason ? `, finish=${resp.finishReason}` : ''}`);
-
-    if (resp.toolCalls && resp.toolCalls.length) {
-      const arow = db.addAgentMessage({ role: 'assistant', content: resp.text || '', toolCalls: resp.toolCalls });
-      rows.push(arow);
-      for (const call of resp.toolCalls) {
-        emit({ type: 'tool_call', id: call.id, name: call.name, args: call.args || {} });
-        const toolT0 = Date.now();
-        tlog('agent', `🔧 tool ${toolRuns + 1}: ${call.name}(${truncArg(call.args)})`);
-        let ok = true;
-        let result = null;
-        let error = null;
-        try {
-          result = await runAgentTool(call.name, call.args || {}, settings, cfg);
-        } catch (e) {
-          ok = false;
-          error = String(e.message || e);
-          result = { error };
-        }
-        toolRuns++;
-        tlog('agent', `🔧 tool ${call.name} ${ok ? '✓ ok' : '✗ FAILED'} in ${Date.now() - toolT0}ms` +
-          (ok ? ` — result ${JSON.stringify(sanitizeForModel(result)).length}B` : ` — error: ${error}`));
-        const trow = db.addAgentMessage({
-          role: 'tool',
-          callId: call.id,
-          toolName: call.name,
-          toolArgs: call.args || {},
-          toolResult: capToolResultJson(sanitizeForModel(result), AGENT_TOOL_RESULT_CAP),
-          toolError: !ok,
-        });
-        rows.push(trow);
-        emit({ type: 'tool_result', id: call.id, name: call.name, ok, error, result });
+  try {
+    for (let iter = 0; iter < AGENT_MAX_ITERATIONS; iter++) {
+      emit({ type: 'status', status: 'thinking' });
+      const llmT0 = Date.now();
+      tlog('agent', `── LLM call #${iter + 1}/${AGENT_MAX_ITERATIONS}`);
+      let resp;
+      if (cfg.provider === 'anthropic') {
+        resp = await agentCallAnthropic(cfg, system, mapAgentHistoryAnthropic(rows), tools, ctrl.signal, onDelta);
+      } else {
+        resp = await agentCallOpenAI(cfg, system, mapAgentHistoryOpenAI(rows), tools, ctrl.signal, onDelta);
       }
-      continue;
+      tlog('agent', `── LLM call #${iter + 1} answered in ${Date.now() - llmT0}ms — ` +
+        `${resp.text ? resp.text.length + 'ch of text' : 'no text'}${resp.finishReason ? `, finish=${resp.finishReason}` : ''}`);
+
+      if (resp.toolCalls && resp.toolCalls.length) {
+        const arow = db.addAgentMessage({ role: 'assistant', content: resp.text || '', toolCalls: resp.toolCalls });
+        rows.push(arow);
+        for (const call of resp.toolCalls) {
+          emit({ type: 'tool_call', id: call.id, name: call.name, args: call.args || {} });
+          const toolT0 = Date.now();
+          tlog('agent', `🔧 tool ${toolRuns + 1}: ${call.name}(${truncArg(call.args)})`);
+          let ok = true;
+          let result = null;
+          let error = null;
+          try {
+            result = await runAgentTool(call.name, call.args || {}, settings, cfg);
+          } catch (e) {
+            ok = false;
+            error = String(e.message || e);
+            result = { error };
+          }
+          toolRuns++;
+          tlog('agent', `🔧 tool ${call.name} ${ok ? '✓ ok' : '✗ FAILED'} in ${Date.now() - toolT0}ms` +
+            (ok ? ` — result ${JSON.stringify(sanitizeForModel(result)).length}B` : ` — error: ${error}`));
+          const trow = db.addAgentMessage({
+            role: 'tool',
+            callId: call.id,
+            toolName: call.name,
+            toolArgs: call.args || {},
+            toolResult: capToolResultJson(sanitizeForModel(result), AGENT_TOOL_RESULT_CAP),
+            toolError: !ok,
+          });
+          rows.push(trow);
+          emit({ type: 'tool_result', id: call.id, name: call.name, ok, error, result });
+        }
+        continue;
+      }
+
+      /* agentCallOpenAI/agentCallAnthropic guarantee either tool calls or
+         non-empty text (empty responses raise a descriptive error instead). */
+      const finalText = resp.text;
+      db.addAgentMessage({ role: 'assistant', content: finalText });
+      if (activeAgentGen) {
+        activeAgentGen.active = false;
+        activeAgentGen.done = true;
+        activeAgentGen.text = finalText;
+        setTimeout(() => { if (activeAgentGen && activeAgentGen.text === finalText) activeAgentGen = null; }, 120000);
+      }
+      emit({ type: 'done', text: finalText });
+      tlog('agent', `▲ turn complete in ${Date.now() - turnT0}ms — ${toolRuns} tool run(s), reply ${finalText.length}ch`);
+      return;
     }
 
-    /* agentCallOpenAI/agentCallAnthropic guarantee either tool calls or
-       non-empty text (empty responses raise a descriptive error instead). */
-    const finalText = resp.text;
-    db.addAgentMessage({ role: 'assistant', content: finalText });
-    emit({ type: 'done', text: finalText });
-    tlog('agent', `▲ turn complete in ${Date.now() - turnT0}ms — ${toolRuns} tool run(s), reply ${finalText.length}ch`);
-    return;
+    const fallback = 'I ran several tool steps and paused to avoid looping. Tell me to continue if I should keep going.';
+    db.addAgentMessage({ role: 'assistant', content: fallback });
+    if (activeAgentGen) {
+      activeAgentGen.active = false;
+      activeAgentGen.done = true;
+      activeAgentGen.text = fallback;
+      setTimeout(() => { if (activeAgentGen && activeAgentGen.text === fallback) activeAgentGen = null; }, 120000);
+    }
+    emit({ type: 'done', text: fallback });
+    tlog('agent', `⚠ turn exhausted ${AGENT_MAX_ITERATIONS} iterations in ${Date.now() - turnT0}ms — ${toolRuns} tool run(s); replied with a continue-note`);
+  } catch (err) {
+    if (activeAgentGen) {
+      activeAgentGen.active = false;
+      activeAgentGen.done = true;
+      activeAgentGen.error = err.message;
+      setTimeout(() => { if (activeAgentGen && activeAgentGen.error === err.message) activeAgentGen = null; }, 120000);
+    }
+    throw err;
   }
-
-  const fallback = 'I ran several tool steps and paused to avoid looping. Tell me to continue if I should keep going.';
-  db.addAgentMessage({ role: 'assistant', content: fallback });
-  emit({ type: 'done', text: fallback });
-  tlog('agent', `⚠ turn exhausted ${AGENT_MAX_ITERATIONS} iterations in ${Date.now() - turnT0}ms — ${toolRuns} tool run(s); replied with a continue-note`);
 }
 
 async function route(req, res, u) {
@@ -2197,6 +2250,28 @@ async function route(req, res, u) {
     if (!dec) return send(res, 404, { error: 'Attachment unreadable' });
     res.writeHead(200, { 'Content-Type': dec.mime, 'Cache-Control': 'private, max-age=86400' });
     return res.end(dec.buffer);
+  }
+  if (req.method === 'GET' && p === '/api/agent/generation') {
+    if (!activeAgentGen) return send(res, 200, { active: false, done: false, messages: db.getAgentMessages() });
+    return send(res, 200, {
+      active: activeAgentGen.active,
+      done: activeAgentGen.done,
+      text: activeAgentGen.text,
+      error: activeAgentGen.error,
+      messages: activeAgentGen.done ? db.getAgentMessages() : null,
+    });
+  }
+  if ((m = p.match(/^\/api\/agent\/messages\/(\d+)$/)) && req.method === 'DELETE') {
+    try {
+      const resu = db.deleteAgentTurn(Number(m[1]));
+      return send(res, 200, { ok: true, rolledBack: resu.rolledBack, changes: db.getAgentChanges(), messages: db.getAgentMessages() });
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+  if ((m = p.match(/^\/api\/agent\/messages\/(\d+)\/regenerate$/)) && req.method === 'POST') {
+    body.regenerateMessageId = Number(m[1]);
+    return startEventStream(res, (emit, ctrl) => runAgentChat(body, emit, ctrl), 'agent-regen');
   }
   if (req.method === 'POST' && p === '/api/agent/chat') {
     return startEventStream(res, (emit, ctrl) => runAgentChat(body, emit, ctrl), 'agent');
@@ -2363,6 +2438,18 @@ async function route(req, res, u) {
   if ((m = p.match(/^\/api\/chats\/([\w-]+)$/)) && req.method === 'DELETE') {
     return send(res, 200, db.deleteChat(m[1]));
   }
+  if ((m = p.match(/^\/api\/chats\/([\w-]+)\/generation$/)) && req.method === 'GET') {
+    const g = activeChatGens.get(m[1]);
+    if (!g) return send(res, 200, { active: false, done: false, chat: db.getChat(m[1]) });
+    return send(res, 200, {
+      active: g.active,
+      done: g.done,
+      text: g.text,
+      error: g.error,
+      chat: g.chat || (g.done ? db.getChat(m[1]) : null),
+      node: g.node,
+    });
+  }
   if ((m = p.match(/^\/api\/chats\/([\w-]+)\/messages$/)) && req.method === 'POST') {
     const content = String(body.content || '').trim();
     const role = body.role === 'injection' ? 'injection' : 'user';
@@ -2392,6 +2479,17 @@ async function route(req, res, u) {
     const aiCfg = resolveAiConfig(settings);
     const simulated = !aiCfg.apiKey && aiCfg.provider !== 'ollama';
     const fresh = db.getChat(chat.id);
+    const genRecord = {
+      chatId: chat.id,
+      text: '',
+      active: true,
+      done: false,
+      error: null,
+      chat: null,
+      node: null,
+      startedAt: Date.now(),
+    };
+    activeChatGens.set(chat.id, genRecord);
     startEventStream(res, async (emit, ctrl) => {
       let posePromise = null;
       let streamed = '';
@@ -2400,6 +2498,7 @@ async function route(req, res, u) {
       try {
         const text = await generateReplyStream(char, db.pathNodes(fresh.tree, node.id), persona, settings, (d) => {
           streamed += d;
+          genRecord.text += d;
           emit({ type: 'delta', text: d });
         }, ctrl.signal, chat);
         tlog('ai', `✓ reply streamed ${streamed.length} chars in ${Date.now() - rT0}ms`);
@@ -2414,7 +2513,13 @@ async function route(req, res, u) {
         if (chosen) { try { db.setChatPose(chat.id, chosen.poseId); } catch {} }
         const reply = db.addReply(chat.id, node.id, text, chosen ? { poseId: chosen.poseId } : null);
         if (chosen) emit({ type: 'pose', poseId: chosen.poseId, poseName: chosen.poseName, confidence: chosen.confidence });
-        emit({ type: 'done', chat: db.getChat(chat.id), node: reply, title });
+        const freshChat = db.getChat(chat.id);
+        genRecord.active = false;
+        genRecord.done = true;
+        genRecord.chat = freshChat;
+        genRecord.node = reply;
+        setTimeout(() => { if (activeChatGens.get(chat.id) === genRecord) activeChatGens.delete(chat.id); }, 120000);
+        emit({ type: 'done', chat: freshChat, node: reply, title });
       } catch (e) {
         console.error('[ai] generation failed:', e.message);
         if (e.partial) {
@@ -2426,7 +2531,13 @@ async function route(req, res, u) {
           }
           db.addReply(chat.id, node.id, e.partial, p && p.changed ? { poseId: p.poseId } : null);
         }
-        emit({ type: 'error', error: e.message, chat: db.getChat(chat.id) });
+        const freshChat = db.getChat(chat.id);
+        genRecord.active = false;
+        genRecord.done = true;
+        genRecord.error = e.message;
+        genRecord.chat = freshChat;
+        setTimeout(() => { if (activeChatGens.get(chat.id) === genRecord) activeChatGens.delete(chat.id); }, 120000);
+        emit({ type: 'error', error: e.message, chat: freshChat });
       }
     });
     return;
@@ -2466,6 +2577,17 @@ async function route(req, res, u) {
         didReset = true;
       } catch (e) { console.error('[pose] revert failed:', e.message); }
     }
+    const genRecord = {
+      chatId: chat.id,
+      text: '',
+      active: true,
+      done: false,
+      error: null,
+      chat: null,
+      node: null,
+      startedAt: Date.now(),
+    };
+    activeChatGens.set(chat.id, genRecord);
     startEventStream(res, async (emit, ctrl) => {
       let posePromise = null;
       let streamed = '';
@@ -2478,12 +2600,19 @@ async function route(req, res, u) {
         }
         const text = await generateReplyStream(char, path, persona, settings, (d) => {
           streamed += d;
+          genRecord.text += d;
           emit({ type: 'delta', text: d });
         }, ctrl.signal, chat, asUser, guidance);
         tlog('ai', `✓ ${asUser ? 'respond-as-user' : 'regenerate'} streamed ${streamed.length} chars in ${Date.now() - rT0}ms`);
         if (asUser) {
           const reply = db.addNode(chat.id, 'user', text, parentId);
-          emit({ type: 'done', chat: db.getChat(chat.id), node: reply });
+          const freshChat = db.getChat(chat.id);
+          genRecord.active = false;
+          genRecord.done = true;
+          genRecord.chat = freshChat;
+          genRecord.node = reply;
+          setTimeout(() => { if (activeChatGens.get(chat.id) === genRecord) activeChatGens.delete(chat.id); }, 120000);
+          emit({ type: 'done', chat: freshChat, node: reply });
           return;
         }
         if (poseEnabled && text && text.trim().length > 0) {
@@ -2497,13 +2626,25 @@ async function route(req, res, u) {
         if (chosen) { try { db.setChatPose(chat.id, chosen.poseId); } catch {} }
         const reply = db.addReply(chat.id, parentId, text, chosen ? { poseId: chosen.poseId } : null);
         if (chosen) emit({ type: 'pose', poseId: chosen.poseId, poseName: chosen.poseName, confidence: chosen.confidence });
-        emit({ type: 'done', chat: db.getChat(chat.id), node: reply });
+        const freshChat = db.getChat(chat.id);
+        genRecord.active = false;
+        genRecord.done = true;
+        genRecord.chat = freshChat;
+        genRecord.node = reply;
+        setTimeout(() => { if (activeChatGens.get(chat.id) === genRecord) activeChatGens.delete(chat.id); }, 120000);
+        emit({ type: 'done', chat: freshChat, node: reply });
       } catch (e) {
         console.error('[ai] generation failed:', e.message);
         if (e.partial) {
           if (asUser) {
             const reply = db.addNode(chat.id, 'user', e.partial, parentId);
-            emit({ type: 'done', chat: db.getChat(chat.id), node: reply });
+            const freshChat = db.getChat(chat.id);
+            genRecord.active = false;
+            genRecord.done = true;
+            genRecord.chat = freshChat;
+            genRecord.node = reply;
+            setTimeout(() => { if (activeChatGens.get(chat.id) === genRecord) activeChatGens.delete(chat.id); }, 120000);
+            emit({ type: 'done', chat: freshChat, node: reply });
             return;
           }
           let p = null;
@@ -2514,7 +2655,13 @@ async function route(req, res, u) {
           }
           db.addReply(chat.id, parentId, e.partial, p && p.changed ? { poseId: p.poseId } : null);
         }
-        emit({ type: 'error', error: e.message, chat: db.getChat(chat.id) });
+        const freshChat = db.getChat(chat.id);
+        genRecord.active = false;
+        genRecord.done = true;
+        genRecord.error = e.message;
+        genRecord.chat = freshChat;
+        setTimeout(() => { if (activeChatGens.get(chat.id) === genRecord) activeChatGens.delete(chat.id); }, 120000);
+        emit({ type: 'error', error: e.message, chat: freshChat });
       }
     });
     return;

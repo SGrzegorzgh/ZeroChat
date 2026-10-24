@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS agent_session_changes (
   created_at INTEGER NOT NULL
 );
 `);
+ensureColumn('agent_session_changes', 'message_id', 'INTEGER DEFAULT 0');
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS agent_messages (
@@ -1882,14 +1883,37 @@ function createAgentCheckpoint(force = false) {
   }
 }
 
-function revertAgentCheckpoint() {
-  if (!fs.existsSync(AGENT_CHECKPOINT_PATH)) {
-    throw new Error('No agent session checkpoint found to revert to');
+let currentAgentTurnMsgId = 0;
+function setCurrentAgentTurnMsgId(id) {
+  currentAgentTurnMsgId = Number(id) || 0;
+}
+
+function createAgentTurnCheckpoint(userMsgId) {
+  if (!userMsgId) return false;
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    ensureAgentSessionCheckpoint();
+    const turnPath = path.join(BACKUP_DIR, `agent-turn-${userMsgId}.db`);
+    if (fs.existsSync(turnPath)) {
+      try { fs.unlinkSync(turnPath); } catch {}
+    }
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    db.exec(`VACUUM INTO '${turnPath.replace(/'/g, "''")}'`);
+    return true;
+  } catch (e) {
+    console.error('Failed to create agent turn checkpoint:', e.message);
+    return false;
+  }
+}
+
+function restoreTablesFromSnapshot(snapPath) {
+  if (!fs.existsSync(snapPath)) {
+    throw new Error('Checkpoint file not found: ' + snapPath);
   }
   snapshotBeforeDestructive();
   const tables = ['characters', 'poses', 'scenarios', 'personalities', 'presets', 'chats', 'settings'];
   try {
-    db.exec(`ATTACH DATABASE '${AGENT_CHECKPOINT_PATH.replace(/'/g, "''")}' AS snap`);
+    db.exec(`ATTACH DATABASE '${snapPath.replace(/'/g, "''")}' AS snap`);
     /* Restore per column NAME (not INSERT SELECT *): the checkpoint may have
        been taken under an older schema before ensureColumn upgrades, and a
        raw * copy would then fail or misplace values. Columns added after the
@@ -1907,13 +1931,21 @@ function revertAgentCheckpoint() {
       db.exec(`DELETE FROM "${t}"; INSERT INTO "${t}" (${specs[t]}) SELECT ${specs[t]} FROM snap."${t}";`);
     }
     db.exec('COMMIT; PRAGMA foreign_keys = ON; DETACH DATABASE snap;');
-    clearAgentChanges();
-    return { ok: true };
+    return true;
   } catch (e) {
     try { db.exec('ROLLBACK;'); } catch {}
     try { db.exec('PRAGMA foreign_keys = ON; DETACH DATABASE snap;'); } catch {}
-    throw new Error('Failed to revert agent checkpoint: ' + e.message);
+    throw new Error('Failed to restore tables from snapshot: ' + e.message);
   }
+}
+
+function revertAgentCheckpoint() {
+  if (!fs.existsSync(AGENT_CHECKPOINT_PATH)) {
+    throw new Error('No agent session checkpoint found to revert to');
+  }
+  restoreTablesFromSnapshot(AGENT_CHECKPOINT_PATH);
+  clearAgentChanges();
+  return { ok: true };
 }
 
 /* Called before every agent tool execution. Tool handlers record changes
@@ -1934,8 +1966,8 @@ function agentSessionChangeCount() {
 
 function addAgentChange({ action, entityType = '', entityId = '' }) {
   ensureAgentSessionCheckpoint();
-  db.prepare('INSERT INTO agent_session_changes (action, entity_type, entity_id, created_at) VALUES (?, ?, ?, ?)')
-    .run(String(action), String(entityType), String(entityId), Date.now());
+  db.prepare('INSERT INTO agent_session_changes (action, entity_type, entity_id, message_id, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(String(action), String(entityType), String(entityId), currentAgentTurnMsgId, Date.now());
 }
 
 function getAgentChanges() {
@@ -1947,6 +1979,98 @@ function clearAgentChanges() {
   if (fs.existsSync(AGENT_CHECKPOINT_PATH)) {
     try { fs.unlinkSync(AGENT_CHECKPOINT_PATH); } catch {}
   }
+  try {
+    if (fs.existsSync(BACKUP_DIR)) {
+      for (const f of fs.readdirSync(BACKUP_DIR)) {
+        if (f.startsWith('agent-turn-') && f.endsWith('.db')) {
+          try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {}
+        }
+      }
+    }
+  } catch {}
+}
+
+function deleteAgentTurn(msgId) {
+  snapshotBeforeDestructive();
+  const row = db.prepare('SELECT * FROM agent_messages WHERE id = ?').get(msgId);
+  if (!row) throw new Error('Message not found');
+
+  let startId = row.id;
+  let userMsgId = null;
+  if (row.role === 'user') {
+    startId = row.id;
+    userMsgId = row.id;
+  } else {
+    const prevUser = db.prepare('SELECT * FROM agent_messages WHERE id < ? AND role = \'user\' ORDER BY id DESC LIMIT 1').get(row.id);
+    if (prevUser) {
+      userMsgId = prevUser.id;
+      const firstReply = db.prepare('SELECT * FROM agent_messages WHERE id > ? ORDER BY id ASC LIMIT 1').get(prevUser.id);
+      if (firstReply) startId = firstReply.id;
+    }
+  }
+
+  let rolledBack = false;
+  if (userMsgId) {
+    const changesCount = db.prepare('SELECT COUNT(*) as n FROM agent_session_changes WHERE message_id >= ? OR (message_id = 0 AND created_at >= ?)').get(userMsgId, row.created_at).n;
+    if (changesCount > 0) {
+      const turnPath = path.join(BACKUP_DIR, `agent-turn-${userMsgId}.db`);
+      const snapPath = fs.existsSync(turnPath) ? turnPath : AGENT_CHECKPOINT_PATH;
+      if (fs.existsSync(snapPath)) {
+        restoreTablesFromSnapshot(snapPath);
+        rolledBack = true;
+      }
+      db.prepare('DELETE FROM agent_session_changes WHERE message_id >= ? OR (message_id = 0 AND created_at >= ?)').run(userMsgId, row.created_at);
+      if (agentSessionChangeCount() === 0) {
+        clearAgentChanges();
+      }
+    }
+  }
+
+  try {
+    if (fs.existsSync(BACKUP_DIR)) {
+      for (const f of fs.readdirSync(BACKUP_DIR)) {
+        const mm = f.match(/^agent-turn-(\d+)\.db$/);
+        if (mm && Number(mm[1]) >= startId) {
+          try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {}
+        }
+      }
+    }
+  } catch {}
+
+  db.prepare('DELETE FROM agent_messages WHERE id >= ?').run(startId);
+
+  return { ok: true, rolledBack, remainingChanges: agentSessionChangeCount() };
+}
+
+function prepareRegenerateAgentTurn(msgId) {
+  snapshotBeforeDestructive();
+  const row = db.prepare('SELECT * FROM agent_messages WHERE id = ?').get(msgId);
+  if (!row) throw new Error('Message not found');
+
+  const prevUser = row.role === 'user'
+    ? row
+    : db.prepare('SELECT * FROM agent_messages WHERE id < ? AND role = \'user\' ORDER BY id DESC LIMIT 1').get(row.id);
+  if (!prevUser) throw new Error('No user prompt found to regenerate');
+
+  const changesCount = db.prepare('SELECT COUNT(*) as n FROM agent_session_changes WHERE message_id >= ? OR (message_id = 0 AND created_at >= ?)').get(prevUser.id, prevUser.created_at).n;
+  let rolledBack = false;
+  if (changesCount > 0) {
+    const turnPath = path.join(BACKUP_DIR, `agent-turn-${prevUser.id}.db`);
+    const snapPath = fs.existsSync(turnPath) ? turnPath : AGENT_CHECKPOINT_PATH;
+    if (fs.existsSync(snapPath)) {
+      restoreTablesFromSnapshot(snapPath);
+      rolledBack = true;
+    }
+    db.prepare('DELETE FROM agent_session_changes WHERE message_id >= ? OR (message_id = 0 AND created_at >= ?)').run(prevUser.id, prevUser.created_at);
+  }
+
+  db.prepare('DELETE FROM agent_messages WHERE id > ?').run(prevUser.id);
+
+  return {
+    ok: true,
+    rolledBack,
+    userMessage: shapeAgentMessage(prevUser),
+  };
 }
 
 module.exports = {
@@ -1962,5 +2086,6 @@ module.exports = {
   exportData, importData,
   getAgentMessages, addAgentMessage, clearAgentMessages, agentMessageCount,
   addAgentAttachment, getAgentAttachment, countAgentAttachments,
-  createAgentCheckpoint, revertAgentCheckpoint, ensureAgentSessionCheckpoint, addAgentChange, getAgentChanges, clearAgentChanges,
+  createAgentCheckpoint, revertAgentCheckpoint, ensureAgentSessionCheckpoint, addAgentChange, getAgentChanges, clearAgentChanges, agentSessionChangeCount,
+  createAgentTurnCheckpoint, setCurrentAgentTurnMsgId, deleteAgentTurn, prepareRegenerateAgentTurn, restoreTablesFromSnapshot,
 };
