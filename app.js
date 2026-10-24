@@ -214,7 +214,28 @@ function md(s) {
      matched as entities here. Lazy matching means a stray or inch-mark quote is
      left as plain text rather than swallowing the rest of the line. */
   t = t.replace(/&quot;(.*?)&quot;/g, '<span class="dlg">$1</span>');
-  return t.replace(/\n/g, '<br>');
+
+  /* Numbered lists: standard markdown allows numbered lists to start at any number
+     (e.g. "3. Three \n 1. Four" or "1. One \n 1. Two"). When consecutive items appear,
+     renumber them starting from the initial number (or 1 if repeated/incremented)
+     so repeated items like 1. \n 1. \n 1. render as 1. \n 2. \n 3. */
+  const lines = t.split('\n');
+  let currentNum = null;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(\s*)(\d+)([.)]\s+)(.*)$/);
+    if (m) {
+      const origNum = parseInt(m[2], 10);
+      if (currentNum === null) {
+        currentNum = origNum;
+      } else {
+        currentNum++;
+      }
+      lines[i] = `${m[1]}${currentNum}${m[3]}${m[4]}`;
+    } else {
+      currentNum = null;
+    }
+  }
+  return lines.join('<br>');
 }
 
 function fmtDate(ts) {
