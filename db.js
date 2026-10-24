@@ -858,13 +858,13 @@ function deleteCharacter(id) {
   return { ok: true };
 }
 
-function createChatInternal(characterId, scenarioId = null) {
+function createChatInternal(characterId, scenarioId = null, initialScenarioContent = null) {
   const c = characterRow(characterId);
   if (!c) throw new Error('Character not found');
   let sc = null;
-  let scenarioContent = '';
+  let scenarioContent = initialScenarioContent != null ? String(initialScenarioContent) : '';
   let initialTitle = 'New chat';
-  if (scenarioId) {
+  if (scenarioId && !scenarioContent) {
     sc = getScenario(scenarioId);
     if (sc) {
       if (!isCharacterAllowedForScenario(sc, characterId)) {
@@ -893,8 +893,8 @@ function createChatInternal(characterId, scenarioId = null) {
   return shapeChat(db.prepare('SELECT * FROM chats WHERE id = ?').get(id));
 }
 
-function createChat(characterId, scenarioId = null) {
-  return createChatInternal(characterId, scenarioId);
+function createChat(characterId, scenarioId = null, initialScenarioContent = null) {
+  return createChatInternal(characterId, scenarioId, initialScenarioContent);
 }
 
 function getChat(id) {

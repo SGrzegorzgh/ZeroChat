@@ -642,6 +642,23 @@
             </div>
 
             <div class="field">
+              <div class="field-tab-header">
+                <label>Freeform scenario</label>
+                <div class="field-actions-row">
+                  <div class="field-tabs">
+                    <button type="button" class="field-tab-btn active" id="ce-scen-tab-edit">Edit</button>
+                    <button type="button" class="field-tab-btn" id="ce-scen-tab-preview">Preview</button>
+                  </div>
+                </div>
+              </div>
+              <div id="ce-scen-edit-wrap">
+                <textarea id="ce-scenario" rows="3" placeholder="Default opening scene when chatting without a scenario... (leave empty for default)"></textarea>
+              </div>
+              <div id="ce-scen-prev-wrap" class="field-preview-box hidden"></div>
+              <p class="m-note">Opening scene used when chatting freeform without a scenario. Supports {{char}} and {{user}}.</p>
+            </div>
+
+            <div class="field">
               <label>Note for user</label>
               <textarea id="ce-note" rows="2" placeholder="A private reminder shown under their name — the model never sees this."></textarea>
             </div>
@@ -989,6 +1006,14 @@
             <div class="ps-card-desc">Start an open chat without any pre-set opening scene or instructions.</div>
           </div>
           <span class="btn btn-ghost sm">Start</span>
+        </div>
+        <div class="ps-quick-card" id="ps-agent-gen-btn">
+          <div class="ps-card-icon">⚡</div>
+          <div class="ps-card-info">
+            <div class="ps-card-title">AI Generated Opening</div>
+            <div class="ps-card-desc">Use the agent model to dynamically create an opening scene tailored to this character and preset.</div>
+          </div>
+          <span class="btn btn-ghost sm" id="ps-agent-gen-badge">Generate</span>
         </div>
         <div class="ps-filter-bar">
           <div class="sidebar-label" style="padding-left:0;margin:0">Available scenarios</div>

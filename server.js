@@ -2273,6 +2273,72 @@ async function route(req, res, u) {
     body.regenerateMessageId = Number(m[1]);
     return startEventStream(res, (emit, ctrl) => runAgentChat(body, emit, ctrl), 'agent-regen');
   }
+  if (req.method === 'POST' && p === '/api/agent/generate-scenario') {
+    const charId = body.characterId;
+    if (!charId) return send(res, 400, { error: 'characterId is required' });
+    const char = db.getCharacter(charId);
+    if (!char) return send(res, 404, { error: 'Character not found' });
+    const settings = db.getSettings();
+    const persona = settings.activePersonalityId ? db.getPersona(settings.activePersonalityId) : null;
+    const presets = db.getPresets();
+    const activePreset = settings.activePresetId ? presets.find((pr) => pr.id === settings.activePresetId) : null;
+    const cfg = resolveAgentConfig(settings);
+
+    const userName = persona ? persona.name : 'the user';
+    const charName = char.name;
+
+    const sysPrompt = [
+      'You are a creative writer and scenario designer for an AI roleplay application.',
+      'Your task is to write a compelling, atmospheric opening scenario / scene to start a new roleplay conversation.',
+      'Requirements:',
+      `- Write purely the scenario text (scene-setting narrative and opening dialogue/action) for the opening turn of a chat between "${userName}" and "${charName}".`,
+      `- Set the physical setting, sensory details, the initial mood/tension, and what brings them together.`,
+      `- Write actions/beats in *asterisks* and spoken dialogue in "double quotes".`,
+      `- Do NOT include meta-commentary, notes, titles, or explanations. Return ONLY the scene text itself.`,
+    ].join('\n');
+
+    const userPromptParts = [
+      `Generate an immersive opening scenario for a new conversation.`,
+      `\nCharacter Profile (${charName}):`,
+      `Description: ${char.description || 'A mysterious character.'}`,
+    ];
+    if (char.scenario) userPromptParts.push(`Character's existing default scene note/idea: ${char.scenario}`);
+    if (persona) {
+      userPromptParts.push(`\nUser Persona (${userName}):\n${persona.description || 'An ordinary person.'}`);
+    }
+    if (activePreset) {
+      userPromptParts.push(`\nActive Roleplay Preset / Style (${activePreset.name}):`);
+      if (activePreset.systemPrompt) userPromptParts.push(activePreset.systemPrompt.trim());
+    }
+
+    const messages = [{ role: 'user', content: userPromptParts.join('\n') }];
+
+    try {
+      let resultText = '';
+      if (!cfg.apiKey && cfg.provider !== 'ollama') {
+        // Fallback when no API key configured: generate a creative themed simulated scene
+        const fallbacks = [
+          `*The air is still, charged with unspoken words. Rain taps rhythmically against the glass as ${charName} looks up, eyes catching yours from across the dimly lit room.*\n\n"I wasn't expecting company today," ${charName} says softly, pausing what they were doing. "What brings you here?"`,
+          `*Shadows lengthen across the quiet room. ${charName} stands near the window, lost in thought, before turning to face you with a quiet, knowing expression.*\n\n"So you finally decided to show up," ${charName} observes, a faint smile playing at the corners of their mouth. "Let's see what happens next."`,
+          `*A gentle breeze drifts through the open doorway. ${charName} pauses mid-motion, noticing your presence, their gaze lingering as a calm silence settles between you.*\n\n"Welcome," ${charName} greets you, stepping forward into the light. "Take a seat. We have plenty to talk about."`
+        ];
+        resultText = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      } else if (cfg.provider === 'anthropic') {
+        const resp = await agentCallAnthropicPlain(cfg, sysPrompt, messages, [], null);
+        resultText = resp.text;
+      } else {
+        const resp = await agentCallOpenAIPlain(cfg, sysPrompt, messages, [], null);
+        resultText = resp.text;
+      }
+
+      resultText = String(resultText || '').trim();
+      if (!resultText) throw new Error('Model produced an empty opening scene');
+      return send(res, 200, { scenario: resultText });
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+
   if (req.method === 'POST' && p === '/api/agent/chat') {
     return startEventStream(res, (emit, ctrl) => runAgentChat(body, emit, ctrl), 'agent');
   }
@@ -2432,7 +2498,7 @@ async function route(req, res, u) {
 
   if (req.method === 'POST' && p === '/api/chats') {
     if (!body.characterId) return send(res, 400, { error: 'characterId is required' });
-    try { return send(res, 200, db.createChat(body.characterId, body.scenarioId || null)); }
+    try { return send(res, 200, db.createChat(body.characterId, body.scenarioId || null, body.initialScenarioContent || null)); }
     catch (e) { return send(res, 400, { error: e.message }); }
   }
   if ((m = p.match(/^\/api\/chats\/([\w-]+)$/)) && req.method === 'DELETE') {

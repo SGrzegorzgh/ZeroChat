@@ -2560,6 +2560,10 @@ input[type="range"] {
   border-color: var(--accent);
   background: var(--panel2);
 }
+.ps-quick-card.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
 .ps-card-icon {
   font-size: 24px;
   flex-shrink: 0;

@@ -820,9 +820,10 @@ async function openCharacter(id, chatId) {
   loadPoses(id);
 }
 
-async function createChatFor(c, scenarioId = null) {
+async function createChatFor(c, scenarioId = null, initialScenarioContent = null) {
   const body = { characterId: c.id };
   if (scenarioId) body.scenarioId = scenarioId;
+  if (initialScenarioContent != null) body.initialScenarioContent = initialScenarioContent;
   const ch = await api('/chats', { method: 'POST', body: JSON.stringify(body) });
   c.chats.unshift(ch);
   ui.activeChatIds[c.id] = ch.id;
@@ -1798,6 +1799,25 @@ function renderCeDescPreview() {
   $('#ce-desc-prev-wrap').innerHTML = renderPreviewMarkdown(raw, ceId, null, charName);
 }
 
+function switchCeScenarioTab(tab) {
+  const isEdit = tab === 'edit';
+  $('#ce-scen-tab-edit')?.classList.toggle('active', isEdit);
+  $('#ce-scen-tab-preview')?.classList.toggle('active', !isEdit);
+  $('#ce-scen-edit-wrap')?.classList.toggle('hidden', !isEdit);
+  $('#ce-scen-prev-wrap')?.classList.toggle('hidden', isEdit);
+  if ($('#ce-scen-prev-wrap')?._resizeBar) {
+    $('#ce-scen-prev-wrap')._resizeBar.classList.toggle('hidden', isEdit);
+  }
+  if (!isEdit) renderCeScenarioPreview();
+}
+
+function renderCeScenarioPreview() {
+  const raw = $('#ce-scenario')?.value || '';
+  const charName = $('#ce-name').value.trim() || 'Character';
+  const el = $('#ce-scen-prev-wrap');
+  if (el) el.innerHTML = renderPreviewMarkdown(raw, ceId, null, charName);
+}
+
 let ceScenSelectedId = null;
 let ceScenTab = 'preview'; // 'preview' | 'vars'
 let ceScenDropdownOpen = false;
@@ -2134,9 +2154,11 @@ function openCharModal(char) {
   $('#ce-poses-enabled').checked = !!(char && char.posesEnabled);
   $('#ce-name').value = char ? char.name : '';
   $('#ce-desc').value = char ? char.description : '';
+  if ($('#ce-scenario')) $('#ce-scenario').value = char ? char.scenario || '' : '';
   $('#ce-note').value = char ? char.note || '' : '';
 
   switchCeDescTab('edit');
+  switchCeScenarioTab('edit');
   closeCeScenPanel();
   renderCeScenActiveCard();
   switchCeScenTab('preview');
@@ -2200,6 +2222,7 @@ async function charFormSave() {
   const body = {
     name,
     description: $('#ce-desc').value.trim(),
+    scenario: ($('#ce-scenario')?.value || '').trim(),
     note: $('#ce-note').value.trim(),
     emoji: ceEmoji,
     avatar: ceAvatar,
@@ -4172,6 +4195,7 @@ function wireEvents() {
   }
   const autoTextareas = [
     { id: '#ce-desc', min: 80, max: 260 },
+    { id: '#ce-scenario', min: 80, max: 260 },
     { id: '#ce-note', min: 54, max: 180 },
     { id: '#se-content', min: 120, max: 340 },
     { id: '#se-desc', min: 54, max: 180 },
@@ -4189,6 +4213,7 @@ function wireEvents() {
   makeElementResizable($('#se-content-prev-wrap'), { min: 110, max: 550, defaultHeight: 180 });
   makeElementResizable($('#ce-scen-preview-text'), { min: 110, max: 550, defaultHeight: 220 });
   makeElementResizable($('#ce-desc-prev-wrap'), { min: 110, max: 550, defaultHeight: 180 });
+  makeElementResizable($('#ce-scen-prev-wrap'), { min: 110, max: 550, defaultHeight: 180 });
 
   $('#persona-sidebar-list')?.addEventListener('click', (e) => {
     const editBtn = e.target.closest('[data-edit-persona]');
@@ -4436,13 +4461,46 @@ function wireEvents() {
   });
   $('#ps-freeform-btn').addEventListener('click', async () => {
     if (!pickScenarioChar) return;
+    const char = pickScenarioChar;
     closeModal('modal-pick-scenario');
     try {
-      await createChatFor(pickScenarioChar, null);
+      ui.activeCharacterId = char.id;
+      await createChatFor(char, null);
       saveUi();
+      closeSidebar();
       renderSidebar();
       renderChat();
+      loadPoses(char.id);
     } catch (e) { toast(e.message); }
+  });
+  $('#ps-agent-gen-btn')?.addEventListener('click', async () => {
+    if (!pickScenarioChar) return;
+    const char = pickScenarioChar;
+    const btn = $('#ps-agent-gen-btn');
+    const badge = $('#ps-agent-gen-badge');
+    if (btn?.classList.contains('loading')) return;
+    btn?.classList.add('loading');
+    if (badge) badge.textContent = 'Generating…';
+    try {
+      const r = await api('/agent/generate-scenario', {
+        method: 'POST',
+        body: JSON.stringify({ characterId: char.id }),
+      });
+      closeModal('modal-pick-scenario');
+      ui.activeCharacterId = char.id;
+      await createChatFor(char, null, r.scenario);
+      saveUi();
+      closeSidebar();
+      renderSidebar();
+      renderChat();
+      loadPoses(char.id);
+    } catch (e) {
+      toast(e.message || 'Failed to generate scenario');
+      alert('Scenario generation failed: ' + (e.message || 'Unknown error'));
+    } finally {
+      btn?.classList.remove('loading');
+      if (badge) badge.textContent = 'Generate';
+    }
   });
   $('#ps-grid').addEventListener('click', async (e) => {
     const card = e.target.closest('.ps-item-card');
@@ -4939,12 +4997,18 @@ function wireEvents() {
   // Character Modal Tabs & Variables events
   $('#ce-tab-edit').addEventListener('click', () => switchCeDescTab('edit'));
   $('#ce-tab-preview').addEventListener('click', () => switchCeDescTab('preview'));
+  $('#ce-scen-tab-edit')?.addEventListener('click', () => switchCeScenarioTab('edit'));
+  $('#ce-scen-tab-preview')?.addEventListener('click', () => switchCeScenarioTab('preview'));
+  $('#ce-scenario')?.addEventListener('input', () => {
+    if ($('#ce-scen-tab-preview')?.classList.contains('active')) renderCeScenarioPreview();
+  });
   $('#ce-desc').addEventListener('input', () => {
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
     updateCeScenPanelUI();
   });
   $('#ce-name').addEventListener('input', () => {
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+    if ($('#ce-scen-tab-preview')?.classList.contains('active')) renderCeScenarioPreview();
     updateCeScenPanelUI();
   });
 
