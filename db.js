@@ -153,6 +153,10 @@ CREATE TABLE IF NOT EXISTS agent_session_changes (
 );
 `);
 ensureColumn('agent_session_changes', 'message_id', 'INTEGER DEFAULT 0');
+/* Images the Agent generated (generate_image / edit_image / apply_image) are
+   tagged with the turn's user message id so deleting/regenerating the turn
+   removes them; user uploads stay at 0 and live until the log is cleared. */
+ensureColumn('agent_attachments', 'message_id', 'INTEGER DEFAULT 0');
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS agent_messages (
@@ -1835,7 +1839,7 @@ function agentMessageCount() {
 
 const ATTACH_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'];
 
-function addAgentAttachment({ name, dataUrl }) {
+function addAgentAttachment({ name, dataUrl, messageId = 0 }) {
   const s = String(dataUrl || '');
   const mm = s.match(/^data:(image\/(?:png|jpe?g|webp|gif|avif));base64,/i);
   if (!mm) throw new Error('Only PNG, JPEG, WebP, AVIF or GIF images can be attached');
@@ -1847,16 +1851,17 @@ function addAgentAttachment({ name, dataUrl }) {
     name: String(name || '').slice(0, 120) || 'image',
     mime,
     dataUrl: s,
+    messageId: Number(messageId) || 0,
     createdAt: Date.now(),
   };
-  db.prepare('INSERT INTO agent_attachments (id, name, mime, data_url, created_at) VALUES (?,?,?,?,?)')
-    .run(a.id, a.name, a.mime, a.dataUrl, a.createdAt);
+  db.prepare('INSERT INTO agent_attachments (id, name, mime, data_url, message_id, created_at) VALUES (?,?,?,?,?,?)')
+    .run(a.id, a.name, a.mime, a.dataUrl, a.messageId, a.createdAt);
   return { id: a.id, name: a.name, mime: a.mime };
 }
 
 function getAgentAttachment(id) {
   const row = db.prepare('SELECT * FROM agent_attachments WHERE id = ?').get(id);
-  return row ? { id: row.id, name: row.name, mime: row.mime, dataUrl: row.data_url, createdAt: row.created_at } : null;
+  return row ? { id: row.id, name: row.name, mime: row.mime, dataUrl: row.data_url, messageId: row.message_id || 0, createdAt: row.created_at } : null;
 }
 
 function countAgentAttachments() {
@@ -2038,6 +2043,9 @@ function deleteAgentTurn(msgId) {
   } catch {}
 
   db.prepare('DELETE FROM agent_messages WHERE id >= ?').run(startId);
+  /* Generated images are tagged with their turn's user message id (user
+     uploads stay at 0), so removing the turn removes the images it made. */
+  db.prepare('DELETE FROM agent_attachments WHERE message_id >= ?').run(userMsgId || startId);
 
   return { ok: true, rolledBack, remainingChanges: agentSessionChangeCount() };
 }
@@ -2065,6 +2073,9 @@ function prepareRegenerateAgentTurn(msgId) {
   }
 
   db.prepare('DELETE FROM agent_messages WHERE id > ?').run(prevUser.id);
+  /* Generated images are tagged with this turn's user message id, so >= (not
+     >) — the user row itself stays, its images do not. */
+  db.prepare('DELETE FROM agent_attachments WHERE message_id >= ?').run(prevUser.id);
 
   return {
     ok: true,

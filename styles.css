@@ -4871,15 +4871,32 @@ body.sidebar-resizing * {
   overflow-x: auto;
   color: var(--muted);
 }
-.agent-tool-img {
-  padding: 0 11px 11px;
+/* Images a turn produced, shown under the reply they belong to. */
+.agent-msg-imgs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 8px;
 }
-.agent-tool-img img {
-  width: 100%;
-  max-height: 240px;
-  object-fit: cover;
-  border-radius: 9px;
+.agent-msg-img {
+  width: 132px;
+  height: 132px;
+  padding: 0;
   border: 1px solid var(--border2);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: zoom-in;
+  background: var(--panel2);
+  transition: border-color 0.15s ease;
+}
+.agent-msg-img:hover {
+  border-color: var(--accent);
+}
+.agent-msg-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .agent-tool-acts {
   display: flex;

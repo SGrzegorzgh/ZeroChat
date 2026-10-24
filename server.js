@@ -1328,6 +1328,37 @@ async function agentImageToDataUrl(src) {
   } finally { clearTimeout(t); }
 }
 
+/* Generated images must outlive the live tool_result event: the stored tool
+   JSON has data URLs sanitized away (multi-MB base64 must never enter the
+   model history), which used to make every image vanish from the drawer as
+   soon as the turn was reloaded. Each produced image is now saved as an agent
+   attachment tagged with the current turn's user message id and referenced by
+   id (`imageId`/`imageUrl`) — the drawer renders it from /api/agent/:id/file
+   forever after. `seen` dedupes within one turn, so apply_image on an image
+   this turn already produced reuses that attachment instead of storing a
+   second copy. */
+async function agentPersistResultImages(result, toolName, turnUserId, seen) {
+  if (!result || typeof result !== 'object' || typeof result.image !== 'string') return result;
+  const img = result.image;
+  let dataUrl = null;
+  if (img.startsWith('data:image')) dataUrl = img;
+  else if (/^https?:\/\//.test(img)) dataUrl = await agentImageToDataUrl(img);
+  if (!dataUrl) return result;
+  try {
+    let id = seen.get(img);
+    if (!id) {
+      const label = toolName === 'edit_image' ? 'Edited image' : toolName === 'apply_image' ? 'Applied image' : 'Generated image';
+      const att = db.addAgentAttachment({ name: label, dataUrl, messageId: turnUserId });
+      id = att.id;
+      seen.set(img, id);
+    }
+    return { ...result, imageId: id, imageUrl: `/api/agent/${id}/file` };
+  } catch (e) {
+    tlog('agent', `image persist failed (image stays live-only): ${e.message}`);
+    return result;
+  }
+}
+
 /* Apply an image (data URL or http url) to a character portrait or pose per the
    shared args shape: character_id, target ("portrait"/"pose"), pose_id,
    pose_name, pose_description, is_default. `apply` (legacy bool) means portrait.
@@ -2134,6 +2165,8 @@ async function runAgentChat(body, emit, ctrl) {
     emit({ type: 'delta', text: t });
   };
   let toolRuns = 0;
+  /* Data URL -> attachment id for images this turn already saved (dedupe). */
+  const turnImageIds = new Map();
 
   try {
     for (let iter = 0; iter < AGENT_MAX_ITERATIONS; iter++) {
@@ -2167,6 +2200,9 @@ async function runAgentChat(body, emit, ctrl) {
             result = { error };
           }
           toolRuns++;
+          /* Save any produced image as a persistent attachment (id-referenced)
+             before the sanitized copy is stored — see agentPersistResultImages. */
+          result = await agentPersistResultImages(result, call.name, userMsgId, turnImageIds);
           tlog('agent', `🔧 tool ${call.name} ${ok ? '✓ ok' : '✗ FAILED'} in ${Date.now() - toolT0}ms` +
             (ok ? ` — result ${JSON.stringify(sanitizeForModel(result)).length}B` : ` — error: ${error}`));
           const trow = db.addAgentMessage({

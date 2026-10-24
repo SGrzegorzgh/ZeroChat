@@ -5583,11 +5583,6 @@ function agentToolCardHtml(mi) {
   const label = agentToolLabel(name);
   const sub = agentToolSummary(name, mi.args, mi.result) || (mi.ok === false && mi.error ? agentTrimLocal(mi.error, 70) : 'done');
   const okCls = mi.ok === false ? 'err' : (mi.pending ? 'pending' : '');
-  const img = mi.result && mi.result.image;
-  // Stored rows keep the sanitizer's placeholder instead of bytes; only real
-  // data URLs / http images can be shown.
-  const hasImg = !!img && typeof img === 'string' && img !== '[image data url, hidden from the model]' &&
-    (img.startsWith('data:image') || /^https?:\/\//.test(img));
   const acts = mi.pending ? '' : agentToolActions(mi);
   let html = `<div class="agent-tool ${okCls}" data-agent-tool="${mi.id || ''}">`;
   html += `<div class="agent-tool-row">`;
@@ -5596,9 +5591,6 @@ function agentToolCardHtml(mi) {
   html += `<svg class="agent-tool-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
   html += `</div>`;
   if (!mi.pending) {
-    if (hasImg) {
-      html += `<div class="agent-tool-img"><img src="${esc(mi.result.image)}" alt="Generated image"></div>`;
-    }
     html += `<div class="agent-tool-details">`;
     if (mi.args) html += `<div class="dt-label">Arguments</div><pre>${esc(JSON.stringify(mi.args, null, 2))}</pre>`;
     if (name === 'read_chat' && mi.ok !== false && mi.result && (mi.result.messages || mi.result.tree)) {
@@ -5616,6 +5608,31 @@ function agentToolCardHtml(mi) {
 function agentTrimLocal(s, n) {
   const t = String(s || '');
   return t.length > n ? t.slice(0, n - 1) + '…' : t;
+}
+
+/* Images a tool produced (generate_image / edit_image / apply_image). The
+   server saves each one as an agent attachment and references it via
+   imageId/imageUrl in the result — the raw data URL is sanitized out of the
+   stored JSON, so only the id survives reloads. Live events carry both. */
+function agentToolResultImages(mi) {
+  const r = mi.result !== undefined ? mi.result : mi.toolResult;
+  if (!r || typeof r !== 'object') return [];
+  const src = r.imageUrl || (r.imageId ? `/api/agent/${r.imageId}/file` : null);
+  if (src) return [{ src, name: r.imageName || (r.applied_to ? 'Applied image' : 'Generated image') }];
+  if (typeof r.image === 'string' && r.image !== '[image data url, hidden from the model]' &&
+    (r.image.startsWith('data:image') || /^https?:\/\//.test(r.image))) {
+    return [{ src: r.image, name: 'Generated image' }];
+  }
+  return [];
+}
+
+/* Thumbnail strip rendered under an assistant reply. */
+function agentMsgImgsHtml(imgs) {
+  if (!imgs.length) return '';
+  return `<div class="agent-msg-imgs">${imgs.map((im) => `
+    <button type="button" class="agent-msg-img" title="${esc(im.name || 'Generated image')}">
+      <img src="${esc(im.src)}" alt="${esc(im.name || 'Generated image')}" loading="lazy">
+    </button>`).join('')}</div>`;
 }
 
 /* read_chat tool results render as a readable transcript / tree in the card
@@ -5785,10 +5802,20 @@ function renderAgent(opts = {}) {
     </div></div>`;
   } else {
     let openToolGroup = false;
+    /* Images this turn's tools produced, flushed under the next assistant
+       reply (or right after the tool group when no reply followed). */
+    let turnImgs = [];
+    const flushTurnImgs = () => {
+      if (turnImgs.length) { html += agentMsgImgsHtml(turnImgs); turnImgs = []; }
+    };
     for (const mi of agentMessages) {
       const role = agentRoles(mi);
-      if (role !== 'tool' && openToolGroup) { html += '</div>'; openToolGroup = false; }
+      if (role !== 'tool' && openToolGroup) {
+        html += '</div>'; openToolGroup = false;
+        if (role !== 'agent') flushTurnImgs();
+      }
       if (role === 'user') {
+        turnImgs = [];
         const idAttr = mi.id ? ` data-id="${mi.id}"` : '';
         html += `<div class="agent-msg user"${idAttr}><div class="agent-bubble agent-md">${agentUserHtml(mi.content || '')}</div>
           <div class="agent-msg-meta"><span class="m-acts-wrap"><span class="m-acts">
@@ -5805,17 +5832,24 @@ function renderAgent(opts = {}) {
             <button data-agent-act="del" class="danger" title="Delete this reply and everything after it">${I.trash}</button>
           </span></span></div>` : '';
           html += `<div class="agent-msg agent"${idAttr}><div class="agent-bubble agent-md${mi.streaming ? ' streaming' : ''}">${agentMd(mi.content)}</div>${acts}</div>`;
+          flushTurnImgs();
         } else if (mi.streaming) {
           html += `<div class="agent-msg agent"${idAttr}><div class="agent-bubble agent-md streaming"></div></div>`;
         }
       } else if (role === 'tool') {
         if (!openToolGroup) { html += `<div class="agent-msg agent tool-group">`; openToolGroup = true; }
+        if (!mi.pending) {
+          for (const im of agentToolResultImages(mi)) {
+            if (!turnImgs.some((x) => x.src === im.src)) turnImgs.push(im);
+          }
+        }
         html += agentToolCardHtml(mi);
       } else if (role === 'error') {
         html += `<div class="agent-msg agent err"><div class="agent-bubble">${esc(mi.text || 'Something went wrong.')}</div></div>`;
       }
     }
     if (openToolGroup) html += '</div>';
+    flushTurnImgs();
   }
   feed.innerHTML = html;
   if (sc) {
@@ -6530,8 +6564,12 @@ function wireAgent() {
       agentEl('#agent-input').focus();
       return;
     }
-    const toolImg = e.target.closest('.agent-tool-img img');
-    if (toolImg) { openViewer(toolImg.src); return; }
+    const galImg = e.target.closest('.agent-msg-img');
+    if (galImg) {
+      const im = galImg.querySelector('img');
+      if (im) openViewer(im.src);
+      return;
+    }
     const chipImg = e.target.closest('.agent-attach-chip[data-att-id] img');
     if (chipImg) { openViewer(chipImg.src); return; }
     const row = e.target.closest('.agent-tool-row');
