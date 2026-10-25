@@ -732,119 +732,213 @@ function buildGroupTurnSystem({ char, persona, chat, cfg, maxBeats }) {
   if (roster.length) {
     parts.push(`Characters in this shared scene:\n` + roster.map((c) => `- "${c.name}": ${ex(c.description) || 'Present in scene.'}`).join('\n'));
   }
+  const otherChars = roster.filter((c) => c.id !== char.id);
+  const secondExample = otherChars[0] ? otherChars[0].name : 'Second Character';
+
   parts.push(styleLine(char, userName));
   parts.push(`MULTI-CHARACTER LENGTH & PACING RULE: each beat stays concise — one or two short sentences of action/expression and 1-2 lines of dialogue — roughly two-thirds of a typical 1-on-1 response, even if the preset asks for long texts.`);
   parts.push(`WHOLE-TURN OUTPUT FORMAT — write the next whole character talk in ONE response:
-- Output only beats, one per line, each starting with the speaker's name in brackets: [${char.name}] *She steps closer to you, studying you.* "Where were you, ${userName}?"
-- The FIRST beat is "${char.name}". Follow with the other characters as the drama needs — a character may speak twice in a row — up to ${maxBeats} beats in total for this turn.
-- Each beat is exactly one character: their own *narration* (written from outside — that character is "she"/"he"/their name and "${userName}" is "you") and their own spoken lines ("...") — NEVER write a beat, quoted line, or action for another character or for "${userName}", and never imitate another character's voice.
-- Stop the turn at the natural pause where "${userName}" would act next. No numbering, no headers, no commentary, nothing out of character — only the beat lines.`);
+- Output only character turns, separating each character's reply with their name in brackets:
+  [${char.name}] *She steps closer to you, studying you.* "Where were you, ${userName}?"
+  [${secondExample}] *He glances between you two, leaning back.* "Give them a moment."
+- The FIRST response is "${char.name}". Follow with the other characters as the drama needs — a character may speak twice in a row — up to ${maxBeats} beats in total for this turn.
+- Each character responds ONLY as themselves: their own *narration* (written from outside — that character is "she"/"he"/their name and "${userName}" is "you") and their own spoken lines ("...") — NEVER write dialogue or actions for another character or for "${userName}", and never imitate another character's voice.
+- Stop the turn at the natural pause where "${userName}" would act next. No numbering, no headers, no commentary, nothing out of character — only the bracketed character replies.`);
   return parts.join('\n\n');
 }
 
 /* Splits a streamed whole-turn answer into per-character beats on the fly.
-   A beat starts at a line whose head names the speaker: "[Name] ..." or
-   "Name: ..." (matched against the chat's roster). Everything before the
-   first header belongs to the opening speaker. */
+   A beat starts at a line whose head names the speaker: "[Name] ...",
+   "**Name:** ...", "Name: ...", etc. Everything before the first recognized
+   header belongs to the opening speaker. */
 function createGroupTurnParser({ roster, initialCharId, initialCharName, onBeatStart, onText, onBeatEnd }) {
-  const norm = roster.map((r) => ({ ...r, key: normName(r.name) }));
+  const rosterTokens = roster.map((r) => {
+    const full = normName(r.name);
+    const parts = r.name.split(/[\s"'\-_.]+/).map(normName).filter((p) => p.length >= 2);
+    const tokens = Array.from(new Set([full, ...parts]));
+    return { ...r, full, tokens };
+  });
+
   const matchName = (raw) => {
     const h = normName(raw);
     if (h.length < 2) return null;
     let best = null;
-    for (const r of norm) {
-      // Substring matches allow honorifics and nicknames in either direction
-      // ("Rex Calder" ↔ roster "Captain Rex Calder").
-      const hit = r.key === h
-        || (r.key.startsWith(h) && h.length >= 3)
-        || (h.startsWith(r.key) && r.key.length >= 3)
-        || (h.length >= 3 && r.key.includes(h))
-        || (r.key.length >= 3 && h.includes(r.key));
-      if (hit && (!best || r.key.length > best.key.length)) best = r;
+    for (const r of rosterTokens) {
+      for (const t of r.tokens) {
+        const hit = t === h
+          || (t.startsWith(h) && h.length >= 3)
+          || (h.startsWith(t) && t.length >= 3)
+          || (h.length >= 3 && t.includes(h))
+          || (t.length >= 3 && h.includes(t));
+        if (hit && (!best || t.length > (best.matchedLen || 0))) {
+          best = { who: r, matchedLen: t.length };
+        }
+      }
     }
-    return best;
+    return best ? best.who : null;
   };
+
   const headerOf = (line) => {
-    let m = line.match(/^\s*\[\s*([^\]]{2,60}?)\s*\]\s*(.*)$/);
-    if (!m) m = line.match(/^\s*([A-Za-z][A-Za-z' .-]{1,49}?)\s*:\s+(.+)$/);
-    if (m) {
-      const who = matchName(m[1]);
-      if (who) return { who, rest: m[2] };
+    const trimmed = line.trim();
+    if (!trimmed) return null;
+
+    const withoutHash = trimmed.replace(/^#{1,6}\s+/, '');
+
+    // 1. Bracketed / wrapped: [Name], **[Name]**, <Name>, (Name), with optional trailing : or -
+    const mBracket = withoutHash.match(/^[*_]*[[<(\]]\s*([^\]>)]+?)\s*[\]>)][*_]*\s*(?:[:\-—–]\s*)?(.*)$/);
+    if (mBracket) {
+      const who = matchName(mBracket[1]);
+      if (who) return { who, rest: mBracket[2] };
     }
+
+    // 2. Bold/italic: **Name:**, **Name**:, **Name -**, or **Name**
+    const mBold = withoutHash.match(/^([*_]{1,3})\s*([^*_\n]+?)\s*\1\s*(.*)$/);
+    if (mBold) {
+      let namePart = mBold[2].trim();
+      let afterPart = mBold[3].trim();
+      if (/[:\-—–]$/.test(namePart)) namePart = namePart.replace(/[:\-—–]+$/, '').trim();
+      if (/^[:\-—–]/.test(afterPart)) afterPart = afterPart.replace(/^[:\-—–]+\s*/, '').trim();
+
+      const who = matchName(namePart);
+      if (who) {
+        const hadSep = /[:\-—–]/.test(mBold[2]) || /[:\-—–]/.test(mBold[3]);
+        if (!afterPart || hadSep || afterPart.startsWith('*') || afterPart.startsWith('"') || afterPart.startsWith('“')) {
+          return { who, rest: afterPart };
+        }
+      }
+    }
+
+    // 3. Plain Name with colon or dash: Name: rest, Name - rest, or Name: on its own line
+    const mPlain = withoutHash.match(/^([A-Za-z][A-Za-z' .\-"]{1,49}?)\s*(?:[:\-—–])\s*(.*)$/);
+    if (mPlain) {
+      const who = matchName(mPlain[1]);
+      if (who) return { who, rest: mPlain[2] };
+    }
+
+    // 4. Standalone name on its own line (e.g. "### Luna", or "Luna" as a header line)
+    if (!/^[*_]/.test(withoutHash)) {
+      const whoAlone = matchName(withoutHash);
+      if (whoAlone && withoutHash.length <= whoAlone.name.length + 8 && !/[.,?!]/.test(withoutHash)) {
+        return { who: whoAlone, rest: '' };
+      }
+    }
+
     return null;
   };
-  // Decide what a fragment (no newline yet) is turning into: a speaker
-  // header to start live, a plain line to flush, or something still forming.
+
+  const couldStartName = (frag) => {
+    const k = normName(frag);
+    if (!k) return true;
+    for (const r of rosterTokens) {
+      for (const t of r.tokens) {
+        if (t.startsWith(k) || k.startsWith(t)) return true;
+      }
+    }
+    return false;
+  };
+
   const tryHeader = (s) => {
-    if (s.startsWith('[')) {
-      const close = s.indexOf(']');
-      if (close === -1) return { act: 'hold' }; // speaker name still being typed
-      const who = matchName(s.slice(1, close));
-      if (who) return { act: 'start', who, rest: s.slice(close + 1) };
-      return { act: 'flush' };
+    if (/^[*#_]*[[<(\]]/.test(s)) {
+      if (!/[\]>)]/.test(s)) return { act: 'hold' };
     }
-    const k = normName(s);
-    if (!k || k.length < 2) return { act: 'hold' }; // too little to judge
-    if (!/[A-Z]/.test(s[0])) return { act: 'flush' }; // tags start capitalized
-    const c = s.indexOf(':');
-    if (c !== -1 && (/^\s/.test(s.slice(c + 1)) || s.slice(c + 1) === '')) {
-      const who = matchName(s.slice(0, c));
-      if (who) return { act: 'start', who, rest: s.slice(c + 1) };
-      return { act: 'flush' };
+    const mStars = s.match(/^([*_]{1,3})/);
+    if (mStars) {
+      const stars = mStars[1];
+      if (!s.slice(stars.length).includes(stars)) {
+        const inner = s.slice(stars.length);
+        if (couldStartName(inner)) return { act: 'hold' };
+        return { act: 'flush' };
+      }
     }
-    if (c !== -1) return { act: 'flush' }; // stray colon mid-prose
-    for (const r of norm) {
-      if (r.key.startsWith(k) || (k.length >= 3 && r.key.includes(k))) return { act: 'hold' };
+    if (/^#{1,6}/.test(s)) {
+      return { act: 'hold' };
     }
+
+    const h = headerOf(s);
+    if (h) return { act: 'start', who: h.who, rest: h.rest };
+
+    if (/^[A-Z]/.test(s)) {
+      if (couldStartName(s)) return { act: 'hold' };
+    }
+
     return { act: 'flush' };
   };
+
   let pending = '';
   let cur = { charId: initialCharId, charName: initialCharName, text: '' };
   let open = false;
+  let lineStarted = false;
+
   const flushText = (t) => { if (t) { cur.text += t; onText(cur, t); } };
+
   const newBeat = (head) => {
-    onBeatEnd(cur, open);
+    if (cur.text.trim()) {
+      onBeatEnd(cur, open);
+    }
     cur = { charId: head.who.id, charName: head.who.name, text: '' };
     open = true;
     onBeatStart(cur);
-    if (head.rest) flushText(head.rest);
+    if (head.rest) {
+      flushText(head.rest);
+      lineStarted = true;
+    } else {
+      lineStarted = false;
+    }
   };
+
   const feed = (chunk) => { pending += chunk; drain(false); };
+
   const drain = (final) => {
     while (true) {
       const nk = pending.indexOf('\n');
       if (nk === -1) {
         if (final) {
-          if (pending.trim()) {
+          if (!lineStarted && pending.trim()) {
             const head = headerOf(pending);
             if (head) newBeat(head);
             else flushText(pending);
+          } else {
+            flushText(pending);
           }
           pending = '';
           return;
         }
-        // A header can start the new beat as soon as it is recognizable
-        // ("]" closed, or "Name:" with the name matched) — everything after
-        // it streams live into the new beat instead of popping in at the
-        // newline.
-        const t = tryHeader(pending.replace(/^\s+/, ''));
-        if (t.act === 'hold') return;
-        if (t.act === 'start') {
-          pending = '';
-          newBeat({ who: t.who, rest: t.rest.replace(/^\s+/, '') });
-          return;
+
+        // Only check for header if we are at the start of a line!
+        if (!lineStarted) {
+          const s = pending.replace(/^\s+/, '');
+          const t = tryHeader(s);
+          if (t.act === 'hold') return;
+          if (t.act === 'start') {
+            pending = '';
+            newBeat({ who: t.who, rest: t.rest.replace(/^\s+/, '') });
+            return;
+          }
         }
+
         flushText(pending);
+        if (pending.length > 0) lineStarted = true;
         pending = '';
         return;
       }
+
       const line = pending.slice(0, nk);
       pending = pending.slice(nk + 1);
-      const head = headerOf(line);
-      if (head) newBeat(head);
-      else flushText(line + '\n');
+
+      if (!lineStarted && line.trim()) {
+        const head = headerOf(line);
+        if (head) {
+          newBeat(head);
+          lineStarted = false;
+          continue;
+        }
+      }
+
+      flushText(line + '\n');
+      lineStarted = false;
     }
   };
+
   const end = () => { drain(true); onBeatEnd(cur, open); };
   return { feed, end };
 }
@@ -862,6 +956,7 @@ async function runGroupTurn({ chat, anchorId, primary, persona, settings, poses,
   let lastNode = null;
   let sawBeat = false;
   let beatCount = 0;
+  let startedBeats = 0;
 
   async function beatDone(beat) {
     beatCount++;
@@ -898,7 +993,10 @@ async function runGroupTurn({ chat, anchorId, primary, persona, settings, poses,
     onBeatStart: (beat) => {
       // The stream starts on the primary character; every later beat switch
       // (back and forth) is announced so the client re-labels the bubble.
-      if (beatCount > 0) emit({ type: 'next_char', characterId: beat.charId, charName: beat.charName });
+      startedBeats++;
+      if (startedBeats > 1 || beat.charId !== primary.id) {
+        emit({ type: 'next_char', characterId: beat.charId, charName: beat.charName });
+      }
     },
     onText: (beat, t) => { emit({ type: 'delta', text: t, characterId: beat.charId }); },
     onBeatEnd: (beat) => { beatQueue = beatQueue.then(() => beatDone(beat)).catch((e) => console.error('[ai] beat save failed:', e.message)); },
