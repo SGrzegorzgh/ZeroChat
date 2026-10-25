@@ -1185,7 +1185,20 @@ async function regenMsg(id) {
   const chat = c && activeChat(c);
   const node = chat && chat.tree.nodes[id];
   if (!node || node.role !== 'char' || typing) return;
-  await generateReplyAt(node.parent, { characterId: node.characterId || null });
+  const isMulti = Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+  if (!isMulti) {
+    await generateReplyAt(node.parent, { characterId: node.characterId || null });
+    return;
+  }
+  // Group chats regenerate the whole character talk: rewind to the start of
+  // the turn (the node after the user's message) like the server does.
+  let startId = node.parent;
+  for (let i = 0; i < 100; i++) {
+    const n = chat.tree.nodes[startId];
+    if (!n || n.role !== 'char') break;
+    startId = n.parent;
+  }
+  await generateReplyAt(startId, {});
 }
 
 function poseRevertNote(prevPoseId, chat) {

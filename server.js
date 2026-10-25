@@ -745,6 +745,41 @@ async function pickNextSpeaker(chatId, fromNodeId, chars, settings, signal) {
   }
 }
 
+/* Continuation of a multi-character turn after its first reply: the turn
+   director picks the next speaker — any member of the room, even the
+   character who just spoke, or nobody (yield to the user). Without a live
+   API key it falls back to the fixed character order. Shared by the message
+   and regenerate endpoints. */
+async function runGroupFollowups({ chatId, firstReplyId, firstCharId, persona, settings, signal, emit }) {
+  let freshChat = db.getChat(chatId);
+  const groupCharIds = (freshChat && freshChat.characterIds) || [];
+  const maxRounds = Math.min(groupCharIds.length, Number(settings.multiCharMaxRounds) || 2);
+  const groupChars = groupCharIds.map((cid) => db.getCharacter(cid)).filter(Boolean);
+  const fallbackIds = groupCharIds.filter((cid) => cid !== firstCharId);
+  let fbIdx = 0;
+  let lastReplyId = firstReplyId;
+  for (let rIdx = 0; rIdx < maxRounds - 1 && (!signal || !signal.aborted); rIdx++) {
+    const pick = await pickNextSpeaker(chatId, lastReplyId, groupChars, settings, signal);
+    let nextChar;
+    if (pick && pick.ok) {
+      nextChar = pick.charId ? groupChars.find((c) => c.id === pick.charId) || null : null;
+    } else {
+      nextChar = groupChars.find((c) => c.id === fallbackIds[fbIdx]) || null;
+      fbIdx++;
+    }
+    if (!nextChar) break;
+    emit({ type: 'next_char', characterId: nextChar.id, charName: nextChar.name });
+    const text = await generateReplyStream(nextChar, db.pathNodes(freshChat.tree, lastReplyId), persona, settings, (d) => {
+      emit({ type: 'delta', text: d, characterId: nextChar.id });
+    }, signal, freshChat);
+    const reply = db.addReply(chatId, lastReplyId, text, { characterId: nextChar.id });
+    lastReplyId = reply.id;
+    freshChat = db.getChat(chatId);
+    emit({ type: 'reply_saved', chat: freshChat, node: reply });
+  }
+  return { chat: freshChat, lastReplyId };
+}
+
 async function maybeGenerateChatTitle(chatId) {
   const settings = db.getSettings();
   if (settings.autoTitleEnabled === false) return null;
@@ -3313,34 +3348,9 @@ function parseOpeningGeneration(text, characters) {
         const groupCharIds = freshChat.characterIds || [];
         if (groupCharIds.length > 1 && !ctrl.signal.aborted) {
           emit({ type: 'reply_saved', chat: freshChat, node: reply });
-          const maxRounds = Math.min(groupCharIds.length, Number(settings.multiCharMaxRounds) || 2);
-          const groupChars = groupCharIds.map((cid) => db.getCharacter(cid)).filter(Boolean);
-          const fallbackIds = groupCharIds.filter((cid) => cid !== char.id);
-          let fbIdx = 0;
-          for (let rIdx = 0; rIdx < maxRounds - 1 && !ctrl.signal.aborted; rIdx++) {
-            if (ctrl.signal.aborted) break;
-            // The turn director picks the next speaker — any member of the
-            // room, even the character who just spoke, or nobody (yield to
-            // the user). Without a live key, fall back to the fixed order.
-            const pick = await pickNextSpeaker(chat.id, reply.id, groupChars, settings, ctrl.signal);
-            let nextChar;
-            if (pick && pick.ok) {
-              nextChar = pick.charId ? groupChars.find((c) => c.id === pick.charId) || null : null;
-            } else {
-              nextChar = groupChars.find((c) => c.id === fallbackIds[fbIdx]) || null;
-              fbIdx++;
-            }
-            if (!nextChar) break;
-            emit({ type: 'next_char', characterId: nextChar.id, charName: nextChar.name });
-            let streamed2 = '';
-            const reply2Text = await generateReplyStream(nextChar, db.pathNodes(freshChat.tree, reply.id), persona, settings, (d) => {
-              streamed2 += d;
-              emit({ type: 'delta', text: d, characterId: nextChar.id });
-            }, ctrl.signal, freshChat);
-            reply = db.addReply(chat.id, reply.id, reply2Text, { characterId: nextChar.id });
-            freshChat = db.getChat(chat.id);
-            emit({ type: 'reply_saved', chat: freshChat, node: reply });
-          }
+          const turn = await runGroupFollowups({ chatId: chat.id, firstReplyId: reply.id, firstCharId: char.id, persona, settings, signal: ctrl.signal, emit });
+          freshChat = turn.chat;
+          reply = (turn.lastReplyId && turn.lastReplyId !== reply.id) ? (freshChat.tree.nodes[turn.lastReplyId] || reply) : reply;
         }
 
         try {
@@ -3384,16 +3394,34 @@ function parseOpeningGeneration(text, characters) {
     const chat = db.getChat(m[1]);
     if (!chat) return send(res, 404, { error: 'Chat not found' });
     const targetCharId = (body.characterId && db.getCharacter(body.characterId)) ? body.characterId : chat.characterId;
-    const char = db.getCharacter(targetCharId);
+    let char = db.getCharacter(targetCharId);
     if (!char) return send(res, 404, { error: 'Character not found' });
     const asUser = Boolean(body.asUser);
     const guidance = typeof body.guidance === 'string' ? body.guidance : '';
-    const parentId = body.parentId && chat.tree.nodes[body.parentId] ? body.parentId : db.treeTip(chat.tree);
+    let parentId = body.parentId && chat.tree.nodes[body.parentId] ? body.parentId : db.treeTip(chat.tree);
     if (parentId === 'root' || !parentId) return send(res, 400, { error: 'Nothing to reply to yet' });
     const settings = db.getSettings();
     const persona = settings.activePersonalityId
       ? db.getPersona(settings.activePersonalityId)
       : null;
+    // In group chats, regenerating a character message redoes the whole
+    // character talk: rewind to the start of that turn (the node the last
+    // user message / opening spawned) and let the turn director run again.
+    // A manual "let X speak" (appending after the current tip) is untouched.
+    const hasReplacedChild = !!db.activeChildId(chat.tree, parentId);
+    const isGroupRegen = !asUser && Array.isArray(chat.characterIds) && chat.characterIds.length > 1 && hasReplacedChild;
+    if (isGroupRegen) {
+      let cur = parentId;
+      for (let i = 0; i < 200; i++) {
+        const n = chat.tree.nodes[cur];
+        if (!n || n.role !== 'char') break;
+        cur = n.parent;
+      }
+      if (cur && cur !== 'root' && chat.tree.nodes[cur] && cur !== parentId) {
+        parentId = cur;
+        char = db.getCharacter(chat.characterId) || char;
+      }
+    }
     const path = db.pathNodes(chat.tree, parentId);
     const poses = db.getPoses(chat.characterId, { withImages: false });
     const pcfg = poseCfg(settings);
@@ -3464,12 +3492,18 @@ function parseOpeningGeneration(text, characters) {
         if (posePromise) pose = await Promise.race([posePromise, new Promise((r) => setTimeout(() => r(null), 6000))]);
         const chosen = pose && pose.changed ? pose : null;
         if (chosen) { try { db.setChatPose(chat.id, chosen.poseId); } catch {} }
-        const reply = db.addReply(chat.id, parentId, text, {
+        let reply = db.addReply(chat.id, parentId, text, {
           poseId: chosen ? chosen.poseId : null,
           characterId: char.id,
         });
         if (chosen) emit({ type: 'pose', poseId: chosen.poseId, poseName: chosen.poseName, confidence: chosen.confidence });
-        const freshChat = db.getChat(chat.id);
+        let freshChat = db.getChat(chat.id);
+        if (isGroupRegen && freshChat.characterIds && freshChat.characterIds.length > 1 && !ctrl.signal.aborted) {
+          emit({ type: 'reply_saved', chat: freshChat, node: reply });
+          const turn = await runGroupFollowups({ chatId: chat.id, firstReplyId: reply.id, firstCharId: char.id, persona, settings, signal: ctrl.signal, emit });
+          freshChat = turn.chat;
+          if (turn.lastReplyId && turn.lastReplyId !== reply.id) reply = freshChat.tree.nodes[turn.lastReplyId] || reply;
+        }
         try {
           const newTitle = await maybeGenerateChatTitle(chat.id);
           if (newTitle) freshChat.title = newTitle;
