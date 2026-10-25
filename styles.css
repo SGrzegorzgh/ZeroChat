@@ -313,6 +313,11 @@ body.sidebar-open #scrim {
 .chat-bg-layer.active {
   opacity: 1;
 }
+/* Split layouts show both characters at once, each on half the screen. */
+#chat-bg.split-tb .chat-bg-layer:nth-child(1) { inset: 0 0 50% 0; }
+#chat-bg.split-tb .chat-bg-layer:nth-child(2) { inset: 50% 0 0 0; }
+#chat-bg.split-lr .chat-bg-layer:nth-child(1) { inset: 0 50% 0 0; }
+#chat-bg.split-lr .chat-bg-layer:nth-child(2) { inset: 0 0 0 50%; }
 #chat-view::after {
   content: '';
   position: absolute;

@@ -505,6 +505,29 @@
 
           <div class="settings-section-title">Reading &amp; Background Display</div>
           <div class="field">
+            <label>Background layout</label>
+            <select id="set-bgmode">
+              <option value="single">Single image</option>
+              <option value="split-tb">Split top / bottom (group chats)</option>
+              <option value="split-lr">Split left / right (group chats)</option>
+            </select>
+            <p class="m-note">Group chats can share the background between the first two characters' artworks.</p>
+          </div>
+          <div class="field">
+            <label>Background character</label>
+            <select id="set-bgchar">
+              <option value="">Chat's own character</option>
+            </select>
+            <p class="m-note">Pin one character's artwork as the background instead.</p>
+          </div>
+          <div class="field">
+            <label>Background image display</label>
+            <select id="set-bgfit">
+              <option value="contain">Original aspect (smaller, whole image)</option>
+              <option value="cover">Crop to screen (fills edge to edge)</option>
+            </select>
+          </div>
+          <div class="field">
             <label>Chat background opacity <span class="val" id="bgop-val"></span></label>
             <input type="range" id="set-bgop" min="0" max="100" step="1">
             <p class="m-note">Shows the character's full artwork softly behind the message feed. 0% hides it.</p>

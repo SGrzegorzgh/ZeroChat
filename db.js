@@ -575,6 +575,9 @@ const SETTINGS_DEFAULTS = {
   bgOpacity: 0.35,
   bgBlur: 0,
   actionDim: 0.72,
+  bgMode: 'single',
+  bgSingleCharId: null,
+  bgFit: 'contain',
   activePresetId: null,
   poseAgent: false,
   poseProvider: 'openrouter',
@@ -632,7 +635,7 @@ function getSettings() {
 function updateSettings(patch) {
   const allowed = [
     'provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId',
-    'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey',
+    'bgOpacity', 'bgBlur', 'actionDim', 'bgMode', 'bgSingleCharId', 'bgFit', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey',
     'poseModel', 'poseLikelihood', 'poseRecheck', 'poseContextCount', 'agentImageModel', 'agentImageEditModel',
     'agentImageBaseUrl', 'agentImageApiKey', 'agentReasoning',
     'agentOverride', 'agentProvider', 'agentBaseUrl', 'agentApiKey', 'agentModel',
@@ -645,6 +648,9 @@ function updateSettings(patch) {
     let v = patch[k];
     if (k === 'bgOpacity') v = clamp(v, 0, 1, 0.35);
     if (k === 'bgBlur') v = clamp(v, 0, 24, 0);
+    if (k === 'bgMode') v = ['single', 'split-tb', 'split-lr'].includes(String(v)) ? String(v) : 'single';
+    if (k === 'bgFit') v = ['cover', 'contain'].includes(String(v)) ? String(v) : 'contain';
+    if (k === 'bgSingleCharId') v = v || null;
     if (k === 'actionDim') v = clamp(v, 0.3, 1, 0.72);
     if (k === 'temperature') v = clamp(v, 0, 2, 0.8);
     if (k === 'poseLikelihood') v = clamp(v, 0, 1, 0.6);

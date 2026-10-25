@@ -118,6 +118,7 @@ Characters have multiple poses (`poses` table) containing an image and descripti
 - **Decision Engine**: Instead of an expensive, slow full-blown LLM with tool calling, the agent uses **Jev**, a fast, low-cost System One decision model specializing in choosing an option based on text input.
 - **Pose Stamps on Nodes**: When a pose changes, `node.poseId` is saved on the character's reply node.
 - **Branch-Accurate Reverts**: Visual poses revert accurately when navigating branches or deleting messages.
+- **Chat Background Modes** (`bgMode`, `bgFit`, `bgSingleCharId` settings, rewritten `applyChatBg` / new `bgImageForChar` in `app.js`): group chats can split the backdrop between the first two characters (`split-tb` = top/bottom halves, `split-lr` = left/right halves, positioned by `#chat-bg.split-tb`/`#chat-bg.split-lr` CSS rules); `bgFit` selects `cover` (crop to screen) vs `contain` (original aspect); `bgSingleCharId` pins one manually-picked character's artwork as the backdrop in every chat. Per-character lookups prefer that character's stamped pose on the active path (group chats), then the chat-level pose, then the character's own image.
 
 ### 4.3 Clean Composer & Steer Scene (OOC)
 - Normal chat input sends messages directly to the character (`sendUser`).
@@ -179,8 +180,8 @@ The Agent is a long-running assistant conversation stored in `agent_messages` (o
   - `parseOpeningGeneration` in server.js parses model output: prefers a JSON `{ scenario, messages[] }` object (name-based character matching), falls back to `Name: dialogue` / `<Name>: …` line formats.
 - **Turn System**:
   - Each character is represented by their own persona and prompt context in the room.
-  - In response to user messages, characters take sequential turns (up to `multiCharMaxRounds`, default: 2) speaking to each other and the user before yielding turn back to the user.
-  - Multi-character replies are deliberately kept short: `buildSystemText` injects a length/pacing rule ("roughly HALF the length of a typical 1-on-1 response", one beat, yield the scene) that overrides preset instructions to write long, and `generateReplyStream` halves `max_tokens` (`cfg.maxTokens * 0.5`, or 512 when unset) for group replies.
+  - After the first character replies, a **turn director** (`pickNextSpeaker` in `server.js`) asks the chat's own model who speaks next from the group roster — any member (even the character who just spoke), or `NONE` to yield back to the user. Without a live API key it falls back to the fixed character order. Turn length stays bounded by `multiCharMaxRounds` (default: 2 replies per user message).
+  - Multi-character replies are deliberately kept short: `buildSystemText` injects a length/pacing rule ("roughly a third shorter than a typical 1-on-1 response", one beat, yield the scene) that overrides preset instructions to write long, and `generateReplyStream` reduces `max_tokens` (`cfg.maxTokens / 1.5`, or 340 when unset) for group replies.
   - Each reply is persisted the moment it finishes and announced with a `reply_saved` event (chat tree + node id); the client adopts the fresh tree and advances `typingAt`, so earlier characters' replies stay on screen while the next character streams (`renderChat` resolves the streaming character via `streaming.characterId` and renders its own avatar + speaker badge, including the waiting "dots" state).
   - Messages display speaker name badges (`.msg-speaker-badge`) and character-specific avatars/poses; clicking a message's avatar opens the image viewer for the speaker who wrote that message (`node.characterId`), not the chat's primary character.
   - The composer's ⚡ popover provides "Let [Character] speak" actions for manual turn prompting.

@@ -455,8 +455,31 @@ function renderHeader() {
   }
 }
 
-let currentBgSrc = null;
+let currentBgKey = null;
 let currentBgLayer = 0;
+
+/* Full backdrop image for a character in the current chat: their stamped
+   pose on the active path (group chats stamp poses per message), or the
+   chat-level pose, with the character's own artwork as fallback. */
+function bgImageForChar(c) {
+  if (!c) return null;
+  if (!c.posesEnabled) return fullImageSrc(c);
+  const chat = activeChat(c);
+  if (chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1) {
+    const nodes = pathOf(chat.tree, typing && typingAt ? typingAt : null);
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      if (n.characterId === c.id && n.poseId) {
+        const p = poseById(c.id, n.poseId);
+        if (p && poseBackdrop(p)) return poseBackdrop(p);
+      }
+    }
+  } else {
+    const p = poseBackdrop(currentPose());
+    if (p) return p;
+  }
+  return fullImageSrc(c);
+}
 
 function applyChatBg() {
   const c = activeChar();
@@ -475,26 +498,70 @@ function applyChatBg() {
     layers = bg.querySelectorAll('.chat-bg-layer');
   }
 
-  const src = (c && op > 0) ? ((c.posesEnabled && poseBackdrop(currentPose())) || fullImageSrc(c)) : null;
+  const s = state.settings;
+  const mode = ['split-tb', 'split-lr'].includes(s.bgMode) ? s.bgMode : 'single';
+  const fit = s.bgFit === 'cover' ? 'cover' : 'contain';
+  const chat = activeChat(c);
+  const isMulti = !!(chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1);
+  const split = isMulti && mode !== 'single' && op > 0;
 
-  if (!src) {
-    currentBgSrc = null;
-    layers.forEach((l) => l.classList.remove('active'));
+  // Resolve one or two backdrop sources
+  let srcs = [];
+  if (c && op > 0) {
+    const picked = s.bgSingleCharId ? state.characters.find((x) => x.id === s.bgSingleCharId) : null;
+    if (picked) {
+      srcs = [bgImageForChar(picked)];
+    } else if (split) {
+      const group = (chat.characterIds || []).slice(0, 2)
+        .map((id) => state.characters.find((x) => x.id === id)).filter(Boolean);
+      srcs = group.length === 2 ? group.map((g) => bgImageForChar(g)) : [bgImageForChar(group[0] || c)];
+    } else {
+      srcs = [bgImageForChar(c)];
+    }
+  }
+  srcs = srcs.filter(Boolean);
+
+  const layout = split && srcs.length === 2 ? mode : '';
+  bg.classList.toggle('split-tb', layout === 'split-tb');
+  bg.classList.toggle('split-lr', layout === 'split-lr');
+
+  if (!srcs.length) {
+    currentBgKey = null;
+    layers.forEach((l) => { l.classList.remove('active'); l.style.backgroundImage = ''; });
     bg.classList.add('none');
     return;
   }
-
   bg.classList.remove('none');
-  if (src === currentBgSrc) return;
 
-  currentBgSrc = src;
-  const nextIdx = (currentBgLayer + 1) % layers.length;
-  const curLayer = layers[currentBgLayer];
+  const key = [layout, fit, ...srcs].join('|');
+  if (key === currentBgKey) return;
+  currentBgKey = key;
+
+  const setLayer = (l, src) => {
+    l.style.backgroundImage = src ? `url("${src.replace(/"/g, '\\"')}")` : '';
+    l.style.backgroundSize = fit;
+    l.style.backgroundPosition = 'center';
+    l.style.backgroundRepeat = 'no-repeat';
+  };
+
+  if (layout) {
+    // Split mode shows both characters at once — set the pair directly.
+    layers.forEach((l, i) => {
+      setLayer(l, srcs[i] || '');
+      l.classList.add('active');
+    });
+    return;
+  }
+
+  // Single image: alternate the two layers so the swap crossfades.
+  const src = srcs[0];
+  const nextIdx = layout ? 0 : ((currentBgLayer + 1) % layers.length);
+  const curLayer = layers[nextIdx === 0 ? 1 : 0];
   const nextLayer = layers[nextIdx];
 
   const activate = () => {
-    if (currentBgSrc !== src) return;
-    nextLayer.style.backgroundImage = `url("${src.replace(/"/g, '\\"')}")`;
+    if (currentBgKey !== key) return;
+    setLayer(nextLayer, src);
     void nextLayer.offsetWidth;
     nextLayer.classList.add('active');
     if (curLayer) curLayer.classList.remove('active');
@@ -1586,6 +1653,9 @@ function getModalSnapshot(id) {
       temperature: +($('#set-temp')?.value || 1),
       bgOpacity: Math.round(+($('#set-bgop')?.value || 50)),
       bgBlur: Math.round(+($('#set-bgblur')?.value || 12)),
+      bgMode: $('#set-bgmode')?.value || 'single',
+      bgSingleCharId: $('#set-bgchar')?.value || null,
+      bgFit: $('#set-bgfit')?.value || 'contain',
       actionDim: Math.round(+($('#set-actdim')?.value || 65)),
       poseAgent: Boolean($('#pose-agent')?.checked),
       poseRecheck: Boolean($('#pose-recheck')?.checked),
@@ -2741,6 +2811,12 @@ function openSettings(tab = 'ai') {
   $('#bgop-val').textContent = Math.round((+s.bgOpacity || 0) * 100) + '%';
   $('#set-bgblur').value = +s.bgBlur || 0;
   $('#bgblur-val').textContent = (+s.bgBlur || 0) + 'px';
+  $('#set-bgmode').value = ['split-tb', 'split-lr'].includes(s.bgMode) ? s.bgMode : 'single';
+  const bgSel = $('#set-bgchar');
+  bgSel.innerHTML = `<option value="">Chat's own character</option>` +
+    state.characters.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+  bgSel.value = state.characters.some((x) => x.id === s.bgSingleCharId) ? s.bgSingleCharId : '';
+  $('#set-bgfit').value = s.bgFit === 'cover' ? 'cover' : 'contain';
   const dimPct = Math.round((Number.isFinite(+s.actionDim) ? +s.actionDim : 0.72) * 100);
   $('#set-actdim').value = dimPct;
   $('#actdim-val').textContent = dimPct + '%';
@@ -3091,6 +3167,9 @@ async function settingsSave() {
     temperature: +$('#set-temp').value,
     bgOpacity: +$('#set-bgop').value / 100,
     bgBlur: +$('#set-bgblur').value,
+    bgMode: $('#set-bgmode').value || 'single',
+    bgSingleCharId: $('#set-bgchar').value || null,
+    bgFit: $('#set-bgfit').value || 'contain',
     actionDim: +$('#set-actdim').value / 100,
     poseAgent: $('#pose-agent').checked,
     poseRecheck: $('#pose-recheck').checked,

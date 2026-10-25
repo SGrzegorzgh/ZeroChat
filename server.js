@@ -378,7 +378,7 @@ function buildSystemText(char, persona, hasInjection, cfg, scenarioText, chatOrS
         `\nStay in character strictly as "${char.name}". Do NOT generate dialogue or actions for "${userName}" or ${otherChars.map((oc) => `"${oc.name}"`).join(', ')}. Speak only for yourself as "${char.name}".`);
       parts.push(`MULTI-CHARACTER RESPONSE LENGTH & PACING RULE:
 This is a shared group roleplay with multiple active characters and "${userName}".
-Keep your response concise, reactive, and roughly HALF the length of a typical 1-on-1 roleplay response (even if the active preset or general instructions request long or multi-paragraph responses).
+Keep your response concise, reactive, and roughly a third shorter than a typical 1-on-1 roleplay response (about two-thirds the usual length — even if the active preset or general instructions request long or multi-paragraph responses).
 Write a single focused beat: one or two short sentences of action/expression and 1-2 lines of dialogue. Never write monologues or monopolize the conversation. Yield the scene naturally so the other characters and "${userName}" have room to speak.`);
     }
   }
@@ -700,6 +700,51 @@ async function generateChatTitle(chatId) {
   }
 }
 
+/* Group-chat turn director: after each character reply, the chat's own model
+   decides who speaks next. Any member of the room may be picked — even the
+   character who just spoke — or nobody, handing the scene back to the user. */
+async function pickNextSpeaker(chatId, fromNodeId, chars, settings, signal) {
+  const out = { ok: false, charId: null };
+  const cfg = resolveAiConfig(settings);
+  if (!cfg.apiKey && cfg.provider !== 'ollama') return out; // caller falls back to fixed order
+  const chat = db.getChat(chatId);
+  if (!chat) return out;
+  const persona = settings.activePersonalityId ? db.getPersona(settings.activePersonalityId) : null;
+  const userName = persona ? persona.name : 'the user';
+  const nodes = db.pathNodes(chat.tree, fromNodeId)
+    .filter((n) => n.role === 'user' || n.role === 'char')
+    .slice(-14);
+  const transcript = nodes.map((n) => {
+    const who = n.role === 'user' ? userName : (n.characterId ? ((db.getCharacter(n.characterId) || {}).name || 'Character') : 'Character');
+    return `${who}: ${(n.content || '').replace(/\s+/g, ' ').slice(0, 260)}`;
+  }).join('\n');
+  const roster = chars.map((c) => `- ${c.name}: ${(c.description || '').replace(/\s+/g, ' ').slice(0, 120) || 'Present in scene.'}`).join('\n');
+  const sys = 'You are the scene director of a multi-character roleplay conversation. After every message a character decides who speaks next. The available characters are:\n' + roster +
+    '\nRules: keep the flow natural and playful. A character MAY speak twice in a row when it fits the drama, and MAY stay silent for a while so the others act. Reply with EXACTLY ONE character name to have them speak next, or the single word NONE if it is the user\'s turn to act (most turns should end this way, since the user drives the story). Reply with nothing else.';
+  const user = `User (plays as "${userName}"). Recent conversation:\n${transcript}\n\nName the next speaker (one name, or NONE):`;
+  try {
+    const raced = await Promise.race([
+      (cfg.provider === 'anthropic'
+        ? agentCallAnthropicPlain(cfg, sys, [{ role: 'user', content: user }], [], signal)
+        : agentCallOpenAIPlain(cfg, sys, [{ role: 'user', content: user }], [], signal)),
+      new Promise((r) => setTimeout(() => r(null), 45000)),
+    ]);
+    if (!raced) return out;
+    const t = (raced.text || '').trim().toUpperCase().slice(0, 80);
+    out.ok = true;
+    if (!t || /^(NONE|NO ?ONE|PASS|USER|THE USER|END|STOP|YIELD|SILENCE)/.test(t)) return out;
+    const first = t.split(/[.,!"'\n/:—-]/)[0].trim();
+    for (const c of [...chars].sort((a, b) => b.name.length - a.name.length)) {
+      const nrm = c.name.toUpperCase();
+      if (t.includes(nrm) || (first && nrm.includes(first) && first.length >= 3)) { out.charId = c.id; return out; }
+    }
+    return out;
+  } catch (e) {
+    console.error('[turn] director failed:', e.message);
+    return out;
+  }
+}
+
 async function maybeGenerateChatTitle(chatId) {
   const settings = db.getSettings();
   if (settings.autoTitleEnabled === false) return null;
@@ -775,7 +820,7 @@ async function generateReplyStream(char, nodes, persona, settings, onDelta, sign
     const call = (emit) => {
       const body = { model: cfg.model, system: systemText, messages: history, stream: true };
       let maxTokens = cfg.maxTokens || 1024;
-      if (isMulti) maxTokens = Math.max(128, Math.round(maxTokens * 0.5));
+      if (isMulti) maxTokens = Math.max(160, Math.round(maxTokens / 1.5));
       if (cfg.reasoning === 'off') {
         body.thinking = { type: 'disabled' };
       } else if (cfg.reasoning !== 'default') {
@@ -798,9 +843,9 @@ async function generateReplyStream(char, nodes, persona, settings, onDelta, sign
     const out = { model: cfg.model, messages: [{ role: 'system', content: systemText }, ...history], stream: true };
     if (typeof cfg.temperature === 'number') out.temperature = cfg.temperature;
     if (cfg.maxTokens) {
-      out.max_tokens = isMulti ? Math.max(128, Math.round(cfg.maxTokens * 0.5)) : cfg.maxTokens;
+      out.max_tokens = isMulti ? Math.max(160, Math.round(cfg.maxTokens / 1.5)) : cfg.maxTokens;
     } else if (isMulti) {
-      out.max_tokens = 512;
+      out.max_tokens = 340;
     }
     if (cfg.reasoning === 'off') {
       if (cfg.provider === 'openrouter') out.reasoning = { enabled: false };
@@ -3269,12 +3314,23 @@ function parseOpeningGeneration(text, characters) {
         if (groupCharIds.length > 1 && !ctrl.signal.aborted) {
           emit({ type: 'reply_saved', chat: freshChat, node: reply });
           const maxRounds = Math.min(groupCharIds.length, Number(settings.multiCharMaxRounds) || 2);
-          const otherCharIds = groupCharIds.filter((cid) => cid !== char.id);
-          for (let rIdx = 0; rIdx < otherCharIds.length && rIdx < maxRounds - 1; rIdx++) {
+          const groupChars = groupCharIds.map((cid) => db.getCharacter(cid)).filter(Boolean);
+          const fallbackIds = groupCharIds.filter((cid) => cid !== char.id);
+          let fbIdx = 0;
+          for (let rIdx = 0; rIdx < maxRounds - 1 && !ctrl.signal.aborted; rIdx++) {
             if (ctrl.signal.aborted) break;
-            const nextCharId = otherCharIds[rIdx];
-            const nextChar = db.getCharacter(nextCharId);
-            if (!nextChar) continue;
+            // The turn director picks the next speaker — any member of the
+            // room, even the character who just spoke, or nobody (yield to
+            // the user). Without a live key, fall back to the fixed order.
+            const pick = await pickNextSpeaker(chat.id, reply.id, groupChars, settings, ctrl.signal);
+            let nextChar;
+            if (pick && pick.ok) {
+              nextChar = pick.charId ? groupChars.find((c) => c.id === pick.charId) || null : null;
+            } else {
+              nextChar = groupChars.find((c) => c.id === fallbackIds[fbIdx]) || null;
+              fbIdx++;
+            }
+            if (!nextChar) break;
             emit({ type: 'next_char', characterId: nextChar.id, charName: nextChar.name });
             let streamed2 = '';
             const reply2Text = await generateReplyStream(nextChar, db.pathNodes(freshChat.tree, reply.id), persona, settings, (d) => {
