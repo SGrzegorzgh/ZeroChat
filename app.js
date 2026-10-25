@@ -4480,6 +4480,9 @@ function wireEvents() {
     { id: '#pf-note', min: 54, max: 160 },
     { id: '#pr-sys', min: 80, max: 300 },
     { id: '#pose-desc', min: 54, max: 180 },
+    { id: '#sa-idea-input', min: 54, max: 180 },
+    { id: '#sa-refine-input', min: 54, max: 180 },
+    { id: '#sa-draft-scenario', min: 88, max: 260 },
   ];
   for (const item of autoTextareas) {
     const el = $(item.id);
@@ -4933,6 +4936,7 @@ function wireEvents() {
         </div>
         <textarea class="sa-textarea sa-msg-input" data-sa-content="${i}" rows="2">${esc(m.content || '')}</textarea>
       </div>`).join('');
+    for (const ta of $$('.sa-msg-input')) makeTextareaAutoResize(ta, { min: 54, max: 200 });
     wrap.classList.remove('hidden');
     $('#sa-start-chat-btn').disabled = false;
   }

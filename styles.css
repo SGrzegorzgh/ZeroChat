@@ -2782,9 +2782,11 @@ input[type="range"] {
   align-items: flex-end;
   gap: 10px;
 }
-.sa-input-row .sa-textarea {
+.sa-input-wrap {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .sa-input-row .btn {
   flex: none;

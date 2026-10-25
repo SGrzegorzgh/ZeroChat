@@ -2657,8 +2657,35 @@ function parseOpeningGeneration(text, characters) {
     }
   }
 
+  // 1b. Models often emit JSON whose string values contain unescaped quotes,
+  // which JSON.parse rejects. Recover the fields from their structure instead.
+  const looksJson = /"(?:scenario|messages)"\s*:/.test(text || '');
+  if (!messages.length && looksJson) {
+    const unescapeLoose = (s) => s.replace(/\\"/g, '"').replace(/\\n/g, '\n');
+    if (!scenario) {
+      const sm = (text || '').match(/"scenario"\s*:\s*"([\s\S]*?)"\s*(?=,\s*"(?:messages|characters)"|\s*\})/);
+      if (sm) scenario = unescapeLoose(sm[1]).trim();
+    }
+    const itemRe = /\{\s*"(?:name|character|characterName)"\s*:\s*"([^"\n]+)"\s*,\s*"(?:content|message|text|dialogue)"\s*:\s*"([\s\S]*?)"\s*\}/g;
+    for (const m of (text || '').matchAll(itemRe)) {
+      const content = unescapeLoose(m[2]).trim();
+      if (!content) continue;
+      const name = m[1].trim();
+      const matched = characters.find((c) =>
+        c.name.toLowerCase() === name.toLowerCase() ||
+        c.name.toLowerCase().includes(name.toLowerCase()) ||
+        name.toLowerCase().includes(c.name.toLowerCase())
+      );
+      messages.push({
+        characterId: matched ? matched.id : characters[0].id,
+        characterName: matched ? matched.name : name,
+        content,
+      });
+    }
+  }
+
   // 2. Fallback: parse lines with character names if no messages found
-  if (!messages.length) {
+  if (!messages.length && !looksJson) {
     const lines = (text || '').split('\n');
     const scenLines = [];
     let currentMsg = null;
@@ -2705,7 +2732,10 @@ function parseOpeningGeneration(text, characters) {
   }
 
   if (!scenario) {
-    scenario = (text || '').trim() || '*The air is charged with anticipation as the scene begins.*';
+    scenario = looksJson ? '' : (text || '').trim();
+  }
+  if (!scenario) {
+    scenario = '*The air is charged with anticipation as the scene begins.*';
   }
 
   return { scenario, messages };
@@ -2743,6 +2773,7 @@ function parseOpeningGeneration(text, characters) {
       chars.map((c) => `    { "name": "${c.name}", "content": "*Brief action/expression* \\"Opening dialogue line\\"" }`).join(',\n'),
       '  ]',
       '}',
+      'The output must pass JSON.parse: escape every double quote inside a string value as \\" (or use single quotes inside dialogue).',
     ].join('\n');
 
     const userPromptParts = [
@@ -2818,6 +2849,7 @@ function parseOpeningGeneration(text, characters) {
       `    { "name": "${char.name}", "content": "*Brief action/expression* \\"Opening dialogue line\\"" }`,
       '  ]',
       '}',
+      'The output must pass JSON.parse: escape every double quote inside a string value as \\" (or use single quotes inside dialogue).',
     ].join('\n');
 
     const userPromptParts = [
@@ -2886,6 +2918,7 @@ function parseOpeningGeneration(text, characters) {
       chars.map((c) => `    { "name": "${c.name}", "content": "*Brief action/expression* \\"Opening dialogue line\\"" }`).join(',\n'),
       '  ]',
       '}',
+      'The output must pass JSON.parse: escape every double quote inside a string value as \\" (or use single quotes inside dialogue).',
       'Rules:',
       `- Feature ${chars.map((c) => `"${c.name}"`).join(', ')} together with "${userName}".`,
       `- Write actions/beats in *asterisks* and spoken dialogue in "double quotes".`,
