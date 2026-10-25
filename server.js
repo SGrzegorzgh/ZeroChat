@@ -376,6 +376,10 @@ function buildSystemText(char, persona, hasInjection, cfg, scenarioText, chatOrS
       parts.push(`Other characters present in this shared scene:\n` +
         otherChars.map((oc) => `- "${oc.name}": ${ex(oc.description) || 'Present in scene.'}`).join('\n') +
         `\nStay in character strictly as "${char.name}". Do NOT generate dialogue or actions for "${userName}" or ${otherChars.map((oc) => `"${oc.name}"`).join(', ')}. Speak only for yourself as "${char.name}".`);
+      parts.push(`MULTI-CHARACTER RESPONSE LENGTH & PACING RULE:
+This is a shared group roleplay with multiple active characters and "${userName}".
+Keep your response concise, reactive, and roughly HALF the length of a typical 1-on-1 roleplay response (even if the active preset or general instructions request long or multi-paragraph responses).
+Write a single focused beat: one or two short sentences of action/expression and 1-2 lines of dialogue. Never write monologues or monopolize the conversation. Yield the scene naturally so the other characters and "${userName}" have room to speak.`);
     }
   }
 
@@ -745,10 +749,14 @@ async function generateReplyStream(char, nodes, persona, settings, onDelta, sign
   const scenarioText = scenarioNode ? scenarioNode.content : (char.scenario || '');
   const systemText = buildSystemText(char, persona, built.hasInjection, cfg, scenarioText, chatOrScenario, asUser, guidance);
 
+  const isMulti = chatOrScenario && Array.isArray(chatOrScenario.characterIds) && chatOrScenario.characterIds.length > 1;
+
   if (!cfg.apiKey && cfg.provider !== 'ollama') {
     let text;
     if (asUser) {
       text = `*I take a breath, meeting ${char.name}'s gaze.* "I hear you," I say. "Let's see where this road leads, then."`;
+    } else if (isMulti) {
+      text = `*${char.name} nods briefly toward the group.* "I hear you. Let's see what the others think."`;
     } else {
       const candidates = SIMULATED_FALLBACKS;
       const picked = candidates[Math.floor(Math.random() * candidates.length)];
@@ -767,6 +775,7 @@ async function generateReplyStream(char, nodes, persona, settings, onDelta, sign
     const call = (emit) => {
       const body = { model: cfg.model, system: systemText, messages: history, stream: true };
       let maxTokens = cfg.maxTokens || 1024;
+      if (isMulti) maxTokens = Math.max(128, Math.round(maxTokens * 0.5));
       if (cfg.reasoning === 'off') {
         body.thinking = { type: 'disabled' };
       } else if (cfg.reasoning !== 'default') {
@@ -788,7 +797,11 @@ async function generateReplyStream(char, nodes, persona, settings, onDelta, sign
   const call = (emit) => {
     const out = { model: cfg.model, messages: [{ role: 'system', content: systemText }, ...history], stream: true };
     if (typeof cfg.temperature === 'number') out.temperature = cfg.temperature;
-    if (cfg.maxTokens) out.max_tokens = cfg.maxTokens;
+    if (cfg.maxTokens) {
+      out.max_tokens = isMulti ? Math.max(128, Math.round(cfg.maxTokens * 0.5)) : cfg.maxTokens;
+    } else if (isMulti) {
+      out.max_tokens = 512;
+    }
     if (cfg.reasoning === 'off') {
       if (cfg.provider === 'openrouter') out.reasoning = { enabled: false };
       else out.reasoning_effort = 'none';
@@ -2599,6 +2612,105 @@ async function route(req, res, u) {
     body.regenerateMessageId = Number(m[1]);
     return startEventStream(res, (emit, ctrl) => runAgentChat(body, emit, ctrl), 'agent-regen');
   }
+function parseOpeningGeneration(text, characters) {
+  let scenario = '';
+  const messages = [];
+
+  // 1. Try JSON extraction first
+  let json = null;
+  try {
+    let clean = (text || '').trim();
+    if (clean.startsWith('```')) {
+      clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    }
+    const s = clean.indexOf('{');
+    const e = clean.lastIndexOf('}');
+    if (s !== -1 && e > s) {
+      json = JSON.parse(clean.slice(s, e + 1));
+    }
+  } catch {}
+
+  if (json && typeof json === 'object') {
+    if (typeof json.scenario === 'string') scenario = json.scenario.trim();
+    else if (typeof json.scene === 'string') scenario = json.scene.trim();
+
+    const rawMsgs = Array.isArray(json.messages)
+      ? json.messages
+      : (Array.isArray(json.characters) ? json.characters : []);
+
+    for (const item of rawMsgs) {
+      if (!item) continue;
+      const content = String(item.content || item.message || item.text || item.dialogue || '').trim();
+      if (!content) continue;
+      const name = String(item.name || item.character || item.characterName || '').trim();
+      const matched = characters.find((c) =>
+        c.id === item.characterId ||
+        c.name.toLowerCase() === name.toLowerCase() ||
+        c.name.toLowerCase().includes(name.toLowerCase()) ||
+        name.toLowerCase().includes(c.name.toLowerCase())
+      );
+      messages.push({
+        characterId: matched ? matched.id : characters[0].id,
+        characterName: matched ? matched.name : (name || characters[0].name),
+        content,
+      });
+    }
+  }
+
+  // 2. Fallback: parse lines with character names if no messages found
+  if (!messages.length) {
+    const lines = (text || '').split('\n');
+    const scenLines = [];
+    let currentMsg = null;
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      let matchedChar = null;
+      let dialogueRest = '';
+      for (const c of characters) {
+        const patterns = [
+          new RegExp(`^<${c.name}>\\s*[:\\-]?\\s*(.*)$`, 'i'),
+          new RegExp(`^\\*\\*${c.name}\\*\\*\\s*[:\\-]?\\s*(.*)$`, 'i'),
+          new RegExp(`^\\*${c.name}\\*\\s*[:\\-]?\\s*(.*)$`, 'i'),
+          new RegExp(`^${c.name}\\s*[:\\-]\\s*(.*)$`, 'i'),
+        ];
+        for (const pat of patterns) {
+          const m = line.match(pat);
+          if (m) {
+            matchedChar = c;
+            dialogueRest = m[1].trim();
+            break;
+          }
+        }
+        if (matchedChar) break;
+      }
+
+      if (matchedChar) {
+        if (currentMsg) messages.push(currentMsg);
+        currentMsg = {
+          characterId: matchedChar.id,
+          characterName: matchedChar.name,
+          content: dialogueRest || line,
+        };
+      } else if (currentMsg) {
+        currentMsg.content += '\n' + line;
+      } else {
+        scenLines.push(line);
+      }
+    }
+    if (currentMsg) messages.push(currentMsg);
+    if (!scenario) scenario = scenLines.join('\n\n').trim();
+  }
+
+  if (!scenario) {
+    scenario = (text || '').trim() || '*The air is charged with anticipation as the scene begins.*';
+  }
+
+  return { scenario, messages };
+}
+
   if (req.method === 'POST' && p === '/api/agent/generate-group-scenario') {
     const charIds = Array.isArray(body.characterIds) ? body.characterIds : [];
     if (charIds.length < 2) return send(res, 400, { error: 'At least 2 characters are required for a group scenario' });
@@ -2616,18 +2728,25 @@ async function route(req, res, u) {
 
     const sysPrompt = [
       'You are a creative writer and scenario designer for an AI roleplay application.',
-      'Your task is to write a compelling, atmospheric opening scenario / scene to start a shared multi-character roleplay conversation.',
+      'Your task is to write a compelling, atmospheric opening scene for a multi-character roleplay conversation.',
       'Requirements:',
-      `- Feature ALL participating characters in the scene together with "${userName}": ${chars.map((c) => `"${c.name}"`).join(', ')}.`,
-      `- Set the physical setting, the sensory atmosphere, what brings everyone together in the room or location, and the opening tension.`,
-      `- Give at least one or two characters an opening line of dialogue or action to start the conversation naturally.`,
+      `- Feature ALL participating characters together in the scene with "${userName}": ${chars.map((c) => `"${c.name}"`).join(', ')}.`,
+      `- Set the physical space, sensory atmosphere, and what brings everyone together.`,
+      `- Provide individual opening responses for the characters present to naturally start the conversation.`,
       `- Write actions/beats in *asterisks* and spoken dialogue in "double quotes".`,
-      `- Label spoken lines clearly so it is obvious which character is speaking.`,
-      `- Do NOT include meta-commentary, titles, or notes. Return ONLY the scene text itself.`,
+      `- Do NOT generate lines or actions for "${userName}".`,
+      'OUTPUT FORMAT:',
+      'You MUST return a JSON object with this exact schema without markdown backticks or extra commentary:',
+      '{',
+      '  "scenario": "A descriptive scene setup paragraph setting the room, location, and atmosphere without dialogue.",',
+      '  "messages": [',
+      chars.map((c) => `    { "name": "${c.name}", "content": "*Brief action/expression* \\"Opening dialogue line\\"" }`).join(',\n'),
+      '  ]',
+      '}',
     ].join('\n');
 
     const userPromptParts = [
-      `Generate an immersive opening scenario bringing these characters and the user together:`,
+      `Generate an immersive opening scene bringing these characters and the user together:`,
       `User Persona (${userName}): ${persona ? persona.description : 'A participant.'}`,
       `Characters present:`,
       ...chars.map((c) => `- ${c.name}: ${c.description || 'A character.'}`),
@@ -2639,17 +2758,203 @@ async function route(req, res, u) {
     const messages = [{ role: 'user', content: userPromptParts.join('\n\n') }];
 
     try {
-      let scenarioText = '';
       if (!cfg.apiKey && cfg.provider !== 'ollama') {
-        scenarioText = `*The room is quiet as ${charNames} gather near the table, their gazes turning toward ${userName}. A tension lingers in the air, waiting for the first word to break the silence.*\n\n*${chars[0].name} looks up first, speaking with measured calm:* "We are all here now. Let us begin."`;
-      } else if (cfg.provider === 'anthropic') {
+        const simScenario = `*The room is quiet as ${charNames} gather near the table, their gazes turning toward ${userName}. A tension lingers in the air, waiting for the first word to break the silence.*`;
+        const simMsgs = [
+          { characterId: chars[0].id, characterName: chars[0].name, content: `*${chars[0].name} leans forward, amber eyes focused and measured.* "We are all here now. Let us begin."` },
+          { characterId: chars[1].id, characterName: chars[1].name, content: `*${chars[1].name} crosses her arms with a faint smirk, observing ${userName}.* "I'm curious to see how this plays out."` },
+        ];
+        if (chars.length > 2) {
+          for (let i = 2; i < chars.length; i++) {
+            simMsgs.push({ characterId: chars[i].id, characterName: chars[i].name, content: `*${chars[i].name} stands near the edge of the light, watchful.* "Let's hear what brought us here."` });
+          }
+        }
+        return send(res, 200, { scenario: simScenario, messages: simMsgs });
+      }
+
+      let raw = '';
+      if (cfg.provider === 'anthropic') {
         const resp = await agentCallAnthropicPlain(cfg, sysPrompt, messages, [], null);
-        scenarioText = resp.text.trim();
+        raw = resp.text.trim();
       } else {
         const resp = await agentCallOpenAIPlain(cfg, sysPrompt, messages, [], null);
-        scenarioText = resp.text.trim();
+        raw = resp.text.trim();
       }
-      return send(res, 200, { scenario: scenarioText });
+      const parsed = parseOpeningGeneration(raw, chars);
+      return send(res, 200, { scenario: parsed.scenario, messages: parsed.messages });
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && p === '/api/agent/generate-scenario') {
+    const charId = body.characterId;
+    if (!charId) return send(res, 400, { error: 'characterId is required' });
+    const char = db.getCharacter(charId);
+    if (!char) return send(res, 404, { error: 'Character not found' });
+
+    const settings = db.getSettings();
+    const persona = settings.activePersonalityId ? db.getPersona(settings.activePersonalityId) : null;
+    const presets = db.getPresets();
+    const activePreset = settings.activePresetId ? presets.find((pr) => pr.id === settings.activePresetId) : null;
+    const cfg = resolveAgentConfig(settings);
+
+    const userName = persona ? persona.name : 'the user';
+
+    const sysPrompt = [
+      'You are a creative writer and scenario designer for an AI roleplay application.',
+      'Your task is to write a compelling, atmospheric opening scene for a roleplay conversation.',
+      'Requirements:',
+      `- Feature "${char.name}" and "${userName}" in an engaging opening setup.`,
+      `- Set the physical space, sensory atmosphere, and context of the encounter.`,
+      `- Give "${char.name}" an opening action and line of dialogue to greet or confront "${userName}".`,
+      `- Write actions/beats in *asterisks* and spoken dialogue in "double quotes".`,
+      `- Do NOT generate lines or actions for "${userName}".`,
+      'OUTPUT FORMAT:',
+      'You MUST return a JSON object with this exact schema without markdown backticks or extra commentary:',
+      '{',
+      '  "scenario": "A descriptive scene setup paragraph setting the room, location, and atmosphere without dialogue.",',
+      '  "messages": [',
+      `    { "name": "${char.name}", "content": "*Brief action/expression* \\"Opening dialogue line\\"" }`,
+      '  ]',
+      '}',
+    ].join('\n');
+
+    const userPromptParts = [
+      `Generate an immersive opening scene between "${char.name}" and "${userName}":`,
+      `User Persona (${userName}): ${persona ? persona.description : 'A participant.'}`,
+      `Character (${char.name}): ${char.description || 'A character.'}`,
+    ];
+    if (char.scenario) {
+      userPromptParts.push(`Character background / default context:\n${char.scenario}`);
+    }
+    if (activePreset && activePreset.systemPrompt) {
+      userPromptParts.push(`\nActive Roleplay Preset / Style (${activePreset.name}):\n${activePreset.systemPrompt.trim()}`);
+    }
+
+    const messages = [{ role: 'user', content: userPromptParts.join('\n\n') }];
+
+    try {
+      if (!cfg.apiKey && cfg.provider !== 'ollama') {
+        const simScenario = `*The light filters quietly through the blinds, casting long shadows across the room as ${char.name} looks up, taking in ${userName}'s arrival.*`;
+        const simMsgs = [
+          { characterId: char.id, characterName: char.name, content: `*${char.name} sets aside what they were holding, eyes meeting yours.* "I was wondering when you would find your way here. Sit down."` },
+        ];
+        return send(res, 200, { scenario: simScenario, messages: simMsgs });
+      }
+
+      let raw = '';
+      if (cfg.provider === 'anthropic') {
+        const resp = await agentCallAnthropicPlain(cfg, sysPrompt, messages, [], null);
+        raw = resp.text.trim();
+      } else {
+        const resp = await agentCallOpenAIPlain(cfg, sysPrompt, messages, [], null);
+        raw = resp.text.trim();
+      }
+      const parsed = parseOpeningGeneration(raw, [char]);
+      return send(res, 200, { scenario: parsed.scenario, messages: parsed.messages });
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+
+  if (req.method === 'POST' && p === '/api/agent/assist-scenario') {
+    const charIds = Array.isArray(body.characterIds) && body.characterIds.length ? body.characterIds : (body.characterId ? [body.characterId] : []);
+    if (!charIds.length) return send(res, 400, { error: 'characterIds or characterId is required' });
+    const chars = charIds.map((id) => db.getCharacter(id)).filter(Boolean);
+    if (!chars.length) return send(res, 404, { error: 'Characters not found' });
+
+    const settings = db.getSettings();
+    const persona = settings.activePersonalityId ? db.getPersona(settings.activePersonalityId) : null;
+    const presets = db.getPresets();
+    const activePreset = settings.activePresetId ? presets.find((pr) => pr.id === settings.activePresetId) : null;
+    const cfg = resolveAgentConfig(settings);
+
+    const userName = persona ? persona.name : 'the user';
+    const idea = typeof body.idea === 'string' ? body.idea.trim() : '';
+    const feedback = typeof body.feedback === 'string' ? body.feedback.trim() : '';
+    const currentDraft = body.currentDraft && typeof body.currentDraft === 'object' ? body.currentDraft : null;
+
+    const sysPrompt = [
+      'You are a creative writer and scenario designer for an AI roleplay application.',
+      'Your task is to collaborate with the user to draft and fine-tune an opening scene for a roleplay conversation.',
+      'Format requirements:',
+      'You MUST return a valid JSON object with this exact schema without markdown backticks or extra commentary:',
+      '{',
+      '  "scenario": "A descriptive scene setup paragraph setting the room, location, and atmosphere without dialogue.",',
+      '  "messages": [',
+      chars.map((c) => `    { "name": "${c.name}", "content": "*Brief action/expression* \\"Opening dialogue line\\"" }`).join(',\n'),
+      '  ]',
+      '}',
+      'Rules:',
+      `- Feature ${chars.map((c) => `"${c.name}"`).join(', ')} together with "${userName}".`,
+      `- Write actions/beats in *asterisks* and spoken dialogue in "double quotes".`,
+      `- Do NOT generate lines or actions for "${userName}".`,
+    ].join('\n');
+
+    const userPromptParts = [];
+    userPromptParts.push(`User Persona (${userName}): ${persona ? persona.description : 'A participant.'}`);
+    userPromptParts.push(`Characters present:\n` + chars.map((c) => `- ${c.name}: ${c.description || 'A character.'}`).join('\n'));
+    if (activePreset && activePreset.systemPrompt) {
+      userPromptParts.push(`Active Preset Style (${activePreset.name}):\n${activePreset.systemPrompt.trim()}`);
+    }
+
+    if (currentDraft && feedback) {
+      userPromptParts.push(`CURRENT OPENING DRAFT TO REFINE:`);
+      userPromptParts.push(`Scene Setting (scenario):\n${currentDraft.scenario || ''}`);
+      if (Array.isArray(currentDraft.messages) && currentDraft.messages.length) {
+        userPromptParts.push(`Opening Messages:\n` + currentDraft.messages.map((m) => `${m.characterName || 'Character'}: ${m.content}`).join('\n'));
+      }
+      userPromptParts.push(`USER INSTRUCTIONS / CHANGES REQUESTED:\n"${feedback}"\nRewrite and refine the scenario and character opening messages to incorporate these changes.`);
+    } else {
+      if (idea) {
+        userPromptParts.push(`USER'S SCENE IDEA / PREMISE:\n"${idea}"\nDraft an evocative opening scene based on this premise.`);
+      } else {
+        userPromptParts.push(`INVENT A NEW PREMISE:\nCreate an evocative, engaging, and original opening scene that fits the characters and atmosphere.`);
+      }
+    }
+
+    const messages = [{ role: 'user', content: userPromptParts.join('\n\n') }];
+
+    try {
+      if (!cfg.apiKey && cfg.provider !== 'ollama') {
+        let simScenario = '';
+        let simMsgs = [];
+        if (currentDraft && feedback) {
+          simScenario = (currentDraft.scenario || '') + `\n\n*(Adjusted for: ${feedback})*`;
+          simMsgs = chars.map((c, idx) => ({
+            characterId: c.id,
+            characterName: c.name,
+            content: `*${c.name} shifts their stance, tone reflecting the new direction.* "Understood. Let's see how this unfolds."`,
+          }));
+        } else if (idea) {
+          simScenario = `*The scene opens around your premise: "${idea}". The environment hums with ambient atmosphere as ${chars.map((c) => c.name).join(' and ')} take their places.*`;
+          simMsgs = chars.map((c) => ({
+            characterId: c.id,
+            characterName: c.name,
+            content: `*${c.name} turns toward ${userName}.* "Everything is in place. Are you ready?"`,
+          }));
+        } else {
+          simScenario = `*An unexpected encounter brings ${chars.map((c) => c.name).join(' and ')} together with ${userName} in a dimly lit, atmospheric sanctuary as rain whispers against the glass.*`;
+          simMsgs = chars.map((c) => ({
+            characterId: c.id,
+            characterName: c.name,
+            content: `*${c.name} looks up with measured interest.* "You're finally here. We should talk."`,
+          }));
+        }
+        return send(res, 200, { scenario: simScenario, messages: simMsgs });
+      }
+
+      let raw = '';
+      if (cfg.provider === 'anthropic') {
+        const resp = await agentCallAnthropicPlain(cfg, sysPrompt, messages, [], null);
+        raw = resp.text.trim();
+      } else {
+        const resp = await agentCallOpenAIPlain(cfg, sysPrompt, messages, [], null);
+        raw = resp.text.trim();
+      }
+      const parsed = parseOpeningGeneration(raw, chars);
+      return send(res, 200, { scenario: parsed.scenario, messages: parsed.messages });
     } catch (e) {
       return send(res, 400, { error: e.message });
     }
@@ -2816,7 +3121,7 @@ async function route(req, res, u) {
   if (req.method === 'POST' && p === '/api/chats') {
     if (!body.characterId && (!body.characterIds || !body.characterIds.length)) return send(res, 400, { error: 'characterId or characterIds is required' });
     const primaryId = body.characterId || body.characterIds[0];
-    try { return send(res, 200, db.createChat(primaryId, body.scenarioId || null, body.initialScenarioContent || null, body.characterIds || null)); }
+    try { return send(res, 200, db.createChat(primaryId, body.scenarioId || null, body.initialScenarioContent || null, body.characterIds || null, body.initialMessages || null)); }
     catch (e) { return send(res, 400, { error: e.message }); }
   }
   if ((m = p.match(/^\/api\/chats\/([\w-]+)\/compact$/)) && req.method === 'POST') {
@@ -2928,6 +3233,7 @@ async function route(req, res, u) {
         let freshChat = db.getChat(chat.id);
         const groupCharIds = freshChat.characterIds || [];
         if (groupCharIds.length > 1 && !ctrl.signal.aborted) {
+          emit({ type: 'reply_saved', chat: freshChat, node: reply });
           const maxRounds = Math.min(groupCharIds.length, Number(settings.multiCharMaxRounds) || 2);
           const otherCharIds = groupCharIds.filter((cid) => cid !== char.id);
           for (let rIdx = 0; rIdx < otherCharIds.length && rIdx < maxRounds - 1; rIdx++) {
@@ -2943,6 +3249,7 @@ async function route(req, res, u) {
             }, ctrl.signal, freshChat);
             reply = db.addReply(chat.id, reply.id, reply2Text, { characterId: nextChar.id });
             freshChat = db.getChat(chat.id);
+            emit({ type: 'reply_saved', chat: freshChat, node: reply });
           }
         }
 

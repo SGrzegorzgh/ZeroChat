@@ -171,13 +171,18 @@ The Agent is a long-running assistant conversation stored in `agent_messages` (o
 - **Database Tracking**: Saved via `db.renameChat(id, title, true)` with `chats.auto_titled = 1`.
 
 ### 4.9 Multi-Character Group Chats & Turn Orchestration
-- **Creation (`POST /api/agent/generate-group-scenario` & `POST /api/chats`)**:
+- **Creation (`POST /api/agent/generate-group-scenario`, `POST /api/agent/assist-scenario` & `POST /api/chats`)**:
   - Supports selecting 2 or more characters (`chats.character_ids`).
   - Supports Freeform openings and AI-generated multi-character opening scenes featuring all participants and the user persona. Static scenarios and variable matrices are restricted from multi-character chats.
+  - AI-generated openings return `{ scenario, messages }`: an atmosphere-only scene setting plus one opening message **per character**. `createChat` (`db.js`) accepts `initialScenarioContent` as an object with a `messages` array and splices each one into the tree as a separate character node (`node.characterId` + default pose) after the scenario node — so singles and groups both render per-character opening windows instead of `<char>: <dialogue>` clumps.
+  - The **AI Assisted Scenario Generator** (`🪄` card in the scenario picker / group modal, `#modal-scenario-assistant`) lets the user give an idea (or none), generate a draft, edit the scene text and each character's opening lines inline, request changes ("make the rain heavier"), rewrite individual openings (↻), and press "Start chat" (`aiDraft` / `renderAssistantDraft` / `syncAssistantDraft` in app.js; same flow for single and multi chats).
+  - `parseOpeningGeneration` in server.js parses model output: prefers a JSON `{ scenario, messages[] }` object (name-based character matching), falls back to `Name: dialogue` / `<Name>: …` line formats.
 - **Turn System**:
   - Each character is represented by their own persona and prompt context in the room.
   - In response to user messages, characters take sequential turns (up to `multiCharMaxRounds`, default: 2) speaking to each other and the user before yielding turn back to the user.
-  - Messages display speaker name badges (`.msg-speaker-badge`) and character-specific avatars/poses.
+  - Multi-character replies are deliberately kept short: `buildSystemText` injects a length/pacing rule ("roughly HALF the length of a typical 1-on-1 response", one beat, yield the scene) that overrides preset instructions to write long, and `generateReplyStream` halves `max_tokens` (`cfg.maxTokens * 0.5`, or 512 when unset) for group replies.
+  - Each reply is persisted the moment it finishes and announced with a `reply_saved` event (chat tree + node id); the client adopts the fresh tree and advances `typingAt`, so earlier characters' replies stay on screen while the next character streams (`renderChat` resolves the streaming character via `streaming.characterId` and renders its own avatar + speaker badge, including the waiting "dots" state).
+  - Messages display speaker name badges (`.msg-speaker-badge`) and character-specific avatars/poses; clicking a message's avatar opens the image viewer for the speaker who wrote that message (`node.characterId`), not the chat's primary character.
   - The composer's ⚡ popover provides "Let [Character] speak" actions for manual turn prompting.
 
 ### 4.10 Feature Toggles in Settings

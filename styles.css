@@ -2740,6 +2740,152 @@ input[type="range"] {
   color: var(--muted);
   line-height: 1.35;
 }
+
+/* ==========================================================================
+   AI Assisted Scenario Generator modal
+   ========================================================================== */
+.sa-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sa-participants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.sa-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border2);
+}
+.sa-chip-you {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.08);
+  color: #93c5fd;
+}
+.sa-idea-section,
+.sa-refine-section {
+  display: flex;
+  flex-direction: column;
+}
+.sa-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.sa-input-row .sa-textarea {
+  flex: 1;
+  min-width: 0;
+}
+.sa-input-row .btn {
+  flex: none;
+  height: 38px;
+}
+.sa-textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 9px 12px;
+  resize: vertical;
+  min-height: 40px;
+  box-sizing: border-box;
+}
+.sa-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.sa-draft-scenario-input {
+  min-height: 88px;
+}
+.sa-draft-container {
+  display: flex;
+  flex-direction: column;
+}
+.sa-draft-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted2);
+}
+.sa-draft-card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sa-draft-messages-wrap {
+  display: flex;
+  flex-direction: column;
+}
+.sa-draft-messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sa-msg-card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sa-msg-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sa-msg-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #93c5fd;
+}
+.sa-msg-regen {
+  height: 24px;
+  padding: 2px 8px;
+  font-size: 11px;
+  flex: none;
+}
+.sa-refine-section {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.sa-body .m-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: 2px 0 0;
+}
+@media (max-width: 560px) {
+  .sa-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sa-input-row .btn {
+    height: 38px;
+  }
+}
+
 .ps-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

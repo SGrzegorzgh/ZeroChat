@@ -150,6 +150,17 @@ async function streamGenerate(path, body, onDelta) {
             streaming.text = '';
           }
           renderChat({ keepScroll: true });
+        } else if (ev.type === 'reply_saved') {
+          // Mid-turn save inside multi-character chats: adopt the fresh tree so
+          // already-finished replies stay on screen while the next one streams.
+          const cur = activeChar();
+          const chat = cur && activeChat(cur);
+          if (chat && ev.chat && ev.chat.id === chat.id) {
+            mergeChat(chat, ev.chat);
+            if (ev.node) typingAt = ev.node.id;
+          }
+          renderChat({ keepScroll: true });
+          full = '';
         } else if (ev.type === 'title') {
           if (ev.title) {
             const chat = activeChat(activeChar());
@@ -878,11 +889,19 @@ function renderChat(opts = {}) {
         ? `<div class="msg user streaming"><div class="msg-main"><div class="bubble">${md(streaming.text)}</div></div>${personaAvatarHtml(p, 'sm', true)}</div>`
         : `<div class="msg user"><div class="msg-main"><div class="bubble dots"><span></span><span></span><span></span></div></div>${personaAvatarHtml(p, 'sm', true)}</div>`;
     } else {
+      const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+      const streamChar = (streaming && streaming.characterId)
+        ? (state.characters.find((x) => x.id === streaming.characterId) || c)
+        : c;
       const cp = currentPose(chat);
       const live = streaming && chat && streaming.chatId === chat.id && streaming.text;
-      html += live
-        ? `<div class="msg char streaming">${avatarHtml(c, 'sm', true, cp && cp.thumb)}<div class="msg-main"><div class="bubble">${md(streaming.text)}</div></div></div>`
-        : `<div class="msg char"><span class="avatar sm emoji">${esc(c.emoji)}</span><div class="bubble dots"><span></span><span></span><span></span></div></div>`;
+      const badge = (isMulti && streamChar) ? `<div class="msg-speaker-badge"><span>${esc(streamChar.name)}</span></div>` : '';
+      if (live) {
+        const cpThumb = streamChar === c ? (cp && cp.thumb) : null;
+        html += `<div class="msg char streaming">${avatarHtml(streamChar, 'sm', true, cpThumb)}<div class="msg-main">${badge}<div class="bubble">${md(streaming.text)}</div></div></div>`;
+      } else {
+        html += `<div class="msg char">${avatarHtml(streamChar, 'sm', true, null)}<div class="msg-main">${badge}<div class="bubble dots"><span></span><span></span><span></span></div></div></div>`;
+      }
     }
   }
   feed.innerHTML = html;
@@ -4745,7 +4764,7 @@ function wireEvents() {
       });
       closeModal('modal-pick-scenario');
       ui.activeCharacterId = char.id;
-      await createChatFor(char, null, r.scenario);
+      await createChatFor(char, null, { scenario: r.scenario, messages: r.messages });
       saveUi();
       closeSidebar();
       renderSidebar();
@@ -4771,6 +4790,11 @@ function wireEvents() {
   $('#ps-new-btn').addEventListener('click', () => {
     closeModal('modal-pick-scenario');
     openScenarioModal(null);
+  });
+
+  $('#ps-assist-btn')?.addEventListener('click', () => {
+    if (!pickScenarioChar) return;
+    openScenarioAssistant([pickScenarioChar.id], false);
   });
 
   // Multi-Character Group Chat events
@@ -4831,7 +4855,7 @@ function wireEvents() {
       });
       closeModal('modal-multi-char');
       ui.activeCharacterId = firstChar.id;
-      await createChatFor(firstChar, null, r.scenario, charIds);
+      await createChatFor(firstChar, null, { scenario: r.scenario, messages: r.messages }, charIds);
       saveUi();
       closeSidebar();
       renderSidebar();
@@ -4843,6 +4867,162 @@ function wireEvents() {
     } finally {
       btn?.classList.remove('loading');
       if (badge) badge.textContent = 'Generate';
+    }
+  });
+
+  $('#mc-assist-btn')?.addEventListener('click', () => {
+    if (selectedGroupCharIds.size < 2) {
+      toast('Select at least 2 characters for a group chat');
+      return;
+    }
+    openScenarioAssistant(Array.from(selectedGroupCharIds), true);
+  });
+
+  // AI Assisted Scenario Generator
+  let saCtx = null;   // { charIds: [], isMulti: boolean }
+  let saDraft = null; // { scenario: '', messages: [{ characterId, characterName, content }] }
+
+  function openScenarioAssistant(charIds, isMulti) {
+    const chars = (charIds || []).map((id) => state.characters.find((x) => x.id === id)).filter(Boolean);
+    if (!chars.length) return;
+    saCtx = { charIds: chars.map((ch) => ch.id), isMulti: Boolean(isMulti) };
+    saDraft = null;
+    $('#sa-title').textContent = isMulti ? 'AI Assisted Group Scenario' : 'AI Assisted Scenario';
+    $('#sa-sub').textContent = isMulti
+      ? 'Collaborate with AI to draft the group opening scene'
+      : `Collaborate with AI to draft the opening scene with ${chars[0].name}`;
+    $('#sa-participants').innerHTML =
+      `<span class="sa-chip sa-chip-you">👤 ${esc(activePersona()?.name || 'You')}</span>` +
+      chars.map((ch) => `<span class="sa-chip">${esc(ch.emoji || '🎭')} ${esc(ch.name)}</span>`).join('');
+    $('#sa-idea-input').value = '';
+    $('#sa-refine-input').value = '';
+    $('#sa-draft-container').classList.add('hidden');
+    $('#sa-draft-messages-list').innerHTML = '';
+    $('#sa-start-chat-btn').disabled = true;
+    closeModal(isMulti ? 'modal-multi-char' : 'modal-pick-scenario');
+    openModal('modal-scenario-assistant');
+  }
+
+  function saSetLoading(on, which) {
+    const genBtn = $('#sa-gen-draft-btn');
+    const refBtn = $('#sa-refine-btn');
+    const genLabel = genBtn?.querySelector('.sa-gen-label');
+    const refLabel = refBtn?.querySelector('.sa-refine-label');
+    if (which === 'gen') {
+      if (genBtn) genBtn.disabled = on;
+      if (genLabel) genLabel.textContent = on ? 'Generating…' : 'Generate draft';
+    } else if (which === 'refine') {
+      if (refBtn) refBtn.disabled = on;
+      if (refLabel) refLabel.textContent = on ? 'Refining…' : 'Refine draft';
+    }
+  }
+
+  function renderAssistantDraft() {
+    const wrap = $('#sa-draft-container');
+    if (!saDraft) {
+      wrap.classList.add('hidden');
+      $('#sa-start-chat-btn').disabled = true;
+      return;
+    }
+    $('#sa-draft-scenario').value = saDraft.scenario || '';
+    $('#sa-draft-messages-list').innerHTML = (saDraft.messages || []).map((m, i) => `
+      <div class="sa-msg-card" data-sa-index="${i}">
+        <div class="sa-msg-card-head">
+          <span class="sa-msg-name">${esc(m.characterName || 'Character')}</span>
+          <button class="mini sa-msg-regen" type="button" data-sa-regen="${i}" title="Ask AI to rewrite this opening">↻ Rewrite</button>
+        </div>
+        <textarea class="sa-textarea sa-msg-input" data-sa-content="${i}" rows="2">${esc(m.content || '')}</textarea>
+      </div>`).join('');
+    wrap.classList.remove('hidden');
+    $('#sa-start-chat-btn').disabled = false;
+  }
+
+  function syncAssistantDraft() {
+    if (!saDraft) return;
+    const sc = $('#sa-draft-scenario');
+    if (sc) saDraft.scenario = sc.value;
+    for (const ta of $$('.sa-msg-input[data-sa-content]')) {
+      const i = Number(ta.dataset.saContent);
+      if (saDraft.messages && saDraft.messages[i]) saDraft.messages[i].content = ta.value;
+    }
+  }
+
+  async function aiDraft(idea = '', { feedback = '', currentDraft = null } = {}) {
+    if (!saCtx) return;
+    const body = { characterIds: saCtx.charIds, characterId: saCtx.charIds[0], idea, feedback, currentDraft };
+    const hasDraft = Boolean(currentDraft);
+    saSetLoading(true, hasDraft ? 'refine' : 'gen');
+    try {
+      const r = await api('/agent/assist-scenario', { method: 'POST', body: JSON.stringify(body) });
+      saDraft = {
+        scenario: typeof r.scenario === 'string' ? r.scenario : '',
+        messages: Array.isArray(r.messages) && r.messages.length
+          ? r.messages
+          : (saDraft && saDraft.messages) || [],
+      };
+      renderAssistantDraft();
+    } catch (e) {
+      toast(e.message || 'Scenario drafting failed');
+    } finally {
+      saSetLoading(false, hasDraft ? 'refine' : 'gen');
+    }
+  }
+
+  $('#sa-gen-draft-btn').addEventListener('click', () => aiDraft($('#sa-idea-input').value.trim()));
+  $('#sa-refine-btn').addEventListener('click', () => {
+    syncAssistantDraft();
+    const feedback = $('#sa-refine-input').value.trim();
+    if (!saDraft) { toast('Generate a draft first'); return; }
+    if (!feedback) { toast('Describe what to change'); return; }
+    $('#sa-refine-input').value = '';
+    aiDraft('', { feedback, currentDraft: saDraft });
+  });
+  $('#sa-draft-messages-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sa-regen]');
+    if (!b || !saCtx) return;
+    const i = Number(b.dataset.saRegen);
+    const m = saDraft && saDraft.messages && saDraft.messages[i];
+    if (!m) return;
+    aiDraft('', {
+      feedback: `Rewrite ONLY the opening message of "${m.characterName}" — keep the scene setting and the other characters' messages untouched.`,
+      currentDraft: saDraft,
+    });
+  });
+  $('#sa-refine-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      $('#sa-refine-btn').click();
+    }
+  });
+  $('#sa-start-chat-btn').addEventListener('click', async () => {
+    if (!saCtx || !saDraft) return;
+    syncAssistantDraft();
+    const chars = saCtx.charIds.map((id) => state.characters.find((x) => x.id === id)).filter(Boolean);
+    const firstChar = chars[0];
+    if (!firstChar) return;
+    const btn = $('#sa-start-chat-btn');
+    btn.disabled = true;
+    try {
+      closeModal('modal-scenario-assistant');
+      ui.activeCharacterId = firstChar.id;
+      await createChatFor(firstChar, null, {
+        scenario: saDraft.scenario,
+        messages: (saDraft.messages || []).map((m) => ({
+          characterId: m.characterId,
+          characterName: m.characterName,
+          content: m.content,
+        })),
+      }, saCtx.isMulti ? saCtx.charIds : null);
+      saCtx = null;
+      saDraft = null;
+      saveUi();
+      closeSidebar();
+      renderSidebar();
+      renderChat();
+      loadPoses(firstChar.id);
+    } catch (e) {
+      toast(e.message || 'Failed to start chat');
+      btn.disabled = false;
     }
   });
 
@@ -5112,9 +5292,14 @@ function wireEvents() {
     const c = activeChar();
     const chat = c && activeChat(c);
     const node = (msg && chat && chat.tree.nodes[msg.dataset.id]) || null;
+    // In multi-character chats each message belongs to the character that spoke it,
+    // so open that speaker's portrait / pose — not the chat's primary character.
+    const speaking = (chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1)
+      ? (state.characters.find((x) => x.id === ((node && node.characterId) || chat.characterId)) || c)
+      : c;
     const src = msg && msg.classList.contains('user')
       ? fullImageSrc(activePersona())
-      : (poseImg(node && poseById(chat.characterId, node.poseId)) || fullImageSrc(c));
+      : (poseImg(node && poseById(speaking && speaking.id, node.poseId)) || fullImageSrc(speaking));
     if (src) { e.stopPropagation(); openViewer(src); }
   }, true);
   $('#char-info').addEventListener('click', (e) => {

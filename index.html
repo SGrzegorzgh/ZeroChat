@@ -1153,6 +1153,15 @@
           </div>
           <span class="btn btn-ghost sm" id="mc-agent-gen-badge">Generate</span>
         </div>
+
+        <div class="ps-quick-card" id="mc-assist-btn">
+          <div class="ps-card-icon">🪄</div>
+          <div class="ps-card-info">
+            <div class="ps-card-title">AI Assisted Scenario Generator</div>
+            <div class="ps-card-desc">Collaborate with AI: give an idea or let it invent one, refine character opening lines and setting, then start.</div>
+          </div>
+          <span class="btn btn-ghost sm">Assist</span>
+        </div>
       </div>
       <div class="m-foot">
         <span class="spacer"></span>
@@ -1189,6 +1198,14 @@
           </div>
           <span class="btn btn-ghost sm" id="ps-agent-gen-badge">Generate</span>
         </div>
+        <div class="ps-quick-card" id="ps-assist-btn">
+          <div class="ps-card-icon">🪄</div>
+          <div class="ps-card-info">
+            <div class="ps-card-title">AI Assisted Scenario Generator</div>
+            <div class="ps-card-desc">Collaborate with AI: give an idea or let it invent one, review the draft, tell it what to change, and start.</div>
+          </div>
+          <span class="btn btn-ghost sm">Assist</span>
+        </div>
         <div class="ps-filter-bar">
           <div class="sidebar-label" style="padding-left:0;margin:0">Available scenarios</div>
           <div style="flex:1;max-width:280px">
@@ -1201,6 +1218,64 @@
         <button id="ps-new-btn" class="btn btn-ghost sm" type="button">+ New scenario</button>
         <span class="spacer"></span>
         <button class="btn btn-ghost" data-close type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-scenario-assistant">
+    <div class="modal-card modal-lg">
+      <div class="m-head">
+        <div>
+          <h3 id="sa-title">AI Assisted Scenario Generator</h3>
+          <p class="m-sub" id="sa-sub">Collaborate with AI to draft and fine-tune your opening scene</p>
+        </div>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body sa-body">
+        <div class="sa-participants" id="sa-participants"></div>
+
+        <div class="sa-idea-section">
+          <label for="sa-idea-input" class="sidebar-label" style="padding-left:0;margin:0 0 6px">Scene idea or premise (optional)</label>
+          <div class="sa-input-row">
+            <textarea id="sa-idea-input" class="sa-textarea" rows="2" placeholder="Describe an idea (e.g. 'Stuck in an archive during a storm', 'Meeting as rivals at a summit') or leave empty for AI to create one…"></textarea>
+            <button id="sa-gen-draft-btn" class="btn btn-ghost" type="button">
+              <span class="sa-gen-icon">✨</span>
+              <span class="sa-gen-label">Generate draft</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="sa-draft-container" class="sa-draft-container hidden">
+          <div class="sidebar-label" style="padding-left:0;margin:16px 0 6px">Opening Scene Draft</div>
+          
+          <div class="sa-draft-card">
+            <div class="sa-draft-label">Scene Setting &amp; Atmosphere</div>
+            <textarea id="sa-draft-scenario" class="sa-textarea sa-draft-scenario-input" rows="3" placeholder="Scene atmosphere and setup…"></textarea>
+          </div>
+
+          <div id="sa-draft-messages-wrap" class="sa-draft-messages-wrap">
+            <div class="sa-draft-label" style="margin:12px 0 6px">Character Opening Responses</div>
+            <div id="sa-draft-messages-list" class="sa-draft-messages-list"></div>
+          </div>
+
+          <div class="sa-refine-section">
+            <label for="sa-refine-input" class="sidebar-label" style="padding-left:0;margin:14px 0 6px">Tell AI what to change</label>
+            <div class="sa-input-row">
+              <textarea id="sa-refine-input" class="sa-textarea" rows="2" placeholder="e.g. 'Make Marlowe more skeptical', 'Set it in a neon-lit alley at night', 'Add more tension between the characters'…"></textarea>
+              <button id="sa-refine-btn" class="btn btn-ghost" type="button">
+                <span class="sa-refine-icon">🪄</span>
+                <span class="sa-refine-label">Refine draft</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="m-foot">
+        <button class="btn btn-ghost" data-close type="button">Cancel</button>
+        <span class="spacer"></span>
+        <button id="sa-start-chat-btn" class="btn btn-primary" type="button" disabled>Start chat</button>
       </div>
     </div>
   </div>

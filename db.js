@@ -898,11 +898,21 @@ function deleteCharacter(id) {
   return { ok: true };
 }
 
-function createChatInternal(characterId, scenarioId = null, initialScenarioContent = null, characterIds = null) {
+function createChatInternal(characterId, scenarioId = null, initialScenarioContent = null, characterIds = null, initialMessages = null) {
   const c = characterRow(characterId);
   if (!c) throw new Error('Character not found');
   let sc = null;
-  let scenarioContent = initialScenarioContent != null ? String(initialScenarioContent) : '';
+  let scenarioContent = '';
+  if (initialScenarioContent && typeof initialScenarioContent === 'object') {
+    if (!initialMessages && Array.isArray(initialScenarioContent.messages)) {
+      initialMessages = initialScenarioContent.messages;
+    }
+    if (typeof initialScenarioContent.scenario === 'string') {
+      scenarioContent = initialScenarioContent.scenario;
+    }
+  } else if (initialScenarioContent != null) {
+    scenarioContent = String(initialScenarioContent);
+  }
   let initialTitle = 'New chat';
   const charIds = Array.isArray(characterIds) && characterIds.length ? characterIds : [characterId];
   if (charIds.length > 1) {
@@ -934,6 +944,32 @@ function createChatInternal(characterId, scenarioId = null, initialScenarioConte
   const sid = 's' + uid();
   tree.nodes[sid] = { id: sid, role: 'scenario', content: scenarioContent, parent: 'root', children: [], active: 0, createdAt: t };
   tree.nodes.root.children.push(sid);
+
+  let parentId = sid;
+  if (Array.isArray(initialMessages)) {
+    for (let i = 0; i < initialMessages.length; i++) {
+      const msg = initialMessages[i];
+      if (!msg || !msg.content || !msg.content.trim()) continue;
+      const mid = 'm' + uid();
+      const mCharId = msg.characterId || characterId;
+      const mChar = characterRow(mCharId);
+      const mPose = mChar && mChar.poses_enabled ? getDefaultPose(mCharId) : null;
+      tree.nodes[mid] = {
+        id: mid,
+        role: msg.role || 'char',
+        content: msg.content.trim(),
+        characterId: mCharId,
+        poseId: msg.poseId || (mPose ? mPose.id : null),
+        parent: parentId,
+        children: [],
+        active: 0,
+        createdAt: t + 10 + i,
+      };
+      tree.nodes[parentId].children.push(mid);
+      parentId = mid;
+    }
+  }
+
   const defPose = c.poses_enabled ? getDefaultPose(characterId) : null;
   const initialPoseId = defPose ? defPose.id : null;
   db.prepare('INSERT INTO chats (id, character_id, scenario_id, title, pose_id, tree, character_ids, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
@@ -941,8 +977,8 @@ function createChatInternal(characterId, scenarioId = null, initialScenarioConte
   return shapeChat(db.prepare('SELECT * FROM chats WHERE id = ?').get(id));
 }
 
-function createChat(characterId, scenarioId = null, initialScenarioContent = null, characterIds = null) {
-  return createChatInternal(characterId, scenarioId, initialScenarioContent, characterIds);
+function createChat(characterId, scenarioId = null, initialScenarioContent = null, characterIds = null, initialMessages = null) {
+  return createChatInternal(characterId, scenarioId, initialScenarioContent, characterIds, initialMessages);
 }
 
 function getChat(id) {
