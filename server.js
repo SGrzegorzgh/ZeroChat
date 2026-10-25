@@ -2737,6 +2737,7 @@ function parseOpeningGeneration(text, characters) {
   if (!scenario) {
     scenario = '*The air is charged with anticipation as the scene begins.*';
   }
+  if (!/^\*[\s\S]*\*$/.test(scenario)) scenario = `*${scenario.replace(/^\*+|\*+$/g, '')}*`;
 
   return { scenario, messages };
 }
@@ -2768,7 +2769,7 @@ function parseOpeningGeneration(text, characters) {
       'OUTPUT FORMAT:',
       'You MUST return a JSON object with this exact schema without markdown backticks or extra commentary:',
       '{',
-      '  "scenario": "A descriptive scene setup paragraph setting the room, location, and atmosphere without dialogue.",',
+      '  "scenario": "*A descriptive scene setup paragraph setting the room, location, and atmosphere without dialogue, wrapped in asterisks.*",',
       '  "messages": [',
       chars.map((c) => `    { "name": "${c.name}", "content": "*Brief action/expression* \\"Opening dialogue line\\"" }`).join(',\n'),
       '  ]',
@@ -2844,7 +2845,7 @@ function parseOpeningGeneration(text, characters) {
       'OUTPUT FORMAT:',
       'You MUST return a JSON object with this exact schema without markdown backticks or extra commentary:',
       '{',
-      '  "scenario": "A descriptive scene setup paragraph setting the room, location, and atmosphere without dialogue.",',
+      '  "scenario": "*A descriptive scene setup paragraph setting the room, location, and atmosphere without dialogue, wrapped in asterisks.*",',
       '  "messages": [',
       `    { "name": "${char.name}", "content": "*Brief action/expression* \\"Opening dialogue line\\"" }`,
       '  ]',
@@ -2913,7 +2914,7 @@ function parseOpeningGeneration(text, characters) {
       'Format requirements:',
       'You MUST return a valid JSON object with this exact schema without markdown backticks or extra commentary:',
       '{',
-      '  "scenario": "A descriptive scene setup paragraph setting the room, location, and atmosphere without dialogue.",',
+      '  "scenario": "*A descriptive scene setup paragraph setting the room, location, and atmosphere without dialogue, wrapped in asterisks.*",',
       '  "messages": [',
       chars.map((c) => `    { "name": "${c.name}", "content": "*Brief action/expression* \\"Opening dialogue line\\"" }`).join(',\n'),
       '  ]',
