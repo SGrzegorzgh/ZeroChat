@@ -49,6 +49,7 @@ let typing = false;
 let typingAt = null;
 let streaming = null;
 let editingId = null;
+let aiEditingId = null;
 let chatStickToBottom = true;
 let agentStickToBottom = true;
 
@@ -141,6 +142,21 @@ async function streamGenerate(path, body, onDelta) {
         if (ev.type === 'delta') {
           full += ev.text;
           onDelta(full);
+        } else if (ev.type === 'next_char') {
+          full = '';
+          if (streaming) {
+            streaming.characterId = ev.characterId;
+            streaming.charName = ev.charName;
+            streaming.text = '';
+          }
+          renderChat({ keepScroll: true });
+        } else if (ev.type === 'title') {
+          if (ev.title) {
+            const chat = activeChat(activeChar());
+            if (chat) chat.title = ev.title;
+            renderHeader();
+            renderChatsMenu();
+          }
         } else if (ev.type === 'done') {
           result = ev;
         } else if (ev.type === 'error') {
@@ -202,7 +218,16 @@ async function bootstrap() {
   state.presets = d.presets || [];
   state.settings = d.settings;
   state.scenarios = d.scenarios || [];
+  applyFeatureToggles();
   api('/default-prompt').then((r) => { defaultPromptCache = r.prompt; }).catch(() => {});
+}
+
+function applyFeatureToggles() {
+  const s = state.settings || {};
+  const agentBtn = $('#agent-toggle-btn');
+  if (agentBtn) agentBtn.classList.toggle('hidden', s.agentSidebarEnabled === false);
+  const grpBtn = $('#new-group-chat-btn');
+  if (grpBtn) grpBtn.classList.toggle('hidden', s.multiCharEnabled === false);
 }
 
 function md(s) {
@@ -385,14 +410,29 @@ function renderHeader() {
   const pose = c.posesEnabled ? currentPose() : null;
   const chat = activeChat(c);
   const scenTitle = chat && (chat.scenarioTitle || (chat.scenarioId && state.scenarios.find((s) => s.id === chat.scenarioId)?.title));
-  $('#char-info').innerHTML = `${avatarHtml(c, '', true, pose && pose.thumb)}
-    <div class="ch-text">
-      <div class="ch-name-row">
-        <span class="ch-name">${esc(c.name)}</span>
-        ${scenTitle ? `<span class="ch-scenario-badge" title="Scenario: ${esc(scenTitle)}">🎬 ${esc(scenTitle)}</span>` : ''}
-      </div>
-      <div class="ch-tag">${esc(c.description)}</div>
-    </div>`;
+  const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+  if (isMulti) {
+    const groupChars = chat.characterIds.map((id) => state.characters.find((x) => x.id === id)).filter(Boolean);
+    const names = groupChars.map((x) => x.name).join(' & ');
+    const avatars = groupChars.slice(0, 3).map((x) => avatarHtml(x, 'sm')).join('');
+    $('#char-info').innerHTML = `<div class="ch-group-avatars" style="display:inline-flex;gap:4px;margin-right:8px">${avatars}</div>
+      <div class="ch-text">
+        <div class="ch-name-row">
+          <span class="ch-name">${esc(names)}</span>
+          <span class="ch-scenario-badge" title="Multi-character chat">👥 Group Chat</span>
+        </div>
+        <div class="ch-tag">${groupChars.length} characters in conversation</div>
+      </div>`;
+  } else {
+    $('#char-info').innerHTML = `${avatarHtml(c, '', true, pose && pose.thumb)}
+      <div class="ch-text">
+        <div class="ch-name-row">
+          <span class="ch-name">${esc(c.name)}</span>
+          ${scenTitle ? `<span class="ch-scenario-badge" title="Scenario: ${esc(scenTitle)}">🎬 ${esc(scenTitle)}</span>` : ''}
+        </div>
+        <div class="ch-tag">${esc(c.description)}</div>
+      </div>`;
+  }
   const p = activePersona();
   $('#persona-label').textContent = p ? p.name : '—';
   const pr = activePreset();
@@ -481,10 +521,12 @@ function msgMetaHtml(n, chat, opts, tag = '') {
     : '';
   const isChar = n.role === 'char';
   const isInj = n.role === 'injection';
+  const isAiEdit = isChar && (state.settings?.aiEditEnabled !== false);
   const delTitle = isInj ? 'Remove this directive (messages after it stay)' : 'Delete this message and everything after it';
   const acts = `<span class="m-acts">
     <button data-act="copy" title="Copy message text">${I.copy}</button>
     <button data-act="edit" title="Edit message">${I.pencil}</button>
+    ${isAiEdit ? `<button data-act="ai-edit" title="Rewrite response with AI">${I.sparkles}</button>` : ''}
     ${isChar ? `<button data-act="ooc" title="Insert OOC directive after this message">${I.zap}</button>` : ''}
     ${opts.regen ? `<button data-act="regen" title="Regenerate this reply">${I.rotr}</button>` : ''}
     <button data-act="del" class="danger" title="${delTitle}">${I.trash}</button>
@@ -498,6 +540,18 @@ function editBoxHtml(n) {
     <div class="edit-actions">
       <button data-act="esave" class="mini primary">Save</button>
       <button data-act="ecancel" class="mini">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function aiEditBoxHtml(n) {
+  return `<div class="ai-edit-box">
+    <div class="ai-edit-head">${I.sparkles}<span>Rewrite response with AI</span></div>
+    <div class="ai-edit-sub">What would you like to change about this reply?</div>
+    <textarea id="ai-edit-input" placeholder="e.g. Make them speak more hesitantly, bring up the storm outside, remove the apology..."></textarea>
+    <div class="ai-edit-actions">
+      <button data-act="ai-edit-cancel" class="mini">Cancel</button>
+      <button data-act="ai-edit-submit" class="mini primary" id="ai-edit-submit-btn">✨ Rewrite</button>
     </div>
   </div>`;
 }
@@ -692,12 +746,19 @@ function renderPreviewMarkdown(raw, characterId, customVars = null, customCharNa
 }
 
 function msgHtml(c, p, n, chat) {
-  const cObj = state.characters.find((x) => x.id === chat.characterId);
-  const msgPose = (n.role === 'char' && cObj && cObj.posesEnabled) ? poseById(chat.characterId, n.poseId) : null;
+  const speakingCharId = n.characterId || chat.characterId;
+  const cObj = state.characters.find((x) => x.id === speakingCharId) || c;
+  const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+  const msgPose = (n.role === 'char' && cObj && cObj.posesEnabled) ? poseById(speakingCharId, n.poseId) : null;
   const meta = msgMetaHtml(n, chat, { regen: n.role === 'char' }, poseTagHtml(msgPose));
   let body;
   if (editingId === n.id) {
     body = editBoxHtml(n);
+  } else if (n.role === 'summary') {
+    return `<div class="msg-summary" data-id="${n.id}">
+      <div class="summary-head"><span>📜 Previous conversation summarized</span></div>
+      <div class="summary-body">${md(n.content)}</div>
+    </div>`;
   } else if (n.role === 'injection') {
     const dot = n.state === 'pending' ? '<span class="inj-dot" title="Will be sent with the next reply"></span>' : '';
     body = `<div class="bubble"><span class="inj-tag">${I.zap}<span>Directive</span>${dot}</span>${md(n.content)}</div>`;
@@ -705,8 +766,12 @@ function msgHtml(c, p, n, chat) {
     body = `<div class="ms-body">${md(expandTags(n.content, chat.characterId, chat.scenarioId || chat))}</div>`;
   } else {
     /* Character lines render their tags; the user's own text is left alone. */
-    const text = n.role === 'char' ? expandTags(n.content, chat.characterId, chat.scenarioId || chat) : n.content;
-    body = `<div class="bubble">${md(text)}</div>`;
+    const text = n.role === 'char' ? expandTags(n.content, speakingCharId, chat.scenarioId || chat) : n.content;
+    const speakerTag = (isMulti && n.role === 'char' && cObj) ? `<div class="msg-speaker-badge"><span>${esc(cObj.name)}</span></div>` : '';
+    body = `<div class="bubble">${speakerTag}${md(text)}</div>`;
+    if (aiEditingId === n.id) {
+      body += aiEditBoxHtml(n);
+    }
   }
   if (n.role === 'scenario') {
     return `<div class="msg-scenario" data-id="${n.id}">
@@ -720,7 +785,7 @@ function msgHtml(c, p, n, chat) {
   if (n.role === 'user') {
     return `<div class="msg user${n.pending ? ' pending' : ''}" data-id="${n.id}">${main}${personaAvatarHtml(p, 'sm', true)}</div>`;
   }
-  return `<div class="msg char" data-id="${n.id}">${avatarHtml(c, 'sm', true, msgPose && msgPose.thumb)}${main}</div>`;
+  return `<div class="msg char" data-id="${n.id}">${avatarHtml(cObj, 'sm', true, msgPose && msgPose.thumb)}${main}</div>`;
 }
 
 let isSteerMode = false;
@@ -841,12 +906,23 @@ async function openCharacter(id, chatId) {
   loadPoses(id);
 }
 
-async function createChatFor(c, scenarioId = null, initialScenarioContent = null) {
+async function createChatFor(c, scenarioId = null, initialScenarioContent = null, characterIds = null) {
   const body = { characterId: c.id };
   if (scenarioId) body.scenarioId = scenarioId;
   if (initialScenarioContent != null) body.initialScenarioContent = initialScenarioContent;
+  if (Array.isArray(characterIds) && characterIds.length) body.characterIds = characterIds;
   const ch = await api('/chats', { method: 'POST', body: JSON.stringify(body) });
   c.chats.unshift(ch);
+  if (Array.isArray(characterIds)) {
+    for (const cid of characterIds) {
+      if (cid !== c.id) {
+        const other = state.characters.find((x) => x.id === cid);
+        if (other && Array.isArray(other.chats) && !other.chats.some((x) => x.id === ch.id)) {
+          other.chats.unshift(ch);
+        }
+      }
+    }
+  }
   ui.activeChatIds[c.id] = ch.id;
   return ch;
 }
@@ -973,17 +1049,19 @@ async function sendInjection() {
   renderChatsMenu();
 }
 
-async function generateReplyAt(parentId) {
+async function generateReplyAt(parentId, opts = {}) {
   const c = activeChar();
   const chat = c && activeChat(c);
   if (!chat || typing || !parentId || parentId === 'root') return;
   typing = true;
   typingAt = parentId;
   chatStickToBottom = true;
-  streaming = { chatId: chat.id, text: '' };
+  streaming = { chatId: chat.id, text: '', characterId: opts.characterId || null };
   renderChat();
   try {
-    const r = await streamGenerate(`/chats/${chat.id}/generate`, { parentId }, (full) => {
+    const body = { parentId };
+    if (opts.characterId) body.characterId = opts.characterId;
+    const r = await streamGenerate(`/chats/${chat.id}/generate`, body, (full) => {
       if (streaming) streaming.text = full;
       liveStreamUpdate();
     });
@@ -1005,7 +1083,7 @@ async function regenMsg(id) {
   const chat = c && activeChat(c);
   const node = chat && chat.tree.nodes[id];
   if (!node || node.role !== 'char' || typing) return;
-  await generateReplyAt(node.parent);
+  await generateReplyAt(node.parent, { characterId: node.characterId || null });
 }
 
 function poseRevertNote(prevPoseId, chat) {
@@ -1111,6 +1189,32 @@ async function saveEdit(id) {
   saveUi();
   renderChat({ keepScroll: true });
   renderChatsMenu();
+}
+
+async function saveAiEdit(id) {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || !chat.tree.nodes[id]) return;
+  const input = $('#ai-edit-input');
+  const instruction = input ? input.value.trim() : '';
+  if (!instruction) { toast('Please describe what to change'); return; }
+  const btn = $('#ai-edit-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '✨ Rewriting…'; }
+  try {
+    const r = await api(`/chats/${chat.id}/nodes/${id}/ai-edit`, {
+      method: 'POST',
+      body: JSON.stringify({ instruction }),
+    });
+    mergeChat(chat, r.chat);
+    aiEditingId = null;
+    saveUi();
+    renderChat({ keepScroll: true });
+    renderChatsMenu();
+    toast('Response rewritten');
+  } catch (e) {
+    toast(e.message || 'AI rewrite failed');
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Rewrite'; }
+  }
 }
 
 async function switchVariant(dir, nodeId) {
@@ -1364,6 +1468,13 @@ function renderChatsMenu() {
   const menu = $('#chats-menu');
   if (!c) { menu.innerHTML = ''; return; }
   const chat = activeChat(c);
+  const msgCount = chat ? pathOf(chat.tree).filter((n) => n.role !== 'scenario' && n.role !== 'root').length : 0;
+  const extraChatActs = (chat && msgCount >= 2) ? `
+    <div class="menu-sep"></div>
+    <div class="menu-title">Chat tools</div>
+    <button class="menu-item" id="cm-compact"><span>📜</span><span>Compact conversation</span></button>
+    <button class="menu-item" id="cm-gen-title"><span>✨</span><span>Generate new title</span></button>
+  ` : '';
   menu.innerHTML = `
     <button class="menu-item primary" id="cm-new">${I.plus}<span>New chat</span></button>
     <div class="menu-title">Chats with ${esc(c.name)}</div>
@@ -1379,7 +1490,7 @@ function renderChatsMenu() {
         </span>
         <span class="row-del" data-del="${ch.id}" title="Delete chat">${I.trash}</span>
       </button>`;
-    }).join('')}`;
+    }).join('')}${extraChatActs}`;
 }
 
 async function setPersona(pid) {
@@ -2625,11 +2736,46 @@ function openSettings(tab = 'ai') {
   const poseCtx = Number.isFinite(+s.poseContextCount) ? +s.poseContextCount : 3;
   $('#set-posecontext').value = poseCtx;
   $('#posecontext-val').textContent = poseCtx === 0 ? 'None (latest reply only)' : `${poseCtx} message${poseCtx === 1 ? '' : 's'}`;
+
+  // Features & Chat tab
+  if ($('#set-feat-agent')) $('#set-feat-agent').checked = s.agentSidebarEnabled !== false;
+  if ($('#set-feat-ai-edit')) $('#set-feat-ai-edit').checked = s.aiEditEnabled !== false;
+  if ($('#set-feat-auto-title')) $('#set-feat-auto-title').checked = s.autoTitleEnabled !== false;
+  if ($('#set-title-interval')) $('#set-title-interval').value = s.autoTitleInterval || 6;
+  if ($('#set-title-idle')) $('#set-title-idle').value = s.autoTitleIdleMinutes || 60;
+  if ($('#set-long-strategy')) $('#set-long-strategy').value = s.longChatStrategy || 'nothing';
+  if ($('#set-max-tokens')) $('#set-max-tokens').value = s.maxContextTokens || 8192;
+  const compThresh = s.compactThreshold != null ? s.compactThreshold : 80;
+  if ($('#set-compact-thresh')) {
+    $('#set-compact-thresh').value = compThresh;
+    $('#compact-thresh-val').textContent = compThresh + '%';
+  }
+  const compKeep = s.compactKeepRatio != null ? s.compactKeepRatio : 25;
+  if ($('#set-compact-keep')) {
+    $('#set-compact-keep').value = compKeep;
+    $('#compact-keep-val').textContent = compKeep + '%';
+  }
+  if ($('#set-feat-multi-char')) $('#set-feat-multi-char').checked = s.multiCharEnabled !== false;
+  if ($('#set-multi-max-rounds')) $('#set-multi-max-rounds').value = s.multiCharMaxRounds || 2;
+  updateFeaturesUI();
+
   renderPresetList();
   switchSettingsTab(tab);
   updateSettingsStatusCard();
   openModal('modal-settings');
   takeModalSnapshot('modal-settings');
+}
+
+function updateFeaturesUI() {
+  const strat = $('#set-long-strategy')?.value || 'nothing';
+  const dtWrap = $('#long-chat-details-wrap');
+  if (dtWrap) dtWrap.style.display = strat === 'nothing' ? 'none' : 'block';
+  const keepWrap = $('#compact-keep-wrap');
+  if (keepWrap) keepWrap.style.display = strat === 'compact' ? 'block' : 'none';
+  const titleWrap = $('#auto-title-fields-wrap');
+  if (titleWrap) titleWrap.style.display = $('#set-feat-auto-title')?.checked ? 'block' : 'none';
+  const roundsWrap = $('#multi-char-rounds-wrap');
+  if (roundsWrap) roundsWrap.style.display = $('#set-feat-multi-char')?.checked ? 'block' : 'none';
 }
 
 function updateAgentConnUI() {
@@ -2924,10 +3070,22 @@ async function settingsSave() {
     agentModel: $('#agent-model').value.trim(),
     agentImageModel: $('#agent-image-model').value.trim(),
     agentImageEditModel: $('#agent-image-edit-model').value.trim(),
+    agentSidebarEnabled: Boolean($('#set-feat-agent')?.checked),
+    aiEditEnabled: Boolean($('#set-feat-ai-edit')?.checked),
+    autoTitleEnabled: Boolean($('#set-feat-auto-title')?.checked),
+    autoTitleInterval: +$('#set-title-interval')?.value || 6,
+    autoTitleIdleMinutes: +$('#set-title-idle')?.value || 60,
+    longChatStrategy: $('#set-long-strategy')?.value || 'nothing',
+    maxContextTokens: +$('#set-max-tokens')?.value || 8192,
+    compactThreshold: +$('#set-compact-thresh')?.value || 80,
+    compactKeepRatio: +$('#set-compact-keep')?.value || 25,
+    multiCharEnabled: Boolean($('#set-feat-multi-char')?.checked),
+    multiCharMaxRounds: +$('#set-multi-max-rounds')?.value || 2,
   };
   try {
     state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(body) });
     closeModal('modal-settings');
+    applyFeatureToggles();
     setHint();
     applyChatBg();
     const agentSub = agentEl('#agent-model-label');
@@ -3023,6 +3181,24 @@ function renderMoreMenu() {
    (OOC steering and writing as your persona) so the composer row itself only
    ever carries one un-accidental button — see styles.css .composer-actions-*. */
 function renderComposerActionsMenu() {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+  let extraCharsHtml = '';
+  if (isMulti) {
+    const chars = chat.characterIds.map((id) => state.characters.find((x) => x.id === id)).filter(Boolean);
+    extraCharsHtml = `
+      <div class="menu-sep"></div>
+      <div class="menu-title">Chime in as character</div>
+      ${chars.map((ch) => `
+        <button class="menu-item" data-act="speak-as-char" data-char-id="${esc(ch.id)}">
+          ${avatarHtml(ch, 'sm')}
+          <span class="mi-main">
+            <span class="mi-name">Let ${esc(ch.name)} speak</span>
+            <span class="mi-desc">Generate reply as ${esc(ch.name)}</span>
+          </span>
+        </button>`).join('')}`;
+  }
   $('#composer-actions-menu').innerHTML = `
     <div class="menu-title">Composer actions</div>
     <button class="menu-item ${isSteerMode ? 'active' : ''}" data-act="steer">
@@ -3039,7 +3215,8 @@ function renderComposerActionsMenu() {
         <span class="mi-name">Respond as me</span>
         <span class="mi-desc">AI writes your next message${$('#msg-input').value.trim() ? ' — input text is used as a hint' : ''}</span>
       </span>
-    </button>`;
+    </button>
+    ${extraCharsHtml}`;
 }
 
 let prMode = 'new';
@@ -3839,6 +4016,44 @@ function openScenarioPicker(c) {
   setTimeout(() => { if (sInp) sInp.focus(); }, 60);
 }
 
+let selectedGroupCharIds = new Set();
+
+function openGroupChatModal() {
+  selectedGroupCharIds = new Set();
+  const grid = $('#mc-char-grid');
+  if (!grid) return;
+  grid.innerHTML = (state.characters || []).map((c) => `
+    <div class="mc-char-item" data-char-id="${esc(c.id)}">
+      <div class="mc-char-check"></div>
+      ${avatarHtml(c, 'sm')}
+      <div class="mc-char-name"><strong>${esc(c.name)}</strong></div>
+    </div>
+  `).join('');
+  updateGroupChatUI();
+  openModal('modal-multi-char');
+}
+
+function updateGroupChatUI() {
+  const count = selectedGroupCharIds.size;
+  const canStart = count >= 2;
+  const fbBtn = $('#mc-freeform-btn');
+  const genBtn = $('#mc-agent-gen-btn');
+  if (fbBtn) fbBtn.style.opacity = canStart ? '1' : '0.5';
+  if (genBtn) genBtn.style.opacity = canStart ? '1' : '0.5';
+}
+
+function detectContextTokens(modelName) {
+  const m = String(modelName || '').toLowerCase();
+  if (m.includes('claude-3-5') || m.includes('claude-3')) return 200000;
+  if (m.includes('gpt-4o') || m.includes('gpt-4.1')) return 128000;
+  if (m.includes('gemini-2') || m.includes('gemini-1.5')) return 1000000;
+  if (m.includes('llama-3.1') || m.includes('llama-3.2') || m.includes('llama-3.3')) return 128000;
+  if (m.includes('mistral-large') || m.includes('mistral-small')) return 128000;
+  if (m.includes('qwen-2.5') || m.includes('qwen2.5')) return 128000;
+  if (m.includes('deepseek')) return 64000;
+  return 8192;
+}
+
 let pickCharScenario = null;
 
 function renderPcList(query = '') {
@@ -4537,6 +4752,96 @@ function wireEvents() {
     openScenarioModal(null);
   });
 
+  // Multi-Character Group Chat events
+  $('#new-group-chat-btn')?.addEventListener('click', openGroupChatModal);
+  $('#mc-char-grid')?.addEventListener('click', (e) => {
+    const item = e.target.closest('.mc-char-item');
+    if (!item) return;
+    const cid = item.dataset.charId;
+    if (selectedGroupCharIds.has(cid)) {
+      selectedGroupCharIds.delete(cid);
+      item.classList.remove('selected');
+      const chk = item.querySelector('.mc-char-check');
+      if (chk) chk.innerHTML = '';
+    } else {
+      selectedGroupCharIds.add(cid);
+      item.classList.add('selected');
+      const chk = item.querySelector('.mc-char-check');
+      if (chk) chk.innerHTML = I.check;
+    }
+    updateGroupChatUI();
+  });
+  $('#mc-freeform-btn')?.addEventListener('click', async () => {
+    if (selectedGroupCharIds.size < 2) {
+      toast('Select at least 2 characters for a group chat');
+      return;
+    }
+    const charIds = Array.from(selectedGroupCharIds);
+    const firstChar = state.characters.find((c) => c.id === charIds[0]);
+    if (!firstChar) return;
+    closeModal('modal-multi-char');
+    try {
+      ui.activeCharacterId = firstChar.id;
+      await createChatFor(firstChar, null, null, charIds);
+      saveUi();
+      closeSidebar();
+      renderSidebar();
+      renderChat();
+      loadPoses(firstChar.id);
+    } catch (e) { toast(e.message); }
+  });
+  $('#mc-agent-gen-btn')?.addEventListener('click', async () => {
+    if (selectedGroupCharIds.size < 2) {
+      toast('Select at least 2 characters for a group chat');
+      return;
+    }
+    const charIds = Array.from(selectedGroupCharIds);
+    const firstChar = state.characters.find((c) => c.id === charIds[0]);
+    if (!firstChar) return;
+    const btn = $('#mc-agent-gen-btn');
+    const badge = $('#mc-agent-gen-badge');
+    if (btn?.classList.contains('loading')) return;
+    btn?.classList.add('loading');
+    if (badge) badge.textContent = 'Generating…';
+    try {
+      const r = await api('/agent/generate-group-scenario', {
+        method: 'POST',
+        body: JSON.stringify({ characterIds: charIds }),
+      });
+      closeModal('modal-multi-char');
+      ui.activeCharacterId = firstChar.id;
+      await createChatFor(firstChar, null, r.scenario, charIds);
+      saveUi();
+      closeSidebar();
+      renderSidebar();
+      renderChat();
+      loadPoses(firstChar.id);
+    } catch (e) {
+      toast(e.message || 'Failed to generate group scenario');
+      alert('Group scenario generation failed: ' + (e.message || 'Unknown error'));
+    } finally {
+      btn?.classList.remove('loading');
+      if (badge) badge.textContent = 'Generate';
+    }
+  });
+
+  // Features Settings inputs
+  $('#set-long-strategy')?.addEventListener('change', updateFeaturesUI);
+  $('#set-feat-auto-title')?.addEventListener('change', updateFeaturesUI);
+  $('#set-feat-multi-char')?.addEventListener('change', updateFeaturesUI);
+  $('#set-compact-thresh')?.addEventListener('input', (e) => {
+    $('#compact-thresh-val').textContent = e.target.value + '%';
+  });
+  $('#set-compact-keep')?.addEventListener('input', (e) => {
+    $('#compact-keep-val').textContent = e.target.value + '%';
+  });
+  $('#set-detect-tokens-btn')?.addEventListener('click', () => {
+    const curModel = $('#set-model')?.value || state.settings?.model || '';
+    const detected = detectContextTokens(curModel);
+    $('#set-max-tokens').value = detected;
+    toast(`Detected ${detected} tokens for ${curModel || 'default model'}`);
+  });
+
   // Character Picker for Scenario modal events
   $('#pc-search').addEventListener('input', (e) => {
     renderPcList(e.target.value);
@@ -4743,6 +5048,17 @@ function wireEvents() {
         renderChat({ keepScroll: true });
       } else if (act.dataset.act === 'esave') {
         saveEdit(id);
+      } else if (act.dataset.act === 'ai-edit') {
+        aiEditingId = id;
+        editingId = null;
+        renderChat({ keepScroll: true });
+        const input = $('#ai-edit-input');
+        if (input) input.focus();
+      } else if (act.dataset.act === 'ai-edit-cancel') {
+        aiEditingId = null;
+        renderChat({ keepScroll: true });
+      } else if (act.dataset.act === 'ai-edit-submit') {
+        saveAiEdit(id);
       } else if (act.dataset.act === 'copy') {
         const c = activeChar();
         const chat = c && activeChat(c);
@@ -4789,10 +5105,40 @@ function wireEvents() {
     if (e.target.closest('#pm-manage')) { closeMenus(); openPersonaModal(); }
   });
 
-  $('#chats-menu').addEventListener('click', (e) => {
+  $('#chats-menu').addEventListener('click', async (e) => {
     if (e.target.closest('#cm-new')) { newChat(); closeMenus(); return; }
     const del = e.target.closest('[data-del]');
     if (del) { delChat(del.dataset.del); return; }
+    if (e.target.closest('#cm-compact')) {
+      const c = activeChar();
+      const chat = c && activeChat(c);
+      if (chat) {
+        closeMenus();
+        try {
+          const r = await api(`/chats/${chat.id}/compact`, { method: 'POST' });
+          mergeChat(chat, r.chat);
+          renderChat({ keepScroll: true });
+          renderChatsMenu();
+          toast('Conversation compacted & summarized');
+        } catch (err) { toast(err.message); }
+      }
+      return;
+    }
+    if (e.target.closest('#cm-gen-title')) {
+      const c = activeChar();
+      const chat = c && activeChat(c);
+      if (chat) {
+        closeMenus();
+        try {
+          const r = await api(`/chats/${chat.id}/generate-title`, { method: 'POST' });
+          if (r.chat) mergeChat(chat, r.chat);
+          renderHeader();
+          renderChatsMenu();
+          toast('Title generated: ' + (r.title || 'Updated'));
+        } catch (err) { toast(err.message); }
+      }
+      return;
+    }
     const row = e.target.closest('[data-cid]');
     if (row) {
       ui.activeChatIds[activeChar().id] = row.dataset.cid;
@@ -4824,6 +5170,17 @@ function wireEvents() {
       // cancels an armed OOC directive styling.
       if (isSteerMode) setSteerMode(false);
       respondAsMe();
+      return;
+    }
+    const speakBtn = e.target.closest('[data-act="speak-as-char"]');
+    if (speakBtn) {
+      closeMenus();
+      const cid = speakBtn.dataset.charId;
+      const c = activeChar();
+      const chat = c && activeChat(c);
+      const tip = chat && tipNode(chat);
+      if (tip && !typing) generateReplyAt(tip.id, { characterId: cid });
+      return;
     }
   });
   $('#cd-generate-btn')?.addEventListener('click', () => {

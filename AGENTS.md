@@ -105,7 +105,7 @@ Chats are not flat message lists; each chat contains a tree represented as JSON 
   }
 }
 ```
-- **Node Roles**: `root`, `scenario`, `user`, `char`, `injection` (OOC directive).
+- **Node Roles**: `root`, `scenario`, `user`, `char`, `injection` (OOC directive), `summary` (compacted narrative overview).
 - **Branch Operations**:
   - **Edit**: Creates a new sibling node, re-parents downstream subtree to the new variant, and updates `parent.active`.
   - **Regenerate**: Attaches a new child variant to the parent prompt and sets it as active.
@@ -148,6 +148,45 @@ The Agent is a long-running assistant conversation stored in `agent_messages` (o
 - **Attachments & Vision**: the drawer paperclip (or drag-drop picker / clipboard paste) posts to `POST /api/agent/attach` (≤12 MB body); any browser image type is accepted (`image/*`) and **normalized client-side** (`normalizeImageDataUrl`): sources are decoded (with a `createImageBitmap` fallback for avif/heic), oversized dimensions scale to ≤1536 px, and results re-encode to WebP (opaque) or PNG (transparency preserved) — small PNG/JPEG pass through untouched — so uploads stay far under the payload cap. The server whitelist accepts png/jpeg/webp/gif/avif. Rows live in the `agent_attachments` table and are wiped with `clearAgentMessages`. `runAgentChat` replaces ids with `[attached image: <id> — <name>]` markers inside the stored user message; when building history for the LLM (`mapAgentHistoryOpenAI` / `mapAgentHistoryAnthropic`), attached images are resolved from the DB and injected as native multimodal vision blocks (`image_url` for OpenAI-compatible providers, `image` base64 for Anthropic) so vision-capable models can actually see and inspect the uploaded images, while retaining the text marker for tool actions (`apply_image` / `edit_image`). The client renders markers as chips via `GET /api/agent/:id/file` (raw bytes). `agentToolResultText` replays sanitized results, where image bytes are the placeholder string — tool cards must not render that as `<img>`.
 - **Workflow protocol**: the system prompt encodes the full-set pipeline — (1) propose character → user approves in chat (typed reply) → create, (2) revision/image round, (3) full scenario draft in plain prose, (4) split into scaffold + {{tag}} table and show the variable values, (5) create the scenario and wire character variables. The agent must never create, update, or delete without explicit user approval typed in the chat and must never invent ids. There is no `ask_user` tool on purpose — the agent asks questions in plain text and the user answers by typing in the drawer.
 - **Client**: an off-canvas right drawer (`body.agent-open`, z-index 90, same scrim pattern as `#sidebar`). Now ~1.5x as wide by default (645px) and resizable via a drag handle on its left edge (`#agent-resize-handle`), with the user's preferred width saved in `localStorage`. Tool calls render as expandable cards with "Open chat / Edit / Open preset" shortcuts; after each agent turn the client re-bootstraps so sidebars stay in sync. The composer has a paperclip (`agentAttachFiles`) with attachment chips, drag-and-drop, and clipboard paste; user rows carry `[attached image: …]` markers rendered as chips by `agentUserHtml`. Any thumbnail (tool result images, attachment chips) opens the shared `#img-viewer` lightbox: wheel/pinch zoom toward the pointer, drag pan when zoomed, double-click reset, Escape/✕/backdrop click closes (`openViewer` / `viewerWire`).
+
+
+### 4.6 On-the-Fly AI Response Editing
+- **Trigger**: Every character message features a ✨ rewrite button (`[data-act="ai-edit"]`, toggleable in Settings).
+- **Inline Box**: Clicking opens an inline prompt box (`aiEditBoxHtml`) asking what should be changed about this reply.
+- **Backend Flow (`POST /api/chats/:id/nodes/:nodeId/ai-edit`)**:
+  - Extracts conversational context up to that node and passes the original character message and user instruction to the Agent AI connection (`resolveAgentConfig`).
+  - The model rewrites the response in character, incorporating the user's requested adjustments.
+  - The rewritten text is attached as a new variant node via `db.editNode(chatId, nodeId, newText)` and set as the active child.
+  - Full branch navigation (`< x / y >`) is preserved, allowing the user to seamlessly switch between the original and edited versions.
+
+### 4.7 Long Chat Context Window Limits & Compaction
+- **Strategies (`longChatStrategy` setting)**:
+  - `nothing`: Retains full history without modification; exceeding provider context limits produces a provider token limit error.
+  - `compact`: When estimated tokens exceed `compactThreshold` % of `maxContextTokens`, the Agent AI generates a narrative summary of earlier messages, splices a `summary` node into the chat tree after the opening scenario, and preserves the most recent `compactKeepRatio` % of messages.
+  - `delete`: Prunes the oldest messages directly after the opening scenario node, splicing the first retained message directly to the scenario node (the opening scene is always preserved).
+- **Manual Actions**: The chats menu provides a "Compact conversation" button (`POST /api/chats/:id/compact`) to trigger compaction on demand.
+
+### 4.8 Auto Chat Title Generation
+- **Interval and Idle Triggers**: Every `autoTitleInterval` messages (default: 6), or when untitled chats have been idle for `autoTitleIdleMinutes` (default: 60 mins), the Agent AI reads the active conversation branch and generates a concise, evocative title under 40 characters (`POST /api/chats/:id/generate-title`).
+- **Database Tracking**: Saved via `db.renameChat(id, title, true)` with `chats.auto_titled = 1`.
+
+### 4.9 Multi-Character Group Chats & Turn Orchestration
+- **Creation (`POST /api/agent/generate-group-scenario` & `POST /api/chats`)**:
+  - Supports selecting 2 or more characters (`chats.character_ids`).
+  - Supports Freeform openings and AI-generated multi-character opening scenes featuring all participants and the user persona. Static scenarios and variable matrices are restricted from multi-character chats.
+- **Turn System**:
+  - Each character is represented by their own persona and prompt context in the room.
+  - In response to user messages, characters take sequential turns (up to `multiCharMaxRounds`, default: 2) speaking to each other and the user before yielding turn back to the user.
+  - Messages display speaker name badges (`.msg-speaker-badge`) and character-specific avatars/poses.
+  - The composer's ⚡ popover provides "Let [Character] speak" actions for manual turn prompting.
+
+### 4.10 Feature Toggles in Settings
+- Settings include a dedicated "Features" tab (`#set-pane-features`) with toggles for:
+  - AI Build Agent drawer (`agentSidebarEnabled`)
+  - On-the-fly AI response editing (`aiEditEnabled`)
+  - Auto chat title generation & interval/idle sliders (`autoTitleEnabled`, `autoTitleInterval`, `autoTitleIdleMinutes`)
+  - Long chat context limits dropdown, token limit input with auto-detect, and threshold sliders (`longChatStrategy`, `maxContextTokens`, `compactThreshold`, `compactKeepRatio`)
+  - Multi-character group chats & max rounds (`multiCharEnabled`, `multiCharMaxRounds`)
 
 ---
 

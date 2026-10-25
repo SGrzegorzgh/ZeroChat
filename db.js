@@ -157,6 +157,8 @@ ensureColumn('agent_session_changes', 'message_id', 'INTEGER DEFAULT 0');
    tagged with the turn's user message id so deleting/regenerating the turn
    removes them; user uploads stay at 0 and live until the log is cleared. */
 ensureColumn('agent_attachments', 'message_id', 'INTEGER DEFAULT 0');
+ensureColumn('chats', 'character_ids', "TEXT DEFAULT '[]'");
+ensureColumn('chats', 'auto_titled', 'INTEGER DEFAULT 0');
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS agent_messages (
@@ -589,6 +591,17 @@ const SETTINGS_DEFAULTS = {
   agentBaseUrl: '',
   agentApiKey: '',
   agentModel: '',
+  aiEditEnabled: true,
+  longChatStrategy: 'nothing',
+  maxContextTokens: 8192,
+  compactThreshold: 80,
+  compactKeepRatio: 25,
+  autoTitleEnabled: true,
+  autoTitleInterval: 6,
+  autoTitleIdleMinutes: 60,
+  multiCharEnabled: true,
+  multiCharMaxRounds: 2,
+  agentSidebarEnabled: true,
 };
 
 const POSES_SEED_FLAG = 'poses.seeded.v1';
@@ -614,7 +627,14 @@ function getSettings() {
 }
 
 function updateSettings(patch) {
-  const allowed = ['provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId', 'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey', 'poseModel', 'poseLikelihood', 'poseRecheck', 'poseContextCount', 'agentImageModel', 'agentImageEditModel', 'agentOverride', 'agentProvider', 'agentBaseUrl', 'agentApiKey', 'agentModel'];
+  const allowed = [
+    'provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId',
+    'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey',
+    'poseModel', 'poseLikelihood', 'poseRecheck', 'poseContextCount', 'agentImageModel', 'agentImageEditModel',
+    'agentOverride', 'agentProvider', 'agentBaseUrl', 'agentApiKey', 'agentModel',
+    'aiEditEnabled', 'longChatStrategy', 'maxContextTokens', 'compactThreshold', 'compactKeepRatio',
+    'autoTitleEnabled', 'autoTitleInterval', 'autoTitleIdleMinutes', 'multiCharEnabled', 'multiCharMaxRounds', 'agentSidebarEnabled'
+  ];
   const up = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
   for (const k of allowed) {
     if (!(k in patch)) continue;
@@ -632,6 +652,14 @@ function updateSettings(patch) {
     if (k === 'agentProvider') v = PROVIDER_IDS.includes(String(v)) ? String(v) : 'openrouter';
     if (k === 'agentBaseUrl' || k === 'agentApiKey' || k === 'agentModel' || k === 'agentImageModel' || k === 'agentImageEditModel') v = String(v ?? '');
     if (k === 'activePresetId' || k === 'activePersonalityId') v = v || null;
+    if (k === 'aiEditEnabled' || k === 'autoTitleEnabled' || k === 'multiCharEnabled' || k === 'agentSidebarEnabled') v = !!v;
+    if (k === 'longChatStrategy') v = ['nothing', 'compact', 'delete'].includes(String(v)) ? String(v) : 'nothing';
+    if (k === 'maxContextTokens') v = Math.round(clamp(v, 512, 2000000, 8192));
+    if (k === 'compactThreshold') v = Math.round(clamp(v, 20, 99, 80));
+    if (k === 'compactKeepRatio') v = Math.round(clamp(v, 5, 90, 25));
+    if (k === 'autoTitleInterval') v = Math.round(clamp(v, 2, 100, 6));
+    if (k === 'autoTitleIdleMinutes') v = Math.round(clamp(v, 5, 10080, 60));
+    if (k === 'multiCharMaxRounds') v = Math.round(clamp(v, 1, 10, 2));
     up.run(k, JSON.stringify(v));
   }
   return getSettings();
@@ -692,11 +720,12 @@ function shapeCharacter(row, withChats) {
     image: row.image,
     posesEnabled: !!row.poses_enabled,
     variables: safeParse(row.variables, {}),
-    responses: safeParse(row.responses, []),
+    responses: [],
   };
   if (withChats) {
     c.poses = getPoses(row.id, { withImages: false });
-    c.chats = db.prepare('SELECT * FROM chats WHERE character_id = ? ORDER BY updated_at DESC').all(row.id)
+    c.chats = db.prepare('SELECT * FROM chats WHERE character_id = ? OR character_ids LIKE ? ORDER BY updated_at DESC')
+      .all(row.id, '%"' + row.id + '"%')
       .map((ch) => shapeChat(ch));
   }
   return c;
@@ -711,6 +740,8 @@ function shapeChat(ch) {
   return {
     id: ch.id,
     characterId: ch.character_id,
+    characterIds: safeParse(ch.character_ids, []),
+    autoTitled: !!ch.auto_titled,
     scenarioId: ch.scenario_id || null,
     scenarioTitle: scTitle,
     title: ch.title,
@@ -862,12 +893,20 @@ function deleteCharacter(id) {
   return { ok: true };
 }
 
-function createChatInternal(characterId, scenarioId = null, initialScenarioContent = null) {
+function createChatInternal(characterId, scenarioId = null, initialScenarioContent = null, characterIds = null) {
   const c = characterRow(characterId);
   if (!c) throw new Error('Character not found');
   let sc = null;
   let scenarioContent = initialScenarioContent != null ? String(initialScenarioContent) : '';
   let initialTitle = 'New chat';
+  const charIds = Array.isArray(characterIds) && characterIds.length ? characterIds : [characterId];
+  if (charIds.length > 1) {
+    const names = charIds.map((cid) => {
+      const cr = characterRow(cid);
+      return cr ? cr.name : cid;
+    });
+    initialTitle = names.join(' & ');
+  }
   if (scenarioId && !scenarioContent) {
     sc = getScenario(scenarioId);
     if (sc) {
@@ -875,7 +914,7 @@ function createChatInternal(characterId, scenarioId = null, initialScenarioConte
         throw new Error('This character is not permitted to enter this scenario');
       }
       scenarioContent = sc.content;
-      initialTitle = sc.title || 'New chat';
+      initialTitle = sc.title || initialTitle;
     }
   }
   if (!scenarioContent && c.scenario) {
@@ -892,13 +931,13 @@ function createChatInternal(characterId, scenarioId = null, initialScenarioConte
   tree.nodes.root.children.push(sid);
   const defPose = c.poses_enabled ? getDefaultPose(characterId) : null;
   const initialPoseId = defPose ? defPose.id : null;
-  db.prepare('INSERT INTO chats (id, character_id, scenario_id, title, pose_id, tree, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)')
-    .run(id, characterId, scenarioId || null, initialTitle, initialPoseId, JSON.stringify(tree), t, t);
+  db.prepare('INSERT INTO chats (id, character_id, scenario_id, title, pose_id, tree, character_ids, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(id, characterId, scenarioId || null, initialTitle, initialPoseId, JSON.stringify(tree), JSON.stringify(charIds), t, t);
   return shapeChat(db.prepare('SELECT * FROM chats WHERE id = ?').get(id));
 }
 
-function createChat(characterId, scenarioId = null, initialScenarioContent = null) {
-  return createChatInternal(characterId, scenarioId, initialScenarioContent);
+function createChat(characterId, scenarioId = null, initialScenarioContent = null, characterIds = null) {
+  return createChatInternal(characterId, scenarioId, initialScenarioContent, characterIds);
 }
 
 function getChat(id) {
@@ -912,8 +951,12 @@ function deleteChat(id) {
   return { ok: true };
 }
 
-function renameChat(id, title) {
-  db.prepare('UPDATE chats SET title = ? WHERE id = ?').run(trunc(title, 40), id);
+function renameChat(id, title, autoTitled = false) {
+  if (autoTitled) {
+    db.prepare('UPDATE chats SET title = ?, auto_titled = 1 WHERE id = ?').run(trunc(title, 40), id);
+  } else {
+    db.prepare('UPDATE chats SET title = ? WHERE id = ?').run(trunc(title, 40), id);
+  }
 }
 
 function emptyTree() {
@@ -1041,6 +1084,7 @@ function addReply(chatId, parentId, content, extra = null) {
   }
   const node = { id: uid(), role: 'char', content: String(content), parent: parentId, children: [], active: 0, createdAt: Date.now() };
   if (extra && extra.poseId) node.poseId = extra.poseId;
+  if (extra && extra.characterId) node.characterId = extra.characterId;
   tree.nodes[node.id] = node;
   parent.children.push(node.id);
   parent.active = parent.children.length - 1;
@@ -1055,6 +1099,8 @@ function editNode(chatId, nodeId, content) {
   const parent = tree.nodes[orig.parent] || tree.nodes.root;
   const node = { id: uid(), role: orig.role, content: String(content), parent: parent.id, children: (orig.children || []).slice(), active: orig.active || 0, createdAt: Date.now() };
   if (orig.role === 'injection') node.state = 'pending';
+  if (orig.characterId) node.characterId = orig.characterId;
+  if (orig.poseId) node.poseId = orig.poseId;
   tree.nodes[node.id] = node;
   // Re-attach the downstream subtree so the conversation continues from the edited version
   for (const c of node.children) tree.nodes[c].parent = node.id;
@@ -2088,8 +2134,8 @@ module.exports = {
   bootstrap: () => ({ characters: getCharacters(), personalities: getPersonalities(), settings: getSettings(), presets: getPresets(), scenarios: getScenarios() }),
   getCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter,
   getScenarios, getScenario, createScenario, updateScenario, deleteScenario, isCharacterAllowedForScenario,
-  createChat, getChat, deleteChat, renameChat,
-  getTree, treeTip, pathNodes, addNode, addReply, editNode, deleteNode, switchNode, poseBefore, poseAtTip, activeChildId, insertOocNode,
+  createChat, getChat, deleteChat, renameChat, snapshotBeforeDestructive,
+  getTree, saveTree, treeTip, pathNodes, addNode, addReply, editNode, deleteNode, switchNode, poseBefore, poseAtTip, activeChildId, insertOocNode,
   getPersonalities, getPersona, createPersona, updatePersona, deletePersona,
   getPresets, getPreset, createPreset, updatePreset, deletePreset,
   getPoses, getPose, createPose, updatePose, deletePose, setChatPose, ensureDefaultPoses, getDefaultPose, setDefaultPose,

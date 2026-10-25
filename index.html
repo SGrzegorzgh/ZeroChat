@@ -38,6 +38,12 @@
               New character
             </span>
           </button>
+          <button id="new-group-chat-btn" class="btn btn-ghost" style="width:100%;margin-bottom:6px">
+            <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
+              <span style="font-size:15px">👥</span>
+              Multi-character chat
+            </span>
+          </button>
           <div class="sidebar-foot-row">
             <button id="import-chars-btn" type="button" class="btn btn-ghost sm" title="Import characters from JSON" style="flex:1">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -290,6 +296,10 @@
           <span class="tab-icon">💾</span>
           <span class="tab-label">Backup &amp; Data</span>
         </button>
+        <button type="button" class="settings-tab-btn" data-stab="features">
+          <span class="tab-icon">⚙️</span>
+          <span class="tab-label">Features</span>
+        </button>
       </div>
 
       <div class="m-body">
@@ -519,6 +529,103 @@
                 Import JSON
               </button>
             </div>
+          </div>
+        </div>
+
+        <!-- Tab 5: Features & Chat Controls -->
+        <div class="settings-tab-pane hidden" id="set-pane-features">
+          <div class="settings-section-title">General Features &amp; Sidebar</div>
+
+          <div class="field">
+            <div class="set-check">
+              <label for="set-feat-agent">Enable AI Build Agent drawer</label>
+              <input type="checkbox" id="set-feat-agent">
+            </div>
+            <p class="m-note" style="margin-top:6px">Displays the assistant drawer button in the header for interactive character/scenario creation and site management.</p>
+          </div>
+
+          <div class="field">
+            <div class="set-check">
+              <label for="set-feat-ai-edit">Enable on-the-fly AI response editing</label>
+              <input type="checkbox" id="set-feat-ai-edit">
+            </div>
+            <p class="m-note" style="margin-top:6px">Adds a ✨ rewrite button next to character messages to quickly prompt the AI to modify or adjust the response.</p>
+          </div>
+
+          <div class="pf-sep"></div>
+
+          <div class="settings-section-title">Long Chats &amp; Context Limits</div>
+          <div class="field">
+            <label for="set-long-strategy">When conversation approaches token limit:</label>
+            <select id="set-long-strategy" style="width:100%">
+              <option value="nothing">Do nothing (fail on limit)</option>
+              <option value="compact">Compact conversation (summarize with AI)</option>
+              <option value="delete">Delete older messages (keep opening scene)</option>
+            </select>
+            <p class="m-note" style="margin-top:6px">Determines what happens when a chat's history approaches the model's context window capacity.</p>
+          </div>
+
+          <div id="long-chat-details-wrap">
+            <div class="field">
+              <label>Max context tokens</label>
+              <div class="key-row">
+                <input type="number" id="set-max-tokens" min="512" max="2000000" step="256" placeholder="8192">
+                <button type="button" id="set-detect-tokens-btn" class="mini" title="Auto-detect context window from model">Detect from model</button>
+              </div>
+              <p class="m-note" style="margin-top:6px">Total token capacity for the active model (e.g. 8192, 16384, 32768, 128000).</p>
+            </div>
+
+            <div class="field">
+              <label>Compact trigger threshold <span class="val" id="compact-thresh-val"></span></label>
+              <input type="range" id="set-compact-thresh" min="50" max="95" step="1">
+              <p class="m-note">Percentage of max tokens where compaction or deletion begins.</p>
+            </div>
+
+            <div class="field" id="compact-keep-wrap">
+              <label>Messages to keep for context <span class="val" id="compact-keep-val"></span></label>
+              <input type="range" id="set-compact-keep" min="10" max="50" step="5">
+              <p class="m-note">Percentage of recent messages kept intact after compaction. The rest are summarized into a narrative overview.</p>
+            </div>
+          </div>
+
+          <div class="pf-sep"></div>
+
+          <div class="settings-section-title">Automatic Chat Title Generation</div>
+          <div class="field">
+            <div class="set-check">
+              <label for="set-feat-auto-title">Enable automatic title generation</label>
+              <input type="checkbox" id="set-feat-auto-title">
+            </div>
+            <p class="m-note" style="margin-top:6px">Uses the Agent AI to generate concise, thematic titles (under 40 characters) as your conversation progresses.</p>
+          </div>
+
+          <div id="auto-title-fields-wrap">
+            <div class="field">
+              <label>Generate title every N messages</label>
+              <input type="number" id="set-title-interval" min="2" max="50" step="1" placeholder="6">
+              <p class="m-note">Interval of messages between automatic title updates.</p>
+            </div>
+            <div class="field">
+              <label>Generate for untitled chats idle for (minutes)</label>
+              <input type="number" id="set-title-idle" min="5" max="1440" step="5" placeholder="60">
+              <p class="m-note">Automatically titles conversations left as "New chat" after this period of inactivity (default: 60 minutes = 1 hour).</p>
+            </div>
+          </div>
+
+          <div class="pf-sep"></div>
+
+          <div class="settings-section-title">Multi-Character Group Chats</div>
+          <div class="field">
+            <div class="set-check">
+              <label for="set-feat-multi-char">Enable multi-character conversations</label>
+              <input type="checkbox" id="set-feat-multi-char">
+            </div>
+            <p class="m-note" style="margin-top:6px">Enables group conversations featuring two or more characters who interact with each other and you.</p>
+          </div>
+          <div class="field" id="multi-char-rounds-wrap">
+            <label>Max character replies per turn</label>
+            <input type="number" id="set-multi-max-rounds" min="1" max="5" step="1" placeholder="2">
+            <p class="m-note">Number of character responses before pausing for you to speak (prevents bots from talking endlessly).</p>
           </div>
         </div>
       </div>
@@ -983,6 +1090,49 @@
         <button id="se-play" class="btn btn-ghost hidden" type="button">Play with character…</button>
         <span class="spacer"></span>
         <button id="se-save" class="btn btn-primary" type="button">Save scenario</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-multi-char">
+    <div class="modal-card modal-lg">
+      <div class="m-head">
+        <div>
+          <h3>Multi-Character Conversation</h3>
+          <p class="m-sub">Select 2 or more characters to chat together in a shared scene</p>
+        </div>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body">
+        <div class="sidebar-label" style="padding-left:0;margin:0 0 8px">Select participating characters</div>
+        <div id="mc-char-grid" class="mc-char-grid"></div>
+
+        <div class="sidebar-label" style="padding-left:0;margin:18px 0 8px">Opening scene</div>
+        <p class="m-note" style="margin-bottom:12px">Static scenarios and variables are not supported in multi-character chats. Start freeform or let the AI craft a custom opening scene bringing everyone together.</p>
+
+        <div class="ps-quick-card" id="mc-freeform-btn">
+          <div class="ps-card-icon">✨</div>
+          <div class="ps-card-info">
+            <div class="ps-card-title">Freeform / Open scene</div>
+            <div class="ps-card-desc">Start an open group conversation without any pre-set script.</div>
+          </div>
+          <span class="btn btn-ghost sm">Start</span>
+        </div>
+
+        <div class="ps-quick-card" id="mc-agent-gen-btn">
+          <div class="ps-card-icon">⚡</div>
+          <div class="ps-card-info">
+            <div class="ps-card-title">AI Generated Group Opening</div>
+            <div class="ps-card-desc">Use the agent model to craft an opening scene introducing all selected characters together.</div>
+          </div>
+          <span class="btn btn-ghost sm" id="mc-agent-gen-badge">Generate</span>
+        </div>
+      </div>
+      <div class="m-foot">
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" data-close type="button">Cancel</button>
       </div>
     </div>
   </div>
