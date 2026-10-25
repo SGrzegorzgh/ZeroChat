@@ -586,6 +586,9 @@ const SETTINGS_DEFAULTS = {
   poseContextCount: 3,
   agentImageModel: '',
   agentImageEditModel: '',
+  agentImageBaseUrl: '',
+  agentImageApiKey: '',
+  agentReasoning: 'default',
   agentOverride: false,
   agentProvider: 'openrouter',
   agentBaseUrl: '',
@@ -631,6 +634,7 @@ function updateSettings(patch) {
     'provider', 'baseUrl', 'apiKey', 'model', 'temperature', 'activePersonalityId', 'activePresetId',
     'bgOpacity', 'bgBlur', 'actionDim', 'poseAgent', 'poseProvider', 'poseBaseUrl', 'poseApiKey',
     'poseModel', 'poseLikelihood', 'poseRecheck', 'poseContextCount', 'agentImageModel', 'agentImageEditModel',
+    'agentImageBaseUrl', 'agentImageApiKey', 'agentReasoning',
     'agentOverride', 'agentProvider', 'agentBaseUrl', 'agentApiKey', 'agentModel',
     'aiEditEnabled', 'longChatStrategy', 'maxContextTokens', 'compactThreshold', 'compactKeepRatio',
     'autoTitleEnabled', 'autoTitleInterval', 'autoTitleIdleMinutes', 'multiCharEnabled', 'multiCharMaxRounds', 'agentSidebarEnabled'
@@ -650,7 +654,8 @@ function updateSettings(patch) {
     if (k === 'poseBaseUrl' || k === 'poseApiKey' || k === 'poseModel') v = String(v ?? '');
     if (k === 'agentOverride') v = !!v;
     if (k === 'agentProvider') v = PROVIDER_IDS.includes(String(v)) ? String(v) : 'openrouter';
-    if (k === 'agentBaseUrl' || k === 'agentApiKey' || k === 'agentModel' || k === 'agentImageModel' || k === 'agentImageEditModel') v = String(v ?? '');
+    if (k === 'agentBaseUrl' || k === 'agentApiKey' || k === 'agentModel' || k === 'agentImageModel' || k === 'agentImageEditModel' || k === 'agentImageBaseUrl' || k === 'agentImageApiKey') v = String(v ?? '');
+    if (k === 'agentReasoning') v = ['default', 'off', 'low', 'medium', 'high'].includes(String(v)) ? String(v) : 'default';
     if (k === 'activePresetId' || k === 'activePersonalityId') v = v || null;
     if (k === 'aiEditEnabled' || k === 'autoTitleEnabled' || k === 'multiCharEnabled' || k === 'agentSidebarEnabled') v = !!v;
     if (k === 'longChatStrategy') v = ['nothing', 'compact', 'delete'].includes(String(v)) ? String(v) : 'nothing';

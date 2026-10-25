@@ -403,9 +403,33 @@
               <input type="url" id="agent-url" placeholder="Leave empty for provider defaults">
               <p class="m-note">Set for custom or local OpenAI-compatible endpoints (e.g. LM Studio, Ollama).</p>
             </div>
+            <div class="field">
+              <label for="agent-reasoning">Model reasoning effort</label>
+              <select id="agent-reasoning" style="width:100%">
+                <option value="default">Default (model default)</option>
+                <option value="off">Off (disable reasoning / thinking)</option>
+                <option value="low">Low effort (~2k tokens budget)</option>
+                <option value="medium">Medium effort (~8k tokens budget)</option>
+                <option value="high">High effort (~16k tokens budget)</option>
+              </select>
+              <p class="m-note" style="margin-top:6px">Configures thinking / reasoning tokens for reasoning models (e.g. Claude 3.7 Sonnet, DeepSeek-R1, o1/o3-mini).</p>
+            </div>
           </div>
 
-          <div class="settings-section-title">Agent images</div>
+          <div class="settings-section-title">Agent image generation &amp; editing</div>
+          <div class="field">
+            <label>Image generation endpoint URL (optional)</label>
+            <input type="url" id="agent-image-url" placeholder="Leave empty to use the Agent's base URL">
+            <p class="m-note" style="margin-top:6px">Connect a different provider or local API specifically for image generation/edits (e.g. Automatic1111 / ComfyUI / custom OpenAI-compatible API).</p>
+          </div>
+          <div class="field">
+            <label>Image generation API key (optional)</label>
+            <div class="key-row">
+              <input type="password" id="agent-image-key" placeholder="Leave empty to use the Agent's API key" autocomplete="off">
+              <button id="agent-image-key-toggle" class="mini" type="button">Show</button>
+            </div>
+            <p class="m-note" style="margin-top:6px">API key for your dedicated image generation endpoint.</p>
+          </div>
           <div class="field">
             <label>Agent image model</label>
             <input type="text" id="agent-image-model" placeholder="dall-e-3" spellcheck="false">

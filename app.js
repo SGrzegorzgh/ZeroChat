@@ -519,6 +519,15 @@ function msgMetaHtml(n, chat, opts, tag = '') {
   const nav = total > 1
     ? `<span class="vnav"><button data-nav="prev" title="Previous version" ${idx <= 0 ? 'disabled' : ''}>${I.chevl}</button><span class="v-count">${idx + 1}/${total}</span><button data-nav="next" title="Next version" ${idx >= total - 1 ? 'disabled' : ''}>${I.chevr}</button></span>`
     : '';
+
+  if (n.role === 'scenario') {
+    const acts = `<span class="m-acts">
+      <button data-act="copy" title="Copy message text">${I.copy}</button>
+      <button data-act="ooc" title="Insert OOC directive after this message">${I.zap}</button>
+    </span>`;
+    return `<div class="msg-meta scenario-meta">${nav}<span class="m-acts-wrap">${acts}</span></div>`;
+  }
+
   const isChar = n.role === 'char';
   const isInj = n.role === 'injection';
   const isAiEdit = isChar && (state.settings?.aiEditEnabled !== false);
@@ -774,9 +783,13 @@ function msgHtml(c, p, n, chat) {
     }
   }
   if (n.role === 'scenario') {
-    return `<div class="msg-scenario" data-id="${n.id}">
-      <div class="ms-head">${I.book}<span>Scenario</span></div>
-      ${body}${meta}</div>`;
+    return `<div class="msg-scenario-wrap" data-id="${n.id}">
+      <div class="msg-scenario">
+        <div class="ms-head">${I.book}<span>Scenario</span></div>
+        ${body}
+      </div>
+      ${meta}
+    </div>`;
   }
   const main = `<div class="msg-main${editingId === n.id ? ' editing' : ''}">${body}${meta}</div>`;
   if (n.role === 'injection') {
@@ -2727,6 +2740,11 @@ function openSettings(tab = 'ai') {
   $('#agent-key-toggle').textContent = 'Show';
   $('#agent-model').value = s.agentModel || '';
   setComboModels($('#agent-model').closest('.combo'), PROVIDERS[s.agentProvider || 'openrouter']?.models || []);
+  $('#agent-reasoning').value = s.agentReasoning || 'default';
+  $('#agent-image-url').value = s.agentImageBaseUrl || '';
+  $('#agent-image-key').value = s.agentImageApiKey || '';
+  $('#agent-image-key').type = 'password';
+  $('#agent-image-key-toggle').textContent = 'Show';
   $('#agent-image-model').value = s.agentImageModel || '';
   $('#agent-image-edit-model').value = s.agentImageEditModel || '';
   updateAgentConnUI();
@@ -3068,6 +3086,9 @@ async function settingsSave() {
     agentBaseUrl: $('#agent-url').value.trim(),
     agentApiKey: $('#agent-key').value.trim(),
     agentModel: $('#agent-model').value.trim(),
+    agentReasoning: $('#agent-reasoning').value || 'default',
+    agentImageBaseUrl: $('#agent-image-url').value.trim(),
+    agentImageApiKey: $('#agent-image-key').value.trim(),
     agentImageModel: $('#agent-image-model').value.trim(),
     agentImageEditModel: $('#agent-image-edit-model').value.trim(),
     agentSidebarEnabled: Boolean($('#set-feat-agent')?.checked),
@@ -5053,7 +5074,10 @@ function wireEvents() {
         editingId = null;
         renderChat({ keepScroll: true });
         const input = $('#ai-edit-input');
-        if (input) input.focus();
+        if (input) {
+          makeTextareaAutoResize(input, { min: 72, max: 280 });
+          input.focus();
+        }
       } else if (act.dataset.act === 'ai-edit-cancel') {
         aiEditingId = null;
         renderChat({ keepScroll: true });
@@ -5266,6 +5290,12 @@ function wireEvents() {
     const showing = input.type === 'text';
     input.type = showing ? 'password' : 'text';
     $('#agent-key-toggle').textContent = showing ? 'Show' : 'Hide';
+  });
+  $('#agent-image-key-toggle')?.addEventListener('click', () => {
+    const input = $('#agent-image-key');
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    $('#agent-image-key-toggle').textContent = showing ? 'Show' : 'Hide';
   });
   $('#key-toggle').addEventListener('click', () => {
     const input = $('#set-key');

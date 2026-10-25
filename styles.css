@@ -767,7 +767,9 @@ body.sidebar-open #scrim {
   transition: opacity 0.15s;
 }
 .msg:hover .m-acts-wrap,
-.msg:focus-within .m-acts-wrap {
+.msg:focus-within .m-acts-wrap,
+.msg-scenario-wrap:hover .m-acts-wrap,
+.msg-scenario-wrap:focus-within .m-acts-wrap {
   opacity: 1;
 }
 @media (hover: none) {
@@ -1057,6 +1059,21 @@ body.sidebar-open #scrim {
   color: #14161a;
 }
 
+.msg-scenario-wrap {
+  max-width: min(680px, 92%);
+  margin: 6px auto 20px;
+  display: flex;
+  flex-direction: column;
+}
+.msg-scenario-wrap .msg-scenario {
+  max-width: 100%;
+  margin: 0;
+}
+.msg-scenario-wrap .msg-meta {
+  justify-content: flex-end;
+  margin-top: 5px;
+  padding: 0 4px;
+}
 .msg-scenario {
   max-width: min(680px, 92%);
   margin: 6px auto 20px;

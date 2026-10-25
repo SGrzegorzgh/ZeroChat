@@ -169,6 +169,29 @@ function resolveAgentConfig(settings) {
     baseUrl: pickAgent('baseUrl', base.baseUrl),
     apiKey: pickAgent('apiKey', base.apiKey),
     model: pickAgent('model', base.model),
+    reasoning: pickAgent('reasoning', base.reasoning || 'default'),
+  };
+}
+
+function resolveImageConfig(settings) {
+  const agentCfg = resolveAgentConfig(settings);
+  const rawBase = (settings.agentImageBaseUrl && settings.agentImageBaseUrl.trim())
+    ? settings.agentImageBaseUrl.trim()
+    : agentCfg.baseUrl;
+  const apiKey = (settings.agentImageApiKey && settings.agentImageApiKey.trim())
+    ? settings.agentImageApiKey.trim()
+    : agentCfg.apiKey;
+  const model = (settings.agentImageModel && settings.agentImageModel.trim())
+    ? settings.agentImageModel.trim()
+    : 'dall-e-3';
+  const editModel = (settings.agentImageEditModel && settings.agentImageEditModel.trim())
+    ? settings.agentImageEditModel.trim()
+    : 'gpt-image-1';
+  return {
+    baseUrl: agentNormBase(rawBase),
+    apiKey,
+    model,
+    editModel,
   };
 }
 
@@ -1369,7 +1392,7 @@ function agentReadChat(chatId, mode, opts = {}) {
   };
 }
 
-function agentToolDefs(cfg) {
+function agentToolDefs(cfg, settings = null) {
   const defs = [
     { name: 'site_overview', description: 'Snapshot of the site: counts, ids of every entity, who the user plays as, which AI preset is active and whether image generation is available. Call this first whenever you are unsure about ids or the current state.', props: {} },
     { name: 'list_characters', description: 'List every character with id, name, a trimmed persona and variable keys. Full details need get_character.', props: {} },
@@ -1412,7 +1435,8 @@ function agentToolDefs(cfg) {
     { name: 'edit_image', description: `Edit an existing image with an instruction (e.g. "make it evening", "change the jacket to red") using the provider's image-edit model. Pick the source: source_type "last" (the last image this session produced), "character" (portrait, needs character_id), "pose" (needs pose_id) or "attachment" (an image the user attached, needs attachment_id). Then optionally apply it to a character portrait or pose like generate_image. Requires an image-edit capable provider.`, props: { prompt: { type: 'string' }, source_type: { type: 'string', description: '"last", "character", "pose" or "attachment"' }, source_id: { type: 'string', description: 'character_id, pose_id or attachment_id (required unless source_type="last")' }, character_id: { type: 'string' }, target: { type: 'string', description: '"portrait", "pose" or "none"' }, pose_id: { type: 'string' }, pose_name: { type: 'string' }, pose_description: { type: 'string' }, size: { type: 'string' } }, req: ['prompt'] },
     { name: 'apply_image', description: `Apply an existing image to a character — no AI provider needed. Source: source_type "attachment" (an image the user attached; attachment_id from the [attached image: ...] marker) or "last" (the last image produced this session). Target: character_id + target "portrait" or "pose" (pose_id to replace an existing pose's image, or pose_name/pose_description to create a new one). Use this to put user-uploaded artwork on a character or turn it into poses.`, props: { source_type: { type: 'string', description: '"attachment" or "last"' }, source_id: { type: 'string', description: 'attachment_id (required for source_type="attachment")' }, character_id: { type: 'string' }, target: { type: 'string', description: '"portrait" or "pose"' }, pose_id: { type: 'string' }, pose_name: { type: 'string' }, pose_description: { type: 'string' }, is_default: { type: 'boolean', description: 'Also mark this new/pose as the character\'s default pose' } }, req: ['character_id', 'target'] },
   ];
-  const tools = defs.filter((d) => !['generate_image', 'edit_image'].includes(d.name) || cfg.provider !== 'anthropic');
+  const hasImage = Boolean(settings?.agentImageBaseUrl || (cfg.provider !== 'anthropic'));
+  const tools = defs.filter((d) => !['generate_image', 'edit_image'].includes(d.name) || hasImage);
   return tools.map((d) => ({
     type: 'function',
     function: { name: d.name, description: d.description, parameters: { type: 'object', properties: d.props, required: d.req || [] } },
@@ -1440,7 +1464,7 @@ function agentSiteOverview(settings, cfg) {
     personas: personas.map((pp) => ({ id: pp.id, name: pp.name, active: pp.id === settings.activePersonalityId })),
     presets: presets.map((p) => ({ id: p.id, name: p.name, active: p.id === settings.activePresetId, provider: p.provider, model: p.model })),
     active_preset_id: settings.activePresetId,
-    image_generation: cfg.provider !== 'anthropic' ? 'available (generates, edits and applies images)' : 'unavailable for anthropic presets — image applying still works',
+    image_generation: (cfg.provider !== 'anthropic' || settings?.agentImageBaseUrl) ? 'available (generates, edits and applies images)' : 'unavailable for anthropic presets — image applying still works',
   };
 }
 
@@ -1851,12 +1875,13 @@ async function runAgentTool(name, args, settings, cfg) {
 
     case 'generate_image': {
       agentNeed(args, ['prompt'], name);
-      if (cfg.provider === 'anthropic') throw new Error('Image generation is not wired for Anthropic presets — suggest connecting an OpenAI-compatible provider instead.');
-      const base = agentNormBase(cfg.baseUrl);
-      const model = settings.agentImageModel || 'dall-e-3';
+      const imgCfg = resolveImageConfig(settings);
+      if (cfg.provider === 'anthropic' && !settings.agentImageBaseUrl) throw new Error('Image generation is not wired for Anthropic presets — configure an image generation endpoint in Settings.');
+      const base = imgCfg.baseUrl;
+      const model = imgCfg.model;
       const r = await fetchJson(base + '/images/generations', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...(cfg.apiKey ? { authorization: 'Bearer ' + cfg.apiKey } : {}) },
+        headers: { 'content-type': 'application/json', ...(imgCfg.apiKey ? { authorization: 'Bearer ' + imgCfg.apiKey } : {}) },
         body: JSON.stringify({ model, prompt: String(args.prompt).slice(0, 4000), n: 1, size: args.size || '1024x1024' }),
       }, 120000);
       const image = extractProviderImage(r);
@@ -1869,13 +1894,14 @@ async function runAgentTool(name, args, settings, cfg) {
 
     case 'edit_image': {
       agentNeed(args, ['prompt'], name);
-      if (cfg.provider === 'anthropic') throw new Error('Image editing is not wired for Anthropic presets — suggest connecting an OpenAI-compatible provider instead.');
+      const imgCfg = resolveImageConfig(settings);
+      if (cfg.provider === 'anthropic' && !settings.agentImageBaseUrl) throw new Error('Image editing is not wired for Anthropic presets — configure an image generation endpoint in Settings.');
       const srcRaw = agentResolveImage(args.source_type, args.source_id);
       const src = await agentImageToDataUrl(srcRaw);
       const decoded = parseImageDataUrl(src);
       if (!decoded) throw new Error('The source image could not be decoded — it may be a remote URL or an unsupported format.');
-      const base = agentNormBase(cfg.baseUrl);
-      const model = settings.agentImageEditModel || 'gpt-image-1';
+      const base = imgCfg.baseUrl;
+      const model = imgCfg.editModel;
       const ext = decoded.mime === 'image/jpeg' ? 'jpeg' : decoded.mime === 'image/webp' ? 'webp' : 'png';
       const mp = multipartBody({
         fields: { prompt: String(args.prompt).slice(0, 4000), model, n: '1', ...(args.size ? { size: args.size } : {}) },
@@ -1883,7 +1909,7 @@ async function runAgentTool(name, args, settings, cfg) {
       });
       const r = await fetchJson(base + '/images/edits', {
         method: 'POST',
-        headers: { ...(cfg.apiKey ? { authorization: 'Bearer ' + cfg.apiKey } : {}), 'content-type': mp.contentType },
+        headers: { ...(imgCfg.apiKey ? { authorization: 'Bearer ' + imgCfg.apiKey } : {}), 'content-type': mp.contentType },
         body: mp.body,
       }, 180000);
       const image = extractProviderImage(r);
@@ -1948,6 +1974,13 @@ async function agentCallOpenAI(cfg, system, messages, tools, signal, onDelta) {
   const headers = { 'content-type': 'application/json', ...(cfg.apiKey ? { authorization: 'Bearer ' + cfg.apiKey } : {}) };
   const out = { model: cfg.model, messages: [{ role: 'system', content: system }, ...messages], tools, tool_choice: 'auto', stream: true };
   if (typeof cfg.temperature === 'number') out.temperature = cfg.temperature;
+  if (cfg.reasoning === 'off') {
+    if (cfg.provider === 'openrouter') out.reasoning = { enabled: false };
+    else out.reasoning_effort = 'none';
+  } else if (cfg.reasoning && cfg.reasoning !== 'default') {
+    if (cfg.provider === 'openrouter') out.reasoning = { effort: cfg.reasoning };
+    else out.reasoning_effort = cfg.reasoning;
+  }
   agentReqLog(cfg, base + '/chat/completions', out);
 
   let text = '';
@@ -2028,6 +2061,13 @@ async function agentCallOpenAIPlain(cfg, system, messages, tools, signal) {
   const headers = { 'content-type': 'application/json', ...(cfg.apiKey ? { authorization: 'Bearer ' + cfg.apiKey } : {}) };
   const out = { model: cfg.model, messages: [{ role: 'system', content: system }, ...messages], tools, tool_choice: 'auto' };
   if (typeof cfg.temperature === 'number') out.temperature = cfg.temperature;
+  if (cfg.reasoning === 'off') {
+    if (cfg.provider === 'openrouter') out.reasoning = { enabled: false };
+    else out.reasoning_effort = 'none';
+  } else if (cfg.reasoning && cfg.reasoning !== 'default') {
+    if (cfg.provider === 'openrouter') out.reasoning = { effort: cfg.reasoning };
+    else out.reasoning_effort = cfg.reasoning;
+  }
   agentReqLog(cfg, base + '/chat/completions', out);
   const r = await postAgentJson(base + '/chat/completions', headers, out, signal, 180000);
   if (r.aborted) throw new Error('Aborted');
@@ -2060,6 +2100,15 @@ async function agentCallAnthropic(cfg, system, messages, tools, signal, onDelta)
     max_tokens: 4096,
     stream: true,
   };
+  if (cfg.reasoning === 'off') {
+    body.thinking = { type: 'disabled' };
+  } else if (cfg.reasoning && cfg.reasoning !== 'default') {
+    const budgets = { low: 2048, medium: 8192, high: 16384 };
+    const budget = budgets[cfg.reasoning] || 2048;
+    body.thinking = { type: 'enabled', budget_tokens: budget };
+    body.max_tokens = Math.max(body.max_tokens || 4096, budget + 2048);
+    body.temperature = 1;
+  }
   agentReqLog(cfg, base + '/messages', { ...body, system, messages });
 
   let fin = '';
@@ -2127,6 +2176,15 @@ async function agentCallAnthropicPlain(cfg, system, messages, tools, signal) {
     tools: tools.map((t) => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })),
     max_tokens: 4096,
   };
+  if (cfg.reasoning === 'off') {
+    body.thinking = { type: 'disabled' };
+  } else if (cfg.reasoning && cfg.reasoning !== 'default') {
+    const budgets = { low: 2048, medium: 8192, high: 16384 };
+    const budget = budgets[cfg.reasoning] || 2048;
+    body.thinking = { type: 'enabled', budget_tokens: budget };
+    body.max_tokens = Math.max(body.max_tokens || 4096, budget + 2048);
+    body.temperature = 1;
+  }
   agentReqLog(cfg, base + '/messages', { ...body, system, messages });
   const r = await postAgentJson(base + '/messages', headers, body, signal, 180000);
   if (r.aborted) throw new Error('Aborted');
