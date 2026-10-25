@@ -142,11 +142,21 @@ async function streamGenerate(path, body, onDelta) {
         if (ev.type === 'delta') {
           full += ev.text;
           onDelta(full);
+        } else if (ev.type === 'directing') {
+          // The turn is not over: someone else may reply. Show the "scene
+          // continues" indicator while the director decides who speaks next.
+          if (streaming) {
+            streaming.characterId = null;
+            streaming.charName = null;
+            streaming.directing = true;
+          }
+          renderChat({ keepScroll: true });
         } else if (ev.type === 'next_char') {
           full = '';
           if (streaming) {
             streaming.characterId = ev.characterId;
             streaming.charName = ev.charName;
+            streaming.directing = false;
             streaming.text = '';
           }
           renderChat({ keepScroll: true });
@@ -960,6 +970,11 @@ function renderChat(opts = {}) {
         : `<div class="msg user"><div class="msg-main"><div class="bubble dots"><span></span><span></span><span></span></div></div>${personaAvatarHtml(p, 'sm', true)}</div>`;
     } else {
       const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+      // Between replies the turn director decides who speaks next: show a
+      // neutral in-between indicator, not a fake typing bubble for one char.
+      if (streaming && streaming.directing && isMulti) {
+        html += `<div class="msg char turn-direct"><div class="msg-main"><div class="turn-direct-pill"><span>The scene continues — deciding who speaks next</span><span class="dots dots-sm"><span></span><span></span><span></span></span></div></div></div>`;
+      } else {
       const streamChar = (streaming && streaming.characterId)
         ? (state.characters.find((x) => x.id === streaming.characterId) || c)
         : c;
@@ -971,6 +986,7 @@ function renderChat(opts = {}) {
         html += `<div class="msg char streaming">${avatarHtml(streamChar, 'sm', true, cpThumb)}<div class="msg-main">${badge}<div class="bubble">${md(streaming.text)}</div></div></div>`;
       } else {
         html += `<div class="msg char">${avatarHtml(streamChar, 'sm', true, null)}<div class="msg-main">${badge}<div class="bubble dots"><span></span><span></span><span></span></div></div></div>`;
+      }
       }
     }
   }

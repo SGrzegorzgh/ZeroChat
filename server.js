@@ -375,7 +375,10 @@ function buildSystemText(char, persona, hasInjection, cfg, scenarioText, chatOrS
     if (otherChars.length) {
       parts.push(`Other characters present in this shared scene:\n` +
         otherChars.map((oc) => `- "${oc.name}": ${ex(oc.description) || 'Present in scene.'}`).join('\n') +
-        `\nStay in character strictly as "${char.name}". Do NOT generate dialogue or actions for "${userName}" or ${otherChars.map((oc) => `"${oc.name}"`).join(', ')}. Speak only for yourself as "${char.name}".`);
+        `\nONE SPEAKER PER REPLY — you write ONLY "${char.name}". Every word of this reply is ${char.name} speaking or acting (first person: "I", "me", "my").
+- NEVER write dialogue for anyone else: no "Rex: ..." lines, no quoted speech invented for "${userName}" or another character, nothing like *Rex says "..."*. If a quoted line appears in your reply, it is ${char.name} speaking, and no one else.
+- NEVER narrate another character's deliberate actions or reactions as if you controlled them, and never imitate their voice.
+- You MAY notice them from ${char.name}'s own point of view (*I glance over, waiting to see what ${otherChars[0].name} does*) — but leave their answer unwritten. The scene will hand them the reply; your job is only your own beat.`);
       parts.push(`MULTI-CHARACTER RESPONSE LENGTH & PACING RULE:
 This is a shared group roleplay with multiple active characters and "${userName}".
 Keep your response concise, reactive, and roughly a third shorter than a typical 1-on-1 roleplay response (about two-thirds the usual length — even if the active preset or general instructions request long or multi-paragraph responses).
@@ -393,7 +396,12 @@ Write a single focused beat: one or two short sentences of action/expression and
   } else {
     parts.push(STYLE_LINE);
     if (hasInjection) parts.push(OOC_LINE);
-    parts.push(`Then the roleplay chat between "${char.name}" and "${userName}" begins.`);
+    const isGroup = chatOrScenario && Array.isArray(chatOrScenario.characterIds) && chatOrScenario.characterIds.length > 1;
+    if (isGroup) {
+      parts.push(`Now write ${char.name}'s next reply — and only ${char.name}'s: your own actions (*...*) and your own spoken lines ("..."). Then stop and yield the scene.`);
+    } else {
+      parts.push(`Then the roleplay chat between "${char.name}" and "${userName}" begins.`);
+    }
   }
 
   return parts.join('\n\n');
@@ -759,6 +767,10 @@ async function runGroupFollowups({ chatId, firstReplyId, firstCharId, persona, s
   let fbIdx = 0;
   let lastReplyId = firstReplyId;
   for (let rIdx = 0; rIdx < maxRounds - 1 && (!signal || !signal.aborted); rIdx++) {
+    // Flag the client that the conversation turn is still in motion — the
+    // director decides who speaks next while the UI shows a live indicator.
+    tlog('turn', `round ${rIdx + 1} — directing (aborted=${!!(signal && signal.aborted)})`);
+    emit({ type: 'directing', round: rIdx + 1 });
     const pick = await pickNextSpeaker(chatId, lastReplyId, groupChars, settings, signal);
     let nextChar;
     if (pick && pick.ok) {
@@ -767,6 +779,7 @@ async function runGroupFollowups({ chatId, firstReplyId, firstCharId, persona, s
       nextChar = groupChars.find((c) => c.id === fallbackIds[fbIdx]) || null;
       fbIdx++;
     }
+    tlog('turn', `pick=${JSON.stringify(pick)} → nextChar=${nextChar ? nextChar.name : 'NONE'}`);
     if (!nextChar) break;
     emit({ type: 'next_char', characterId: nextChar.id, charName: nextChar.name });
     const text = await generateReplyStream(nextChar, db.pathNodes(freshChat.tree, lastReplyId), persona, settings, (d) => {
