@@ -453,6 +453,8 @@ function renderHeader() {
   if (pillLabel) {
     pillLabel.textContent = chat && chat.title ? chat.title : 'Chats';
   }
+  // The background layout quick-menu only applies to group chats.
+  $('#bg-wrap')?.classList.toggle('hidden', !isMulti);
 }
 
 let currentBgKey = null;
@@ -500,7 +502,6 @@ function applyChatBg() {
 
   const s = state.settings;
   const mode = ['split-tb', 'split-lr'].includes(s.bgMode) ? s.bgMode : 'single';
-  const fit = s.bgFit === 'cover' ? 'cover' : 'contain';
   const chat = activeChat(c);
   const isMulti = !!(chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1);
   const split = isMulti && mode !== 'single' && op > 0;
@@ -522,6 +523,8 @@ function applyChatBg() {
   srcs = srcs.filter(Boolean);
 
   const layout = split && srcs.length === 2 ? mode : '';
+  // One character on screen is always shown whole; crops are a split option.
+  const fit = layout ? (s.bgFit === 'cover' ? 'cover' : 'contain') : 'contain';
   bg.classList.toggle('split-tb', layout === 'split-tb');
   bg.classList.toggle('split-lr', layout === 'split-lr');
 
@@ -1540,6 +1543,7 @@ function toggleMenu(wrapId) {
     if (wrapId === 'chats-wrap') renderChatsMenu();
     if (wrapId === 'preset-wrap') renderPresetMenu();
     if (wrapId === 'more-wrap') renderMoreMenu();
+    if (wrapId === 'bg-wrap') renderBgMenu();
     if (wrapId === 'composer-actions-wrap') renderComposerActionsMenu();
     menu.classList.add('open');
   }
@@ -1653,9 +1657,6 @@ function getModalSnapshot(id) {
       temperature: +($('#set-temp')?.value || 1),
       bgOpacity: Math.round(+($('#set-bgop')?.value || 50)),
       bgBlur: Math.round(+($('#set-bgblur')?.value || 12)),
-      bgMode: $('#set-bgmode')?.value || 'single',
-      bgSingleCharId: $('#set-bgchar')?.value || null,
-      bgFit: $('#set-bgfit')?.value || 'contain',
       actionDim: Math.round(+($('#set-actdim')?.value || 65)),
       poseAgent: Boolean($('#pose-agent')?.checked),
       poseRecheck: Boolean($('#pose-recheck')?.checked),
@@ -2811,12 +2812,6 @@ function openSettings(tab = 'ai') {
   $('#bgop-val').textContent = Math.round((+s.bgOpacity || 0) * 100) + '%';
   $('#set-bgblur').value = +s.bgBlur || 0;
   $('#bgblur-val').textContent = (+s.bgBlur || 0) + 'px';
-  $('#set-bgmode').value = ['split-tb', 'split-lr'].includes(s.bgMode) ? s.bgMode : 'single';
-  const bgSel = $('#set-bgchar');
-  bgSel.innerHTML = `<option value="">Chat's own character</option>` +
-    state.characters.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
-  bgSel.value = state.characters.some((x) => x.id === s.bgSingleCharId) ? s.bgSingleCharId : '';
-  $('#set-bgfit').value = s.bgFit === 'cover' ? 'cover' : 'contain';
   const dimPct = Math.round((Number.isFinite(+s.actionDim) ? +s.actionDim : 0.72) * 100);
   $('#set-actdim').value = dimPct;
   $('#actdim-val').textContent = dimPct + '%';
@@ -3167,9 +3162,6 @@ async function settingsSave() {
     temperature: +$('#set-temp').value,
     bgOpacity: +$('#set-bgop').value / 100,
     bgBlur: +$('#set-bgblur').value,
-    bgMode: $('#set-bgmode').value || 'single',
-    bgSingleCharId: $('#set-bgchar').value || null,
-    bgFit: $('#set-bgfit').value || 'contain',
     actionDim: +$('#set-actdim').value / 100,
     poseAgent: $('#pose-agent').checked,
     poseRecheck: $('#pose-recheck').checked,
@@ -3294,6 +3286,73 @@ function renderMoreMenu() {
     <button class="menu-item" id="mf-agent">${I.sparkles}<span>AI Agent</span></button>
     <button class="menu-item" id="mf-manage-presets">${I.gear}<span>Manage presets</span></button>
     <button class="menu-item" id="mf-settings">${I.gear}<span>Settings</span></button>`;
+}
+
+/* Quick background menu (header image icon, group chats only). Group scenes
+   can split the backdrop between two characters; one-character views always
+   show the whole image without cropping. Changes here save immediately. */
+function renderBgMenu() {
+  const menu = $('#bg-menu');
+  if (!menu) return;
+  const s = state.settings;
+  const mode = ['split-tb', 'split-lr'].includes(s.bgMode) ? s.bgMode : 'single';
+  const fit = s.bgFit === 'cover' ? 'cover' : 'contain';
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  const group = (chat && Array.isArray(chat.characterIds))
+    ? chat.characterIds.map((id) => state.characters.find((x) => x.id === id)).filter(Boolean)
+    : [];
+  const picked = s.bgSingleCharId && group.some((x) => x.id === s.bgSingleCharId) ? s.bgSingleCharId : '';
+  const singleActive = !!picked || mode === 'single';
+  const layoutHtml = [
+    { id: 'single', name: 'One character', desc: 'Whole image behind the chat' },
+    { id: 'split-tb', name: 'Top / bottom split', desc: 'The two characters share the screen' },
+    { id: 'split-lr', name: 'Left / right split', desc: 'The two characters share the screen' },
+  ].map((o) => {
+    const active = o.id === 'single' ? singleActive : (!picked && mode === o.id);
+    return `
+    <button class="menu-item ${active ? 'active' : ''}" data-layout="${o.id}">
+      <span class="mi-main">
+        <span class="mi-name">${o.name}</span>
+        <span class="mi-desc">${o.desc}</span>
+      </span>
+      ${active ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>`;
+  }).join('');
+  const charHtml = `
+    <button class="menu-item ${!picked ? 'active' : ''}" data-bgchar="">
+      <span class="mi-main">
+        <span class="mi-name">Auto</span>
+        <span class="mi-desc">Follows the chat's starting character</span>
+      </span>
+      ${!picked ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>` +
+    group.map((g) => `
+    <button class="menu-item ${picked === g.id ? 'active' : ''}" data-bgchar="${g.id}">
+      ${avatarHtml(g, 'sm')}
+      <span class="mi-main"><span class="mi-name">${esc(g.name)}</span></span>
+      ${picked === g.id ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>`).join('');
+  const fitHtml = [
+    { id: 'cover', name: 'Crop to screen', desc: 'Each half fills edge to edge' },
+    { id: 'contain', name: 'Whole image', desc: 'Original aspect, smaller on screen' },
+  ].map((o) => `
+    <button class="menu-item ${fit === o.id ? 'active' : ''}" data-bgfit="${o.id}">
+      <span class="mi-main">
+        <span class="mi-name">${o.name}</span>
+        <span class="mi-desc">${o.desc}</span>
+      </span>
+      ${fit === o.id ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>`).join('');
+  menu.innerHTML = `
+    <div class="menu-title">Background layout</div>
+    ${layoutHtml}
+    <div class="menu-sep"></div>
+    <div class="menu-title">Show only one</div>
+    ${charHtml}
+    <div class="menu-sep"></div>
+    <div class="menu-title">Display in splits</div>
+    ${fitHtml}`;
 }
 
 /* Tiny popover above the composer's ⚡ button: the two "special send" actions
@@ -5205,6 +5264,24 @@ function wireEvents() {
   $('#chats-btn').addEventListener('click', () => toggleMenu('chats-wrap'));
   $('#preset-btn').addEventListener('click', () => toggleMenu('preset-wrap'));
   $('#more-btn').addEventListener('click', () => toggleMenu('more-wrap'));
+  $('#bg-btn').addEventListener('click', () => toggleMenu('bg-wrap'));
+  $('#bg-menu').addEventListener('click', async (e) => {
+    const lay = e.target.closest('[data-layout]');
+    const bc = e.target.closest('[data-bgchar]');
+    const bf = e.target.closest('[data-bgfit]');
+    if (!lay && !bc && !bf) return;
+    const patch = lay
+      ? { bgMode: lay.dataset.layout, bgSingleCharId: null }
+      : bf
+        ? { bgFit: bf.dataset.bgfit }
+        : { bgSingleCharId: bc.dataset.bgchar || null };
+    try {
+      const out = await api('/settings', { method: 'PUT', body: JSON.stringify(patch) });
+      state.settings = out || state.settings;
+      applyChatBg();
+      renderBgMenu();
+    } catch (err) { console.error('Background setting failed:', err.message); }
+  });
   $('#settings-btn').addEventListener('click', () => { closeMenus(); openSettings(); });
   $('#edit-char-btn').addEventListener('click', () => { closeMenus(); const c = activeChar(); if (c) openCharModal(c); });
 

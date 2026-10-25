@@ -165,6 +165,13 @@
               <div class="menu" id="preset-menu"></div>
             </div>
 
+            <div class="menu-wrap hidden" id="bg-wrap">
+              <button id="bg-btn" class="icon-btn" aria-label="Background" title="Background layout (group chats)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              </button>
+              <div class="menu" id="bg-menu"></div>
+            </div>
+
             <div class="menu-wrap" id="more-wrap">
               <button id="more-btn" class="icon-btn" aria-label="More options" title="Persona, AI preset, edit &amp; settings">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
@@ -504,29 +511,6 @@
           <div class="pf-sep"></div>
 
           <div class="settings-section-title">Reading &amp; Background Display</div>
-          <div class="field">
-            <label>Background layout</label>
-            <select id="set-bgmode">
-              <option value="single">Single image</option>
-              <option value="split-tb">Split top / bottom (group chats)</option>
-              <option value="split-lr">Split left / right (group chats)</option>
-            </select>
-            <p class="m-note">Group chats can share the background between the first two characters' artworks.</p>
-          </div>
-          <div class="field">
-            <label>Background character</label>
-            <select id="set-bgchar">
-              <option value="">Chat's own character</option>
-            </select>
-            <p class="m-note">Pin one character's artwork as the background instead.</p>
-          </div>
-          <div class="field">
-            <label>Background image display</label>
-            <select id="set-bgfit">
-              <option value="contain">Original aspect (smaller, whole image)</option>
-              <option value="cover">Crop to screen (fills edge to edge)</option>
-            </select>
-          </div>
           <div class="field">
             <label>Chat background opacity <span class="val" id="bgop-val"></span></label>
             <input type="range" id="set-bgop" min="0" max="100" step="1">
