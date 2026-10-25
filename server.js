@@ -310,7 +310,7 @@ function buildTurns(pathNodes, char, persona, chatOrScenario = null, asUser = fa
   return { turns, hasInjection };
 }
 
-const STYLE_LINE = 'Do not make the character dialog lines too long — focus more on what the character is doing. Write actions and scene beats in *asterisks* and wrap all spoken dialogue in "double quotes". Stay fully in character: never break the fourth wall, never mention being an AI, and never write the user\'s lines or actions for them.';
+const styleLine = (char, userName) => `Do not make the character dialog lines too long — focus more on what the character is doing. Write actions and scene beats in *asterisks* and wrap all spoken dialogue in "double quotes". NARRATION PERSON: narrate from outside the character — ${char.name} is "she"/"he"/their name and ${userName} is always "you" between asterisks (e.g. *${char.name} steps closer to you, studying you with a curious smile*), never "*I step closer to you*". In spoken dialogue ${char.name} talks normally as "I", and addresses ${userName} by name or naturally. Stay fully in character: never break the fourth wall, never mention being an AI, and never write ${userName}'s lines or actions for them.`;
 const OOC_LINE = '((OOC directive: ...)) blocks are out-of-character steering from the user. Treat them as authoritative instructions for what happens next in the scene and weave them into your reply naturally.';
 const DEFAULT_PRESET_PROMPT = 'Write "{{char}}\'s" next reply in a fictional roleplay chat between "{{user}}" and "{{char}}".';
 
@@ -375,10 +375,10 @@ function buildSystemText(char, persona, hasInjection, cfg, scenarioText, chatOrS
     if (otherChars.length) {
       parts.push(`Other characters present in this shared scene:\n` +
         otherChars.map((oc) => `- "${oc.name}": ${ex(oc.description) || 'Present in scene.'}`).join('\n') +
-        `\nONE SPEAKER PER REPLY — you write ONLY "${char.name}". Every word of this reply is ${char.name} speaking or acting (first person: "I", "me", "my").
+        `\nONE SPEAKER PER REPLY — you write ONLY "${char.name}". Every word of this reply is ${char.name} speaking or acting (narration: ${char.name} as "she"/"he"/name and "${userName}" as "you"; dialogue: ${char.name} as "I").
 - NEVER write dialogue for anyone else: no "Rex: ..." lines, no quoted speech invented for "${userName}" or another character, nothing like *Rex says "..."*. If a quoted line appears in your reply, it is ${char.name} speaking, and no one else.
 - NEVER narrate another character's deliberate actions or reactions as if you controlled them, and never imitate their voice.
-- You MAY notice them from ${char.name}'s own point of view (*I glance over, waiting to see what ${otherChars[0].name} does*) — but leave their answer unwritten. The scene will hand them the reply; your job is only your own beat.`);
+- You MAY notice them from ${char.name}'s own point of view (*${char.name} glances over, waiting to see what ${otherChars[0].name} does*) — but leave their answer unwritten. The scene will hand them the reply; your job is only your own beat.`);
       parts.push(`MULTI-CHARACTER RESPONSE LENGTH & PACING RULE:
 This is a shared group roleplay with multiple active characters and "${userName}".
 Keep your response concise, reactive, and roughly a third shorter than a typical 1-on-1 roleplay response (about two-thirds the usual length — even if the active preset or general instructions request long or multi-paragraph responses).
@@ -394,7 +394,7 @@ Write a single focused beat: one or two short sentences of action/expression and
     if (hasInjection) parts.push(OOC_LINE);
     parts.push(`Now write "${userName}'s" next response:`);
   } else {
-    parts.push(STYLE_LINE);
+    parts.push(styleLine(char, userName));
     if (hasInjection) parts.push(OOC_LINE);
     const isGroup = chatOrScenario && Array.isArray(chatOrScenario.characterIds) && chatOrScenario.characterIds.length > 1;
     if (isGroup) {
@@ -2858,6 +2858,7 @@ function parseOpeningGeneration(text, characters) {
       `- Set the physical space, sensory atmosphere, and what brings everyone together.`,
       `- Provide individual opening responses for the characters present to naturally start the conversation.`,
       `- Write actions/beats in *asterisks* and spoken dialogue in "double quotes".`,
+      `- NARRATION PERSON: descriptions address "${userName}" as "you" and each character as "she"/"he"/name (e.g. *She turns to face you*), never *I ...* outside quotes; in dialogue characters speak as "I" and may call "${userName}" by name.`,
       `- Do NOT generate lines or actions for "${userName}".`,
       'OUTPUT FORMAT:',
       'You MUST return a JSON object with this exact schema without markdown backticks or extra commentary:',
@@ -2934,6 +2935,7 @@ function parseOpeningGeneration(text, characters) {
       `- Set the physical space, sensory atmosphere, and context of the encounter.`,
       `- Give "${char.name}" an opening action and line of dialogue to greet or confront "${userName}".`,
       `- Write actions/beats in *asterisks* and spoken dialogue in "double quotes".`,
+      `- NARRATION PERSON: descriptions address "${userName}" as "you" and each character as "she"/"he"/name (e.g. *She turns to face you*), never *I ...* outside quotes; in dialogue characters speak as "I" and may call "${userName}" by name.`,
       `- Do NOT generate lines or actions for "${userName}".`,
       'OUTPUT FORMAT:',
       'You MUST return a JSON object with this exact schema without markdown backticks or extra commentary:',
@@ -3016,6 +3018,7 @@ function parseOpeningGeneration(text, characters) {
       'Rules:',
       `- Feature ${chars.map((c) => `"${c.name}"`).join(', ')} together with "${userName}".`,
       `- Write actions/beats in *asterisks* and spoken dialogue in "double quotes".`,
+      `- NARRATION PERSON: descriptions address "${userName}" as "you" and each character as "she"/"he"/name (e.g. *She turns to face you*), never *I ...* outside quotes; in dialogue characters speak as "I" and may call "${userName}" by name.`,
       `- Do NOT generate lines or actions for "${userName}".`,
     ].join('\n');
 
@@ -3614,6 +3617,7 @@ function parseOpeningGeneration(text, characters) {
       `Writing guidelines:`,
       `- Stay strictly in character as "${character.name}".`,
       `- Maintain the roleplay convention: actions and scene beats in *asterisks*, spoken dialogue in "double quotes".`,
+      `- NARRATION PERSON: descriptions address "${userName || 'the user'}" as "you" and "${character.name}" as "she"/"he"/their name between asterisks (never *I ...* outside quotes); in dialogue the character speaks as "I" and may call the user by name.`,
       `- Implement the requested changes naturally into the response.`,
       `- Return ONLY the edited response text. Do NOT include commentary, explanations, greetings, or wrap the whole output in markdown code blocks.`,
     ].join('\n');
