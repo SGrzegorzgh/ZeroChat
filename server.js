@@ -708,89 +708,276 @@ async function generateChatTitle(chatId) {
   }
 }
 
-/* Group-chat turn director: after each character reply, the chat's own model
-   decides who speaks next. Any member of the room may be picked — even the
-   character who just spoke — or nobody, handing the scene back to the user. */
-async function pickNextSpeaker(chatId, fromNodeId, chars, settings, signal) {
-  const out = { ok: false, charId: null };
-  const cfg = resolveAiConfig(settings);
-  if (!cfg.apiKey && cfg.provider !== 'ollama') return out; // caller falls back to fixed order
-  const chat = db.getChat(chatId);
-  if (!chat) return out;
-  const persona = settings.activePersonalityId ? db.getPersona(settings.activePersonalityId) : null;
+/* Single-request group turns: one model call writes the whole character
+   talk after a user message — a sequence of tagged beats, each spoken by
+   one character ([Name] narration "dialogue"). Beats are split back into
+   individual tree nodes as they arrive, so every reply stays editable or
+   re-branchable on its own while the scene plays out live. */
+
+const normName = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function buildGroupTurnSystem({ char, persona, chat, cfg, maxBeats }) {
   const userName = persona ? persona.name : 'the user';
-  const nodes = db.pathNodes(chat.tree, fromNodeId)
-    .filter((n) => n.role === 'user' || n.role === 'char')
-    .slice(-14);
-  const transcript = nodes.map((n) => {
-    const who = n.role === 'user' ? userName : (n.characterId ? ((db.getCharacter(n.characterId) || {}).name || 'Character') : 'Character');
-    return `${who}: ${(n.content || '').replace(/\s+/g, ' ').slice(0, 260)}`;
-  }).join('\n');
-  const roster = chars.map((c) => `- ${c.name}: ${(c.description || '').replace(/\s+/g, ' ').slice(0, 120) || 'Present in scene.'}`).join('\n');
-  const sys = 'You are the scene director of a multi-character roleplay conversation. After every message a character decides who speaks next. The available characters are:\n' + roster +
-    '\nRules: keep the flow natural and playful. A character MAY speak twice in a row when it fits the drama, and MAY stay silent for a while so the others act. Reply with EXACTLY ONE character name to have them speak next, or the single word NONE if it is the user\'s turn to act (most turns should end this way, since the user drives the story). Reply with nothing else.';
-  const user = `User (plays as "${userName}"). Recent conversation:\n${transcript}\n\nName the next speaker (one name, or NONE):`;
-  try {
-    const raced = await Promise.race([
-      (cfg.provider === 'anthropic'
-        ? agentCallAnthropicPlain(cfg, sys, [{ role: 'user', content: user }], [], signal)
-        : agentCallOpenAIPlain(cfg, sys, [{ role: 'user', content: user }], [], signal)),
-      new Promise((r) => setTimeout(() => r(null), 45000)),
-    ]);
-    if (!raced) return out;
-    const t = (raced.text || '').trim().toUpperCase().slice(0, 80);
-    out.ok = true;
-    if (!t || /^(NONE|NO ?ONE|PASS|USER|THE USER|END|STOP|YIELD|SILENCE)/.test(t)) return out;
-    const first = t.split(/[.,!"'\n/:—-]/)[0].trim();
-    for (const c of [...chars].sort((a, b) => b.name.length - a.name.length)) {
-      const nrm = c.name.toUpperCase();
-      if (t.includes(nrm) || (first && nrm.includes(first) && first.length >= 3)) { out.charId = c.id; return out; }
-    }
-    return out;
-  } catch (e) {
-    console.error('[turn] director failed:', e.message);
-    return out;
+  const ex = (s) => expandPromptMacros(s, char, persona, chat);
+  const custom = cfg.systemPrompt.trim();
+  const parts = [];
+  parts.push(custom ? ex(custom) : `Write "${char.name}'s" next reply in a fictional roleplay chat between "${userName}" and "${char.name}".`);
+  parts.push(`"${char.name}'s" Persona:\n${ex(char.description) || 'A mysterious stranger.'}`);
+  parts.push(persona
+    ? `"${userName}'s" Persona:\n${ex(persona.description) || 'An ordinary person.'}`
+    : `"${userName}'s" Persona:\nAn ordinary person — the user plays themselves.`);
+  const sc = chat.scenarioContent || char.scenario || '';
+  if (sc) parts.push(`The scenario of the conversation:\n${ex(sc)}`);
+  const roster = (chat.characterIds || []).map((id) => db.getCharacter(id)).filter(Boolean);
+  if (roster.length) {
+    parts.push(`Characters in this shared scene:\n` + roster.map((c) => `- "${c.name}": ${ex(c.description) || 'Present in scene.'}`).join('\n'));
   }
+  parts.push(styleLine(char, userName));
+  parts.push(`MULTI-CHARACTER LENGTH & PACING RULE: each beat stays concise — one or two short sentences of action/expression and 1-2 lines of dialogue — roughly two-thirds of a typical 1-on-1 response, even if the preset asks for long texts.`);
+  parts.push(`WHOLE-TURN OUTPUT FORMAT — write the next whole character talk in ONE response:
+- Output only beats, one per line, each starting with the speaker's name in brackets: [${char.name}] *She steps closer to you, studying you.* "Where were you, ${userName}?"
+- The FIRST beat is "${char.name}". Follow with the other characters as the drama needs — a character may speak twice in a row — up to ${maxBeats} beats in total for this turn.
+- Each beat is exactly one character: their own *narration* (written from outside — that character is "she"/"he"/their name and "${userName}" is "you") and their own spoken lines ("...") — NEVER write a beat, quoted line, or action for another character or for "${userName}", and never imitate another character's voice.
+- Stop the turn at the natural pause where "${userName}" would act next. No numbering, no headers, no commentary, nothing out of character — only the beat lines.`);
+  return parts.join('\n\n');
 }
 
-/* Continuation of a multi-character turn after its first reply: the turn
-   director picks the next speaker — any member of the room, even the
-   character who just spoke, or nobody (yield to the user). Without a live
-   API key it falls back to the fixed character order. Shared by the message
-   and regenerate endpoints. */
-async function runGroupFollowups({ chatId, firstReplyId, firstCharId, persona, settings, signal, emit }) {
-  let freshChat = db.getChat(chatId);
-  const groupCharIds = (freshChat && freshChat.characterIds) || [];
-  const maxRounds = Math.min(groupCharIds.length, Number(settings.multiCharMaxRounds) || 2);
-  const groupChars = groupCharIds.map((cid) => db.getCharacter(cid)).filter(Boolean);
-  const fallbackIds = groupCharIds.filter((cid) => cid !== firstCharId);
-  let fbIdx = 0;
-  let lastReplyId = firstReplyId;
-  for (let rIdx = 0; rIdx < maxRounds - 1 && (!signal || !signal.aborted); rIdx++) {
-    // Flag the client that the conversation turn is still in motion — the
-    // director decides who speaks next while the UI shows a live indicator.
-    tlog('turn', `round ${rIdx + 1} — directing (aborted=${!!(signal && signal.aborted)})`);
-    emit({ type: 'directing', round: rIdx + 1 });
-    const pick = await pickNextSpeaker(chatId, lastReplyId, groupChars, settings, signal);
-    let nextChar;
-    if (pick && pick.ok) {
-      nextChar = pick.charId ? groupChars.find((c) => c.id === pick.charId) || null : null;
-    } else {
-      nextChar = groupChars.find((c) => c.id === fallbackIds[fbIdx]) || null;
-      fbIdx++;
+/* Splits a streamed whole-turn answer into per-character beats on the fly.
+   A beat starts at a line whose head names the speaker: "[Name] ..." or
+   "Name: ..." (matched against the chat's roster). Everything before the
+   first header belongs to the opening speaker. */
+function createGroupTurnParser({ roster, initialCharId, initialCharName, onBeatStart, onText, onBeatEnd }) {
+  const norm = roster.map((r) => ({ ...r, key: normName(r.name) }));
+  const matchName = (raw) => {
+    const h = normName(raw);
+    if (h.length < 2) return null;
+    let best = null;
+    for (const r of norm) {
+      // Substring matches allow honorifics and nicknames in either direction
+      // ("Rex Calder" ↔ roster "Captain Rex Calder").
+      const hit = r.key === h
+        || (r.key.startsWith(h) && h.length >= 3)
+        || (h.startsWith(r.key) && r.key.length >= 3)
+        || (h.length >= 3 && r.key.includes(h))
+        || (r.key.length >= 3 && h.includes(r.key));
+      if (hit && (!best || r.key.length > best.key.length)) best = r;
     }
-    tlog('turn', `pick=${JSON.stringify(pick)} → nextChar=${nextChar ? nextChar.name : 'NONE'}`);
-    if (!nextChar) break;
-    emit({ type: 'next_char', characterId: nextChar.id, charName: nextChar.name });
-    const text = await generateReplyStream(nextChar, db.pathNodes(freshChat.tree, lastReplyId), persona, settings, (d) => {
-      emit({ type: 'delta', text: d, characterId: nextChar.id });
-    }, signal, freshChat);
-    const reply = db.addReply(chatId, lastReplyId, text, { characterId: nextChar.id });
-    lastReplyId = reply.id;
-    freshChat = db.getChat(chatId);
-    emit({ type: 'reply_saved', chat: freshChat, node: reply });
+    return best;
+  };
+  const headerOf = (line) => {
+    let m = line.match(/^\s*\[\s*([^\]]{2,60}?)\s*\]\s*(.*)$/);
+    if (!m) m = line.match(/^\s*([A-Za-z][A-Za-z' .-]{1,49}?)\s*:\s+(.+)$/);
+    if (m) {
+      const who = matchName(m[1]);
+      if (who) return { who, rest: m[2] };
+    }
+    return null;
+  };
+  // Decide what a fragment (no newline yet) is turning into: a speaker
+  // header to start live, a plain line to flush, or something still forming.
+  const tryHeader = (s) => {
+    if (s.startsWith('[')) {
+      const close = s.indexOf(']');
+      if (close === -1) return { act: 'hold' }; // speaker name still being typed
+      const who = matchName(s.slice(1, close));
+      if (who) return { act: 'start', who, rest: s.slice(close + 1) };
+      return { act: 'flush' };
+    }
+    const k = normName(s);
+    if (!k || k.length < 2) return { act: 'hold' }; // too little to judge
+    if (!/[A-Z]/.test(s[0])) return { act: 'flush' }; // tags start capitalized
+    const c = s.indexOf(':');
+    if (c !== -1 && (/^\s/.test(s.slice(c + 1)) || s.slice(c + 1) === '')) {
+      const who = matchName(s.slice(0, c));
+      if (who) return { act: 'start', who, rest: s.slice(c + 1) };
+      return { act: 'flush' };
+    }
+    if (c !== -1) return { act: 'flush' }; // stray colon mid-prose
+    for (const r of norm) {
+      if (r.key.startsWith(k) || (k.length >= 3 && r.key.includes(k))) return { act: 'hold' };
+    }
+    return { act: 'flush' };
+  };
+  let pending = '';
+  let cur = { charId: initialCharId, charName: initialCharName, text: '' };
+  let open = false;
+  const flushText = (t) => { if (t) { cur.text += t; onText(cur, t); } };
+  const newBeat = (head) => {
+    onBeatEnd(cur, open);
+    cur = { charId: head.who.id, charName: head.who.name, text: '' };
+    open = true;
+    onBeatStart(cur);
+    if (head.rest) flushText(head.rest);
+  };
+  const feed = (chunk) => { pending += chunk; drain(false); };
+  const drain = (final) => {
+    while (true) {
+      const nk = pending.indexOf('\n');
+      if (nk === -1) {
+        if (final) {
+          if (pending.trim()) {
+            const head = headerOf(pending);
+            if (head) newBeat(head);
+            else flushText(pending);
+          }
+          pending = '';
+          return;
+        }
+        // A header can start the new beat as soon as it is recognizable
+        // ("]" closed, or "Name:" with the name matched) — everything after
+        // it streams live into the new beat instead of popping in at the
+        // newline.
+        const t = tryHeader(pending.replace(/^\s+/, ''));
+        if (t.act === 'hold') return;
+        if (t.act === 'start') {
+          pending = '';
+          newBeat({ who: t.who, rest: t.rest.replace(/^\s+/, '') });
+          return;
+        }
+        flushText(pending);
+        pending = '';
+        return;
+      }
+      const line = pending.slice(0, nk);
+      pending = pending.slice(nk + 1);
+      const head = headerOf(line);
+      if (head) newBeat(head);
+      else flushText(line + '\n');
+    }
+  };
+  const end = () => { drain(true); onBeatEnd(cur, open); };
+  return { feed, end };
+}
+
+/* Runs one whole multi-character turn with a single streaming request and
+   persists each beat as its own chat-tree node (pose stamping for the first
+   beat like a normal reply). Returns the fresh chat and the last node. */
+async function runGroupTurn({ chat, anchorId, primary, persona, settings, poses, posesEnabled, signal, emit, genRecord }) {
+  const fresh = db.getChat(chat.id);
+  const rosterIds = (fresh && fresh.characterIds) || [];
+  const maxBeats = Math.max(1, Math.min(rosterIds.length, Number(settings.multiCharMaxRounds) || 2));
+  const roster = rosterIds.map((id) => { const c = db.getCharacter(id); return c ? { id: c.id, name: c.name } : null; }).filter(Boolean);
+
+  let lastId = anchorId;
+  let lastNode = null;
+  let sawBeat = false;
+  let beatCount = 0;
+
+  async function beatDone(beat) {
+    beatCount++;
+    const text = String(beat.text || '').replace(/\n{3,}/g, '\n\n').trim();
+    if (!text) return;
+    const speaker = db.getCharacter(beat.charId) || primary;
+    let poseId = null;
+    if (!sawBeat && posesEnabled) {
+      sawBeat = true;
+      try {
+        const posePromise = runPoseAgent({ char: speaker, persona, chat: fresh, poses, currentPoseId: fresh.poseId, replyText: text, settings, signal });
+        const pose = await Promise.race([posePromise, new Promise((r) => setTimeout(() => r(null), 6000))]);
+        if (pose && pose.changed) {
+          try { db.setChatPose(chat.id, pose.poseId); } catch {}
+          try { emit({ type: 'pose', poseId: pose.poseId, poseName: pose.poseName, confidence: pose.confidence }); } catch {}
+          poseId = pose.poseId;
+        }
+      } catch (e) { console.error('[pose/jev] director failed:', e.message); }
+    }
+    const reply = db.addReply(chat.id, lastId, text, { characterId: beat.charId, poseId });
+    lastId = reply.id;
+    lastNode = reply;
+    emit({ type: 'reply_saved', chat: db.getChat(chat.id), node: reply });
   }
-  return { chat: freshChat, lastReplyId };
+
+  // Saves run strictly in beat order, even when the pose agent stalls the
+  // first one — the client rebuilds its view from each reply_saved event.
+  let beatQueue = Promise.resolve();
+
+  const parser = createGroupTurnParser({
+    roster,
+    initialCharId: primary.id,
+    initialCharName: primary.name,
+    onBeatStart: (beat) => {
+      // The stream starts on the primary character; every later beat switch
+      // (back and forth) is announced so the client re-labels the bubble.
+      if (beatCount > 0) emit({ type: 'next_char', characterId: beat.charId, charName: beat.charName });
+    },
+    onText: (beat, t) => { emit({ type: 'delta', text: t, characterId: beat.charId }); },
+    onBeatEnd: (beat) => { beatQueue = beatQueue.then(() => beatDone(beat)).catch((e) => console.error('[ai] beat save failed:', e.message)); },
+  });
+
+  const nodes = db.pathNodes(db.getChat(chat.id).tree, anchorId);
+  const built = buildTurns(nodes, primary, persona, fresh, false);
+  const builtHistory = (settings.longChatStrategy === 'nothing') ? built.turns : built.turns.slice(-100);
+  const cfg = resolveAiConfig(settings);
+  const scenarioNode = nodes.find((n) => n.role === 'scenario');
+  const systemText = buildGroupTurnSystem({
+    char: primary,
+    persona,
+    chat: { ...fresh, scenarioContent: scenarioNode ? scenarioNode.content : (primary.scenario || '') },
+    cfg,
+    maxBeats,
+  });
+  if (genRecord) genRecord.text = '';
+
+  tlog('ai', `▶ group turn — chat ${chat.id} (${primary.name} + ${roster.filter((r) => r.id !== primary.id).map((r) => r.name).join(', ')}) up to ${maxBeats} beats`);
+  const rT0 = Date.now();
+
+  function feed(str) {
+    parser.feed(str);
+    if (genRecord) genRecord.text += str;
+  }
+
+  const run = async () => {
+    if (!cfg.apiKey && cfg.provider !== 'ollama') {
+      // Simulated whole turn (no API key): short tagged beats in roster order.
+      const userName = persona ? persona.name : 'the user';
+      const beats = roster.filter((r) => r.id === primary.id).concat(roster.filter((r) => r.id !== primary.id)).slice(0, maxBeats);
+      const raw = beats.map((c) => `[${c.name}] *${c.id === primary.id ? primary.name : c.name.replace(/\s.*$/, '')} turns to you, noticing your words.* "I hear you, ${userName}. But you will hear my answer first."`).join('\n\n');
+      for (const chunk of raw.match(/[\s\S]{1,8}/g) || [raw]) {
+        if (signal && signal.aborted) throw new Error('Aborted');
+        feed(chunk);
+        await wait(12 + Math.random() * 22);
+      }
+      return;
+    }
+    const call = (emitDelta) => {
+      if (cfg.provider === 'anthropic') {
+        const base = cfg.baseUrl.replace(/\/+$/, '');
+        const body = { model: cfg.model, system: systemText, messages: builtHistory, stream: true };
+        body.max_tokens = Math.max(1024, cfg.maxTokens || 0);
+        if (cfg.reasoning === 'off') body.thinking = { type: 'disabled' };
+        else if (cfg.reasoning !== 'default') {
+          const budgets = { low: 2048, medium: 8192, high: 16384 };
+          const budget = budgets[cfg.reasoning] || 2048;
+          body.thinking = { type: 'enabled', budget_tokens: budget };
+          body.max_tokens = Math.max(body.max_tokens, budget + 2048);
+          body.temperature = 1;
+        } else if (typeof cfg.temperature === 'number') body.temperature = cfg.temperature;
+        return streamAnthropic(base, body, cfg.apiKey, emitDelta, signal);
+      }
+      const base = cfg.baseUrl.replace(/\/+$/, '');
+      const out = { model: cfg.model, messages: [{ role: 'system', content: systemText }, ...builtHistory], stream: true };
+      if (typeof cfg.temperature === 'number') out.temperature = cfg.temperature;
+      if (cfg.reasoning === 'off') {
+        if (cfg.provider === 'openrouter') out.reasoning = { enabled: false };
+        else out.reasoning_effort = 'none';
+      } else if (cfg.reasoning !== 'default') {
+        if (cfg.provider === 'openrouter') out.reasoning = { effort: cfg.reasoning };
+        else out.reasoning_effort = cfg.reasoning;
+      }
+      out.max_tokens = cfg.maxTokens ? Math.max(cfg.maxTokens, 900) : 1100;
+      return streamOpenAI(base + '/chat/completions', out, cfg.apiKey, emitDelta, signal);
+    };
+    await retryOnce(call, feed, signal);
+  };
+
+  try {
+    await run();
+  } finally {
+    parser.end();
+  }
+  await beatQueue;
+  tlog('ai', `✓ group turn streamed in ${Date.now() - rT0}ms`);
+  return { chat: db.getChat(chat.id), node: lastNode };
 }
 
 async function maybeGenerateChatTitle(chatId) {
@@ -3339,6 +3526,30 @@ function parseOpeningGeneration(text, characters) {
       try {
         await manageChatContextWindow(fresh, node.id, settings);
         let currentChat = db.getChat(chat.id);
+        // Multi-character chats: one request writes the whole character talk,
+        // split into per-character beat nodes as it streams.
+        if (Array.isArray(currentChat.characterIds) && currentChat.characterIds.length > 1 && !ctrl.signal.aborted) {
+          const turn = await runGroupTurn({
+            chat, anchorId: node.id, primary: char, persona, settings,
+            poses, posesEnabled: poseEnabled, signal: ctrl.signal, emit, genRecord,
+          });
+          let reply = turn.node;
+          let freshChat = turn.chat;
+          try {
+            const newTitle = await maybeGenerateChatTitle(chat.id);
+            if (newTitle) {
+              title = newTitle;
+              freshChat.title = newTitle;
+            }
+          } catch {}
+          genRecord.active = false;
+          genRecord.done = true;
+          genRecord.chat = freshChat;
+          genRecord.node = reply;
+          setTimeout(() => { if (activeChatGens.get(chat.id) === genRecord) activeChatGens.delete(chat.id); }, 120000);
+          emit({ type: 'done', chat: freshChat, node: reply, title });
+          return;
+        }
         const text = await generateReplyStream(char, db.pathNodes(currentChat.tree, node.id), persona, settings, (d) => {
           streamed += d;
           genRecord.text += d;
@@ -3360,14 +3571,7 @@ function parseOpeningGeneration(text, characters) {
         });
         if (chosen) emit({ type: 'pose', poseId: chosen.poseId, poseName: chosen.poseName, confidence: chosen.confidence });
 
-        let freshChat = db.getChat(chat.id);
-        const groupCharIds = freshChat.characterIds || [];
-        if (groupCharIds.length > 1 && !ctrl.signal.aborted) {
-          emit({ type: 'reply_saved', chat: freshChat, node: reply });
-          const turn = await runGroupFollowups({ chatId: chat.id, firstReplyId: reply.id, firstCharId: char.id, persona, settings, signal: ctrl.signal, emit });
-          freshChat = turn.chat;
-          reply = (turn.lastReplyId && turn.lastReplyId !== reply.id) ? (freshChat.tree.nodes[turn.lastReplyId] || reply) : reply;
-        }
+        const freshChat = db.getChat(chat.id);
 
         try {
           const newTitle = await maybeGenerateChatTitle(chat.id);
@@ -3422,10 +3626,11 @@ function parseOpeningGeneration(text, characters) {
       : null;
     // In group chats, regenerating a character message redoes the whole
     // character talk: rewind to the start of that turn (the node the last
-    // user message / opening spawned) and let the turn director run again.
+    // user message / opening spawned) and write the turn in one request.
     // A manual "let X speak" (appending after the current tip) is untouched.
     const hasReplacedChild = !!db.activeChildId(chat.tree, parentId);
     const isGroupRegen = !asUser && Array.isArray(chat.characterIds) && chat.characterIds.length > 1 && hasReplacedChild;
+    let groupAnchorId = parentId;
     if (isGroupRegen) {
       let cur = parentId;
       for (let i = 0; i < 200; i++) {
@@ -3433,10 +3638,7 @@ function parseOpeningGeneration(text, characters) {
         if (!n || n.role !== 'char') break;
         cur = n.parent;
       }
-      if (cur && cur !== 'root' && chat.tree.nodes[cur] && cur !== parentId) {
-        parentId = cur;
-        char = db.getCharacter(chat.characterId) || char;
-      }
+      if (cur && cur !== 'root' && chat.tree.nodes[cur] && cur !== parentId) groupAnchorId = cur;
     }
     const path = db.pathNodes(chat.tree, parentId);
     const poses = db.getPoses(chat.characterId, { withImages: false });
@@ -3480,8 +3682,29 @@ function parseOpeningGeneration(text, characters) {
           const p = resetPose ? poses.find((x) => x.id === resetPose) : null;
           emit({ type: 'pose', poseId: resetPose, poseName: p ? p.name : null, reset: true });
         }
-        await manageChatContextWindow(chat, parentId, settings);
+        await manageChatContextWindow(chat, isGroupRegen ? groupAnchorId : parentId, settings);
         const latestChat = db.getChat(chat.id);
+        // In a group, regenerating rewrites the character talk in one request
+        // (anchored at the turn start); single chats and manual prompts below.
+        if (isGroupRegen && !ctrl.signal.aborted) {
+          const turn = await runGroupTurn({
+            chat, anchorId: groupAnchorId, primary: char, persona, settings,
+            poses, posesEnabled: poseEnabled, signal: ctrl.signal, emit, genRecord,
+          });
+          let reply = turn.node;
+          let freshChat = turn.chat;
+          try {
+            const newTitle = await maybeGenerateChatTitle(chat.id);
+            if (newTitle) freshChat.title = newTitle;
+          } catch {}
+          genRecord.active = false;
+          genRecord.done = true;
+          genRecord.chat = freshChat;
+          genRecord.node = reply;
+          setTimeout(() => { if (activeChatGens.get(chat.id) === genRecord) activeChatGens.delete(chat.id); }, 120000);
+          emit({ type: 'done', chat: freshChat, node: reply, title: freshChat.title });
+          return;
+        }
         const text = await generateReplyStream(char, db.pathNodes(latestChat.tree, parentId), persona, settings, (d) => {
           streamed += d;
           genRecord.text += d;
@@ -3513,13 +3736,7 @@ function parseOpeningGeneration(text, characters) {
           characterId: char.id,
         });
         if (chosen) emit({ type: 'pose', poseId: chosen.poseId, poseName: chosen.poseName, confidence: chosen.confidence });
-        let freshChat = db.getChat(chat.id);
-        if (isGroupRegen && freshChat.characterIds && freshChat.characterIds.length > 1 && !ctrl.signal.aborted) {
-          emit({ type: 'reply_saved', chat: freshChat, node: reply });
-          const turn = await runGroupFollowups({ chatId: chat.id, firstReplyId: reply.id, firstCharId: char.id, persona, settings, signal: ctrl.signal, emit });
-          freshChat = turn.chat;
-          if (turn.lastReplyId && turn.lastReplyId !== reply.id) reply = freshChat.tree.nodes[turn.lastReplyId] || reply;
-        }
+        const freshChat = db.getChat(chat.id);
         try {
           const newTitle = await maybeGenerateChatTitle(chat.id);
           if (newTitle) freshChat.title = newTitle;
