@@ -18,8 +18,16 @@ const I = {
   sparkles: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>',
   chevl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
   chevr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
   star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
   starFilled: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+  clapper: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>',
+  scroll: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></svg>',
+  users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  wand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 4-2 2m4 2-2-2m-2 6 7-7a2.12 2.12 0 1 0-3-3l-7 7m-4 5-5 5h4l4-4M3 21l3-3m-1-4 1-1m-2 4 1-1"/></svg>',
+  palette: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>',
+  masks: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10s3-4 10-4 10 4 10 4-3 10-10 10S2 10 2 10Z"/><circle cx="8" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/><path d="M9 15c1.5 1 4.5 1 6 0"/></svg>',
+  save: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>',
 };
 
 const EMOJIS = ['🧙','🧝','🧛','🧜','🐉','🦊','🐺','🦉','🤖','👾','🕵️','🚀','🌸','🌙','⭐','✨','👑','⚔️','🛡️','🎭','👻','💀','🌌','🔥'];
@@ -48,6 +56,47 @@ let typing = false;
 let typingAt = null;
 let streaming = null;
 let editingId = null;
+let aiEditingId = null;
+let chatStickToBottom = true;
+let agentStickToBottom = true;
+
+async function recoverChatGeneration(chatId) {
+  const maxWait = 90000;
+  const start = Date.now();
+  while (Date.now() - start < maxWait) {
+    try {
+      const r = await fetch(`/api/chats/${chatId}/generation`);
+      if (r.ok) {
+        const data = await r.json();
+        if (data.active) {
+          if (data.text && streaming && streaming.chatId === chatId) {
+            streaming.text = data.text;
+            liveStreamUpdate();
+          }
+          await new Promise((res) => setTimeout(res, 800));
+          continue;
+        }
+        if (data.done || data.chat) {
+          if (data.error) return { error: data.error, chat: data.chat };
+          return { done: true, chat: data.chat, node: data.node };
+        }
+      }
+    } catch {
+      await new Promise((res) => setTimeout(res, 1200));
+    }
+    // Also check if character data already has the new reply node
+    try {
+      const c = activeChar();
+      if (c) {
+        const charData = await api(`/characters/${c.id}`);
+        const found = charData.chats && charData.chats.find((x) => x.id === chatId);
+        if (found) return { done: true, chat: found };
+      }
+    } catch {}
+    break;
+  }
+  return null;
+}
 
 async function streamGenerate(path, body, onDelta) {
   const r = await fetch('/api' + path, {
@@ -65,45 +114,98 @@ async function streamGenerate(path, body, onDelta) {
   let buf = '';
   let full = '';
   let result = null;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf('\n\n')) !== -1) {
-      const chunk = buf.slice(0, i);
-      buf = buf.slice(i + 2);
-      const line = chunk.split('\n').find((l) => l.startsWith('data: '));
-      if (!line) continue;
-      let ev;
-      try { ev = JSON.parse(line.slice(6)); } catch { continue; }
-      if (ev.type === 'pose') {
-        const chat = activeChat(activeChar());
-        if (ev.reset) {
-          // Revert (delete / edit / re-generate): repaint the shot that was on
-          // screen before the removed message, but leave the last message's own
-          // avatar alone — it is stamped with its own pose, not the current one.
-          if (chat) chat.poseId = ev.poseId || null;
-          applyChatBg();
-          renderHeader();
-          toast(ev.poseName ? 'Back to: ' + ev.poseName : 'Image cleared');
-        } else {
-          applyPoseLive(ev.poseId, ev.poseName);
-          toast('Pose: ' + ev.poseName);
+  const chatIdMatch = path.match(/\/chats\/([\w-]+)/);
+  const chatId = chatIdMatch ? chatIdMatch[1] : null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n\n')) !== -1) {
+        const chunk = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+        if (!line) continue;
+        let ev;
+        try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+        if (ev.type === 'pose') {
+          const chat = activeChat(activeChar());
+          if (ev.reset) {
+            // Revert (delete / edit / re-generate): repaint the shot that was on
+            // screen before the removed message, but leave the last message's own
+            // avatar alone — it is stamped with its own pose, not the current one.
+            if (chat) chat.poseId = ev.poseId || null;
+            applyChatBg();
+            renderHeader();
+            toast(ev.poseName ? 'Back to: ' + ev.poseName : 'Image cleared');
+          } else {
+            applyPoseLive(ev.poseId, ev.poseName);
+            toast('Pose: ' + ev.poseName);
+          }
+          continue;
         }
-        continue;
-      }
-      if (ev.type === 'delta') {
-        full += ev.text;
-        onDelta(full);
-      } else if (ev.type === 'done') {
-        result = ev;
-      } else if (ev.type === 'error') {
-        return ev;
+        if (ev.type === 'delta') {
+          full += ev.text;
+          onDelta(full);
+        } else if (ev.type === 'directing') {
+          // The turn is not over: someone else may reply. Show the "scene
+          // continues" indicator while the director decides who speaks next.
+          if (streaming) {
+            streaming.characterId = null;
+            streaming.charName = null;
+            streaming.directing = true;
+          }
+          renderChat({ keepScroll: true });
+        } else if (ev.type === 'next_char') {
+          full = '';
+          if (streaming) {
+            streaming.characterId = ev.characterId;
+            streaming.charName = ev.charName;
+            streaming.directing = false;
+            streaming.text = '';
+          }
+          renderChat({ keepScroll: true });
+        } else if (ev.type === 'reply_saved') {
+          // Mid-turn save inside multi-character chats: adopt the fresh tree so
+          // already-finished replies stay on screen while the next one streams.
+          const cur = activeChar();
+          const chat = cur && activeChat(cur);
+          if (chat && ev.chat && ev.chat.id === chat.id) {
+            mergeChat(chat, ev.chat);
+            if (ev.node) typingAt = ev.node.id;
+          }
+          renderChat({ keepScroll: true });
+          full = '';
+        } else if (ev.type === 'title') {
+          if (ev.title) {
+            const chat = activeChat(activeChar());
+            if (chat) chat.title = ev.title;
+            renderHeader();
+            renderChatsMenu();
+          }
+        } else if (ev.type === 'done') {
+          result = ev;
+        } else if (ev.type === 'error') {
+          return ev;
+        }
       }
     }
+  } catch (err) {
+    if (chatId) {
+      const rec = await recoverChatGeneration(chatId);
+      if (rec) return rec;
+    }
+    throw err;
   }
-  if (!result) throw new Error('Stream ended unexpectedly');
+  if (!result) {
+    if (chatId) {
+      const rec = await recoverChatGeneration(chatId);
+      if (rec) return rec;
+    }
+    throw new Error('Stream ended unexpectedly');
+  }
   return result;
 }
 
@@ -144,7 +246,16 @@ async function bootstrap() {
   state.presets = d.presets || [];
   state.settings = d.settings;
   state.scenarios = d.scenarios || [];
+  applyFeatureToggles();
   api('/default-prompt').then((r) => { defaultPromptCache = r.prompt; }).catch(() => {});
+}
+
+function applyFeatureToggles() {
+  const s = state.settings || {};
+  const agentBtn = $('#agent-toggle-btn');
+  if (agentBtn) agentBtn.classList.toggle('hidden', s.agentSidebarEnabled === false);
+  const grpBtn = $('#new-group-chat-btn');
+  if (grpBtn) grpBtn.classList.toggle('hidden', s.multiCharEnabled === false);
 }
 
 function md(s) {
@@ -156,7 +267,28 @@ function md(s) {
      matched as entities here. Lazy matching means a stray or inch-mark quote is
      left as plain text rather than swallowing the rest of the line. */
   t = t.replace(/&quot;(.*?)&quot;/g, '<span class="dlg">$1</span>');
-  return t.replace(/\n/g, '<br>');
+
+  /* Numbered lists: standard markdown allows numbered lists to start at any number
+     (e.g. "3. Three \n 1. Four" or "1. One \n 1. Two"). When consecutive items appear,
+     renumber them starting from the initial number (or 1 if repeated/incremented)
+     so repeated items like 1. \n 1. \n 1. render as 1. \n 2. \n 3. */
+  const lines = t.split('\n');
+  let currentNum = null;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(\s*)(\d+)([.)]\s+)(.*)$/);
+    if (m) {
+      const origNum = parseInt(m[2], 10);
+      if (currentNum === null) {
+        currentNum = origNum;
+      } else {
+        currentNum++;
+      }
+      lines[i] = `${m[1]}${currentNum}${m[3]}${m[4]}`;
+    } else {
+      currentNum = null;
+    }
+  }
+  return lines.join('<br>');
 }
 
 function fmtDate(ts) {
@@ -260,11 +392,7 @@ function poseTagHtml(p) {
 }
 
 function toast(msg) {
-  const t = $('#toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+  // Silent: toast popups removed to prevent obstruction
 }
 
 function showWelcome() {
@@ -310,14 +438,29 @@ function renderHeader() {
   const pose = c.posesEnabled ? currentPose() : null;
   const chat = activeChat(c);
   const scenTitle = chat && (chat.scenarioTitle || (chat.scenarioId && state.scenarios.find((s) => s.id === chat.scenarioId)?.title));
-  $('#char-info').innerHTML = `${avatarHtml(c, '', true, pose && pose.thumb)}
-    <div class="ch-text">
-      <div class="ch-name-row">
-        <span class="ch-name">${esc(c.name)}</span>
-        ${scenTitle ? `<span class="ch-scenario-badge" title="Scenario: ${esc(scenTitle)}">🎬 ${esc(scenTitle)}</span>` : ''}
-      </div>
-      <div class="ch-tag">${esc(c.description)}</div>
-    </div>`;
+  const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+  if (isMulti) {
+    const groupChars = chat.characterIds.map((id) => state.characters.find((x) => x.id === id)).filter(Boolean);
+    const names = groupChars.map((x) => x.name).join(' & ');
+    const avatars = groupChars.slice(0, 3).map((x) => avatarHtml(x, 'sm')).join('');
+    $('#char-info').innerHTML = `<div class="ch-group-avatars" style="display:inline-flex;gap:4px;margin-right:8px">${avatars}</div>
+      <div class="ch-text">
+        <div class="ch-name-row">
+          <span class="ch-name">${esc(names)}</span>
+          <span class="ch-scenario-badge" title="Multi-character chat">${I.users} Group Chat</span>
+        </div>
+        <div class="ch-tag">${groupChars.length} characters in conversation</div>
+      </div>`;
+  } else {
+    $('#char-info').innerHTML = `${avatarHtml(c, '', true, pose && pose.thumb)}
+      <div class="ch-text">
+        <div class="ch-name-row">
+          <span class="ch-name">${esc(c.name)}</span>
+          ${scenTitle ? `<span class="ch-scenario-badge" title="Scenario: ${esc(scenTitle)}">${I.clapper} ${esc(scenTitle)}</span>` : ''}
+        </div>
+        <div class="ch-tag">${esc(c.description)}</div>
+      </div>`;
+  }
   const p = activePersona();
   $('#persona-label').textContent = p ? p.name : '—';
   const pr = activePreset();
@@ -327,10 +470,35 @@ function renderHeader() {
   if (pillLabel) {
     pillLabel.textContent = chat && chat.title ? chat.title : 'Chats';
   }
+  // The background layout quick-menu only applies to group chats.
+  $('#bg-wrap')?.classList.toggle('hidden', !isMulti);
 }
 
-let currentBgSrc = null;
+let currentBgKey = null;
 let currentBgLayer = 0;
+
+/* Full backdrop image for a character in the current chat: their stamped
+   pose on the active path (group chats stamp poses per message), or the
+   chat-level pose, with the character's own artwork as fallback. */
+function bgImageForChar(c) {
+  if (!c) return null;
+  if (!c.posesEnabled) return fullImageSrc(c);
+  const chat = activeChat(c);
+  if (chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1) {
+    const nodes = pathOf(chat.tree, typing && typingAt ? typingAt : null);
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      if (n.characterId === c.id && n.poseId) {
+        const p = poseById(c.id, n.poseId);
+        if (p && poseBackdrop(p)) return poseBackdrop(p);
+      }
+    }
+  } else {
+    const p = poseBackdrop(currentPose());
+    if (p) return p;
+  }
+  return fullImageSrc(c);
+}
 
 function applyChatBg() {
   const c = activeChar();
@@ -349,26 +517,71 @@ function applyChatBg() {
     layers = bg.querySelectorAll('.chat-bg-layer');
   }
 
-  const src = (c && op > 0) ? ((c.posesEnabled && poseBackdrop(currentPose())) || fullImageSrc(c)) : null;
+  const s = state.settings;
+  const mode = ['split-tb', 'split-lr'].includes(s.bgMode) ? s.bgMode : 'single';
+  const chat = activeChat(c);
+  const isMulti = !!(chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1);
+  const split = isMulti && mode !== 'single' && op > 0;
 
-  if (!src) {
-    currentBgSrc = null;
-    layers.forEach((l) => l.classList.remove('active'));
+  // Resolve one or two backdrop sources
+  let srcs = [];
+  if (c && op > 0) {
+    const picked = s.bgSingleCharId ? state.characters.find((x) => x.id === s.bgSingleCharId) : null;
+    if (picked) {
+      srcs = [bgImageForChar(picked)];
+    } else if (split) {
+      const group = (chat.characterIds || []).slice(0, 2)
+        .map((id) => state.characters.find((x) => x.id === id)).filter(Boolean);
+      srcs = group.length === 2 ? group.map((g) => bgImageForChar(g)) : [bgImageForChar(group[0] || c)];
+    } else {
+      srcs = [bgImageForChar(c)];
+    }
+  }
+  srcs = srcs.filter(Boolean);
+
+  const layout = split && srcs.length === 2 ? mode : '';
+  // One character on screen is always shown whole; crops are a split option.
+  const fit = layout ? (s.bgFit === 'cover' ? 'cover' : 'contain') : 'contain';
+  bg.classList.toggle('split-tb', layout === 'split-tb');
+  bg.classList.toggle('split-lr', layout === 'split-lr');
+
+  if (!srcs.length) {
+    currentBgKey = null;
+    layers.forEach((l) => { l.classList.remove('active'); l.style.backgroundImage = ''; });
     bg.classList.add('none');
     return;
   }
-
   bg.classList.remove('none');
-  if (src === currentBgSrc) return;
 
-  currentBgSrc = src;
-  const nextIdx = (currentBgLayer + 1) % layers.length;
-  const curLayer = layers[currentBgLayer];
+  const key = [layout, fit, ...srcs].join('|');
+  if (key === currentBgKey) return;
+  currentBgKey = key;
+
+  const setLayer = (l, src) => {
+    l.style.backgroundImage = src ? `url("${src.replace(/"/g, '\\"')}")` : '';
+    l.style.backgroundSize = fit;
+    l.style.backgroundPosition = 'center';
+    l.style.backgroundRepeat = 'no-repeat';
+  };
+
+  if (layout) {
+    // Split mode shows both characters at once — set the pair directly.
+    layers.forEach((l, i) => {
+      setLayer(l, srcs[i] || '');
+      l.classList.add('active');
+    });
+    return;
+  }
+
+  // Single image: alternate the two layers so the swap crossfades.
+  const src = srcs[0];
+  const nextIdx = layout ? 0 : ((currentBgLayer + 1) % layers.length);
+  const curLayer = layers[nextIdx === 0 ? 1 : 0];
   const nextLayer = layers[nextIdx];
 
   const activate = () => {
-    if (currentBgSrc !== src) return;
-    nextLayer.style.backgroundImage = `url("${src.replace(/"/g, '\\"')}")`;
+    if (currentBgKey !== key) return;
+    setLayer(nextLayer, src);
     void nextLayer.offsetWidth;
     nextLayer.classList.add('active');
     if (curLayer) curLayer.classList.remove('active');
@@ -390,9 +603,10 @@ function setHint() {
   const live = ai.apiKey || ai.provider === 'ollama';
   const providerLabel = PROVIDERS[ai.provider]?.label || 'Custom';
   const who = ai.name ? `${ai.name} (${providerLabel})` : providerLabel;
+  const zapTip = `<span class="zap-hint">${I.zap}</span> menu for OOC &amp; respond-as-me`;
   $('#composer-hint').innerHTML = live
-    ? `<span class="live">Live · ${esc(who)} · ${esc(ai.model || 'no model set')}</span><span>·</span><span>Enter to send · Shift+Enter for a new line · <span class="zap-hint">${I.zap}</span> steers the next reply</span>`
-    : `<span class="sim">No API key — replies are simulated · set one in Settings</span><span>·</span><span>Enter to send · Shift+Enter for a new line · <span class="zap-hint">${I.zap}</span> steers the next reply</span>`;
+    ? `<span class="live">Live · ${esc(who)} · ${esc(ai.model || 'no model set')}</span><span>·</span><span>Enter to send · Shift+Enter for a new line · ${zapTip}</span>`
+    : `<span class="sim">No API key — replies are simulated · set one in Settings</span><span>·</span><span>Enter to send · Shift+Enter for a new line · ${zapTip}</span>`;
 }
 
 function msgMetaHtml(n, chat, opts, tag = '') {
@@ -403,10 +617,26 @@ function msgMetaHtml(n, chat, opts, tag = '') {
   const nav = total > 1
     ? `<span class="vnav"><button data-nav="prev" title="Previous version" ${idx <= 0 ? 'disabled' : ''}>${I.chevl}</button><span class="v-count">${idx + 1}/${total}</span><button data-nav="next" title="Next version" ${idx >= total - 1 ? 'disabled' : ''}>${I.chevr}</button></span>`
     : '';
+
+  if (n.role === 'scenario') {
+    const acts = `<span class="m-acts">
+      <button data-act="copy" title="Copy message text">${I.copy}</button>
+      <button data-act="ooc" title="Insert OOC directive after this message">${I.zap}</button>
+    </span>`;
+    return `<div class="msg-meta scenario-meta">${nav}<span class="m-acts-wrap">${acts}</span></div>`;
+  }
+
+  const isChar = n.role === 'char';
+  const isInj = n.role === 'injection';
+  const isAiEdit = isChar && (state.settings?.aiEditEnabled !== false);
+  const delTitle = isInj ? 'Remove this directive (messages after it stay)' : 'Delete this message and everything after it';
   const acts = `<span class="m-acts">
+    <button data-act="copy" title="Copy message text">${I.copy}</button>
     <button data-act="edit" title="Edit message">${I.pencil}</button>
+    ${isAiEdit ? `<button data-act="ai-edit" title="Rewrite response with AI">${I.sparkles}</button>` : ''}
+    ${isChar ? `<button data-act="ooc" title="Insert OOC directive after this message">${I.zap}</button>` : ''}
     ${opts.regen ? `<button data-act="regen" title="Regenerate this reply">${I.rotr}</button>` : ''}
-    <button data-act="del" class="danger" title="Delete this message and everything after it">${I.trash}</button>
+    <button data-act="del" class="danger" title="${delTitle}">${I.trash}</button>
   </span>`;
   return `<div class="msg-meta">${tag}${nav}<span class="m-acts-wrap">${acts}</span></div>`;
 }
@@ -417,6 +647,18 @@ function editBoxHtml(n) {
     <div class="edit-actions">
       <button data-act="esave" class="mini primary">Save</button>
       <button data-act="ecancel" class="mini">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function aiEditBoxHtml(n) {
+  return `<div class="ai-edit-box">
+    <div class="ai-edit-head">${I.sparkles}<span>Rewrite response with AI</span></div>
+    <div class="ai-edit-sub">What would you like to change about this reply?</div>
+    <textarea id="ai-edit-input" placeholder="e.g. Make them speak more hesitantly, bring up the storm outside, remove the apology..."></textarea>
+    <div class="ai-edit-actions">
+      <button data-act="ai-edit-cancel" class="mini">Cancel</button>
+      <button data-act="ai-edit-submit" class="mini primary" id="ai-edit-submit-btn">${I.sparkles} Rewrite</button>
     </div>
   </div>`;
 }
@@ -553,8 +795,8 @@ function expandTags(s, characterId, customVarsOrScenario = null, customCharName 
 
   return str.replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
     const lower = key.toLowerCase();
-    if (lower === 'char') return charName;
-    if (lower === 'user') return userName;
+    if (lower === 'char' || lower === 'character' || lower === 'bot' || lower === 'char_name' || lower === 'character_name') return charName;
+    if (lower === 'user' || lower === 'user_name' || lower === 'persona') return userName;
     if (varMap.has(lower)) {
       const val = varMap.get(lower);
       return val != null ? String(val) : '';
@@ -563,7 +805,7 @@ function expandTags(s, characterId, customVarsOrScenario = null, customCharName 
   });
 }
 
-function renderPreviewMarkdown(raw, characterId, customVars = null, customCharName = null, scenarioOrId = null) {
+function renderPreviewMarkdown(raw, characterId, customVars = null, customCharName = null, scenarioOrId = null, isSignature = false) {
   if (!raw || !raw.trim()) {
     return `<div class="prow-desc" style="padding:16px;text-align:center">Nothing to preview. Switch to Edit to write.</div>`;
   }
@@ -572,17 +814,22 @@ function renderPreviewMarkdown(raw, characterId, customVars = null, customCharNa
   const charName = customCharName || (c && c.name) || 'the character';
   const userName = (persona && persona.name) || 'the user';
 
-  let vars = customVars;
-  if (!vars && scenarioOrId) {
-    vars = resolveScenarioCharacterVariables(characterId, scenarioOrId);
-  }
-  if (!vars) {
-    vars = (c && c.variables && typeof c.variables === 'object') ? c.variables : {};
+  let vars = null;
+  if (!isSignature) {
+    vars = customVars;
+    if (!vars && scenarioOrId) {
+      vars = resolveScenarioCharacterVariables(characterId, scenarioOrId);
+    }
+    if (!vars) {
+      vars = (c && c.variables && typeof c.variables === 'object') ? c.variables : {};
+    }
   }
 
   const varMap = new Map();
-  for (const [k, v] of Object.entries(vars || {})) {
-    if (k) varMap.set(k.trim().toLowerCase(), String(v == null ? '' : v));
+  if (vars) {
+    for (const [k, v] of Object.entries(vars || {})) {
+      if (k) varMap.set(k.trim().toLowerCase(), String(v == null ? '' : v));
+    }
   }
 
   // 1. Convert markdown to HTML (safely escaping raw user text)
@@ -591,11 +838,14 @@ function renderPreviewMarkdown(raw, characterId, customVars = null, customCharNa
   // 2. Substitute {{...}} tokens into rendered HTML badges (NOT re-escaped)
   html = html.replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
     const lower = key.toLowerCase();
-    if (lower === 'char') {
+    if (lower === 'char' || lower === 'character' || lower === 'bot' || lower === 'char_name' || lower === 'character_name') {
       return `<mark class="var-hl char" title="{{char}}">${esc(charName)}</mark>`;
     }
-    if (lower === 'user') {
+    if (lower === 'user' || lower === 'user_name' || lower === 'persona') {
       return `<mark class="var-hl user" title="{{user}}">${esc(userName)}</mark>`;
+    }
+    if (isSignature) {
+      return `<span class="var-unset" title="Signature scenarios only support {{char}} and {{user}}">[unsupported: {{${esc(lower)}}}]</span>`;
     }
     if (varMap.has(lower)) {
       const val = varMap.get(lower);
@@ -611,12 +861,19 @@ function renderPreviewMarkdown(raw, characterId, customVars = null, customCharNa
 }
 
 function msgHtml(c, p, n, chat) {
-  const cObj = state.characters.find((x) => x.id === chat.characterId);
-  const msgPose = (n.role === 'char' && cObj && cObj.posesEnabled) ? poseById(chat.characterId, n.poseId) : null;
+  const speakingCharId = n.characterId || chat.characterId;
+  const cObj = state.characters.find((x) => x.id === speakingCharId) || c;
+  const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+  const msgPose = (n.role === 'char' && cObj && cObj.posesEnabled) ? poseById(speakingCharId, n.poseId) : null;
   const meta = msgMetaHtml(n, chat, { regen: n.role === 'char' }, poseTagHtml(msgPose));
   let body;
   if (editingId === n.id) {
     body = editBoxHtml(n);
+  } else if (n.role === 'summary') {
+    return `<div class="msg-summary" data-id="${n.id}">
+      <div class="summary-head">${I.scroll}<span>Previous conversation summarized</span></div>
+      <div class="summary-body">${md(n.content)}</div>
+    </div>`;
   } else if (n.role === 'injection') {
     const dot = n.state === 'pending' ? '<span class="inj-dot" title="Will be sent with the next reply"></span>' : '';
     body = `<div class="bubble"><span class="inj-tag">${I.zap}<span>Directive</span>${dot}</span>${md(n.content)}</div>`;
@@ -624,13 +881,21 @@ function msgHtml(c, p, n, chat) {
     body = `<div class="ms-body">${md(expandTags(n.content, chat.characterId, chat.scenarioId || chat))}</div>`;
   } else {
     /* Character lines render their tags; the user's own text is left alone. */
-    const text = n.role === 'char' ? expandTags(n.content, chat.characterId, chat.scenarioId || chat) : n.content;
-    body = `<div class="bubble">${md(text)}</div>`;
+    const text = n.role === 'char' ? expandTags(n.content, speakingCharId, chat.scenarioId || chat) : n.content;
+    const speakerTag = (isMulti && n.role === 'char' && cObj) ? `<div class="msg-speaker-badge"><span>${esc(cObj.name)}</span></div>` : '';
+    body = `<div class="bubble">${speakerTag}${md(text)}</div>`;
+    if (aiEditingId === n.id) {
+      body += aiEditBoxHtml(n);
+    }
   }
   if (n.role === 'scenario') {
-    return `<div class="msg-scenario" data-id="${n.id}">
-      <div class="ms-head">${I.book}<span>Scenario</span></div>
-      ${body}${meta}</div>`;
+    return `<div class="msg-scenario-wrap" data-id="${n.id}">
+      <div class="msg-scenario">
+        <div class="ms-head">${I.book}<span>Scenario</span></div>
+        ${body}
+      </div>
+      ${meta}
+    </div>`;
   }
   const main = `<div class="msg-main${editingId === n.id ? ' editing' : ''}">${body}${meta}</div>`;
   if (n.role === 'injection') {
@@ -639,14 +904,14 @@ function msgHtml(c, p, n, chat) {
   if (n.role === 'user') {
     return `<div class="msg user${n.pending ? ' pending' : ''}" data-id="${n.id}">${main}${personaAvatarHtml(p, 'sm', true)}</div>`;
   }
-  return `<div class="msg char" data-id="${n.id}">${avatarHtml(c, 'sm', true, msgPose && msgPose.thumb)}${main}</div>`;
+  return `<div class="msg char" data-id="${n.id}">${avatarHtml(cObj, 'sm', true, msgPose && msgPose.thumb)}${main}</div>`;
 }
 
 let isSteerMode = false;
 
 function setSteerMode(active) {
   isSteerMode = active;
-  const btn = $('#steer-toggle-btn');
+  const btn = $('#composer-actions-btn');
   const input = $('#msg-input');
   const sendBtn = $('#send-btn');
   if (btn) btn.classList.toggle('active', isSteerMode);
@@ -671,15 +936,38 @@ function updateComposerButtons() {
   $('#send-btn').disabled = typing || !chat || !text;
   if ($('#inject-btn')) $('#inject-btn').disabled = typing || !chat || !text;
   if ($('#generate-btn')) $('#generate-btn').disabled = typing || !chat || !canReply;
-  if ($('#steer-toggle-btn')) $('#steer-toggle-btn').disabled = typing || !chat;
+  if ($('#composer-actions-btn')) $('#composer-actions-btn').disabled = typing || !chat;
 
   const bar = $('#composer-directive-bar');
   if (bar) {
-    const hasPendingDirective = !!tip && tip.role === 'injection' && !tip.pending;
-    bar.classList.toggle('hidden', !hasPendingDirective);
-    if (hasPendingDirective) {
+    const isInj = !!tip && tip.role === 'injection' && !tip.pending;
+    const isUserTip = !!tip && tip.role === 'user' && !tip.pending;
+    const showBar = (isInj || isUserTip) && !typing;
+    bar.classList.toggle('hidden', !showBar);
+    bar.classList.toggle('ready-user', isUserTip);
+    if (showBar) {
+      const cdIcon = bar.querySelector('.cd-icon');
+      const cdText = $('#cd-text');
       const cdGen = $('#cd-generate-btn');
+      const cdRegen = $('#cd-regen-btn');
       if (cdGen) cdGen.disabled = typing;
+      if (cdRegen) {
+        cdRegen.disabled = typing;
+        cdRegen.classList.toggle('hidden', !isUserTip);
+      }
+      const cdArrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:-2px"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+
+      if (isInj) {
+        if (cdIcon) cdIcon.innerHTML = I.zap;
+        if (cdText) cdText.textContent = 'Directive waiting · The AI will incorporate your instruction into the next reply';
+        if (cdGen) cdGen.innerHTML = `<span>Generate reply now</span> ${cdArrow}`;
+      } else if (isUserTip) {
+        const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+        const responder = isMulti ? 'the characters' : (c ? c.name : 'the character');
+        if (cdIcon) cdIcon.innerHTML = I.user;
+        if (cdText) cdText.textContent = `Response ready · Let ${responder} reply to your message`;
+        if (cdGen) cdGen.innerHTML = `<span>Generate reply now</span> ${cdArrow}`;
+      }
     }
   }
 }
@@ -689,12 +977,12 @@ function liveStreamUpdate() {
   const sc = $('#chat-scroll');
   let bubble = document.querySelector('#chat-feed .msg.streaming .bubble');
   if (!bubble) {
-    renderChat();
+    renderChat({ keepScroll: !chatStickToBottom });
     bubble = document.querySelector('#chat-feed .msg.streaming .bubble');
   }
   if (bubble) {
     bubble.innerHTML = md(streaming.text);
-    if (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 160) sc.scrollTop = sc.scrollHeight;
+    if (chatStickToBottom) sc.scrollTop = sc.scrollHeight;
   }
 }
 
@@ -712,18 +1000,45 @@ function renderChat(opts = {}) {
   const nodes = chat ? pathOf(chat.tree, typing && typingAt ? typingAt : null) : [];
   let html = nodes.map((n) => msgHtml(c, p, n, chat)).join('');
   if (typing) {
-    const cp = currentPose(chat);
-    const live = streaming && chat && streaming.chatId === chat.id && streaming.text;
-    html += live
-      ? `<div class="msg char streaming">${avatarHtml(c, 'sm', true, cp && cp.thumb)}<div class="msg-main"><div class="bubble">${md(streaming.text)}</div></div></div>`
-      : `<div class="msg char"><span class="avatar sm emoji">${esc(c.emoji)}</span><div class="bubble dots"><span></span><span></span><span></span></div></div>`;
+    const isUserStream = streaming && streaming.role === 'user';
+    if (isUserStream) {
+      const live = streaming && chat && streaming.chatId === chat.id && streaming.text;
+      html += live
+        ? `<div class="msg user streaming"><div class="msg-main"><div class="bubble">${md(streaming.text)}</div></div>${personaAvatarHtml(p, 'sm', true)}</div>`
+        : `<div class="msg user"><div class="msg-main"><div class="bubble dots"><span></span><span></span><span></span></div></div>${personaAvatarHtml(p, 'sm', true)}</div>`;
+    } else {
+      const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+      // Between replies the turn director decides who speaks next: show a
+      // neutral in-between indicator, not a fake typing bubble for one char.
+      if (streaming && streaming.directing && isMulti) {
+        html += `<div class="msg char turn-direct"><div class="msg-main"><div class="turn-direct-pill"><span>The scene continues — deciding who speaks next</span><span class="dots dots-sm"><span></span><span></span><span></span></span></div></div></div>`;
+      } else {
+      const streamChar = (streaming && streaming.characterId)
+        ? (state.characters.find((x) => x.id === streaming.characterId) || c)
+        : c;
+      const cp = currentPose(chat);
+      const live = streaming && chat && streaming.chatId === chat.id && streaming.text;
+      const badge = (isMulti && streamChar) ? `<div class="msg-speaker-badge"><span>${esc(streamChar.name)}</span></div>` : '';
+      if (live) {
+        const cpThumb = streamChar === c ? (cp && cp.thumb) : null;
+        html += `<div class="msg char streaming">${avatarHtml(streamChar, 'sm', true, cpThumb)}<div class="msg-main">${badge}<div class="bubble">${md(streaming.text)}</div></div></div>`;
+      } else {
+        html += `<div class="msg char">${avatarHtml(streamChar, 'sm', true, null)}<div class="msg-main">${badge}<div class="bubble dots"><span></span><span></span><span></span></div></div></div>`;
+      }
+      }
+    }
   }
   feed.innerHTML = html;
-  sc.scrollTop = opts.keepScroll ? prevScroll : sc.scrollHeight;
+  if (opts.keepScroll || !chatStickToBottom) {
+    sc.scrollTop = prevScroll;
+  } else {
+    sc.scrollTop = sc.scrollHeight;
+  }
   updateComposerButtons();
 }
 
 async function openCharacter(id, chatId) {
+  chatStickToBottom = true;
   const c = state.characters.find((x) => x.id === id);
   if (!c) return;
   ui.activeCharacterId = id;
@@ -747,11 +1062,23 @@ async function openCharacter(id, chatId) {
   loadPoses(id);
 }
 
-async function createChatFor(c, scenarioId = null) {
+async function createChatFor(c, scenarioId = null, initialScenarioContent = null, characterIds = null) {
   const body = { characterId: c.id };
   if (scenarioId) body.scenarioId = scenarioId;
+  if (initialScenarioContent != null) body.initialScenarioContent = initialScenarioContent;
+  if (Array.isArray(characterIds) && characterIds.length) body.characterIds = characterIds;
   const ch = await api('/chats', { method: 'POST', body: JSON.stringify(body) });
   c.chats.unshift(ch);
+  if (Array.isArray(characterIds)) {
+    for (const cid of characterIds) {
+      if (cid !== c.id) {
+        const other = state.characters.find((x) => x.id === cid);
+        if (other && Array.isArray(other.chats) && !other.chats.some((x) => x.id === ch.id)) {
+          other.chats.unshift(ch);
+        }
+      }
+    }
+  }
   ui.activeChatIds[c.id] = ch.id;
   return ch;
 }
@@ -826,6 +1153,7 @@ async function sendUser() {
   const tmp = pushOptimistic(chat, 'user', text);
   typing = true;
   typingAt = tmp.id;
+  chatStickToBottom = true;
   streaming = { chatId: chat.id, text: '' };
   renderChat();
   try {
@@ -877,16 +1205,19 @@ async function sendInjection() {
   renderChatsMenu();
 }
 
-async function generateReplyAt(parentId) {
+async function generateReplyAt(parentId, opts = {}) {
   const c = activeChar();
   const chat = c && activeChat(c);
   if (!chat || typing || !parentId || parentId === 'root') return;
   typing = true;
   typingAt = parentId;
-  streaming = { chatId: chat.id, text: '' };
+  chatStickToBottom = true;
+  streaming = { chatId: chat.id, text: '', characterId: opts.characterId || null };
   renderChat();
   try {
-    const r = await streamGenerate(`/chats/${chat.id}/generate`, { parentId }, (full) => {
+    const body = { parentId };
+    if (opts.characterId) body.characterId = opts.characterId;
+    const r = await streamGenerate(`/chats/${chat.id}/generate`, body, (full) => {
       if (streaming) streaming.text = full;
       liveStreamUpdate();
     });
@@ -908,7 +1239,20 @@ async function regenMsg(id) {
   const chat = c && activeChat(c);
   const node = chat && chat.tree.nodes[id];
   if (!node || node.role !== 'char' || typing) return;
-  await generateReplyAt(node.parent);
+  const isMulti = Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+  if (!isMulti) {
+    await generateReplyAt(node.parent, { characterId: node.characterId || null });
+    return;
+  }
+  // Group chats regenerate the whole character talk: rewind to the start of
+  // the turn (the node after the user's message) like the server does.
+  let startId = node.parent;
+  for (let i = 0; i < 100; i++) {
+    const n = chat.tree.nodes[startId];
+    if (!n || n.role !== 'char') break;
+    startId = n.parent;
+  }
+  await generateReplyAt(startId, {});
 }
 
 function poseRevertNote(prevPoseId, chat) {
@@ -921,10 +1265,13 @@ async function delMsg(id) {
   const c = activeChar();
   const chat = c && activeChat(c);
   if (!chat || !chat.tree.nodes[id]) return;
+  const isInj = chat.tree.nodes[id].role === 'injection';
   const ok = await customConfirm({
-    title: 'Delete message branch?',
-    message: 'Delete this message and everything after it on this branch? This cannot be undone.',
-    confirmText: 'Delete branch',
+    title: isInj ? 'Remove directive?' : 'Delete message turn?',
+    message: isInj
+      ? 'Remove this directive? The messages after it stay in the chat. This cannot be undone.'
+      : 'Delete this message box (including all alternative versions you can switch to) and everything after it? This cannot be undone.',
+    confirmText: isInj ? 'Remove directive' : 'Delete message',
     danger: true,
   });
   if (!ok) return;
@@ -937,6 +1284,100 @@ async function delMsg(id) {
   saveUi();
   renderChat({ keepScroll: true });
   renderChatsMenu();
+}
+
+async function insertOocAt(id) {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || !chat.tree.nodes[id]) return;
+  try {
+    const r = await api(`/chats/${chat.id}/nodes/${id}/insert-ooc`, { method: 'POST', body: JSON.stringify({ content: '' }) });
+    mergeChat(chat, r.chat);
+    editingId = r.node.id;
+    saveUi();
+    renderChat({ keepScroll: true });
+    const ta = $('#edit-ta');
+    if (ta) {
+      makeTextareaAutoResize(ta, { min: 60, max: 280 });
+      ta.focus();
+    }
+  } catch (e) {
+    console.error('Insert OOC failed:', e.message);
+  }
+}
+
+async function respondAsMe() {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || typing) return;
+  const ta = $('#msg-input');
+  const guidance = ta ? ta.value.trim() : '';
+  if (ta) {
+    ta.value = '';
+    ta.style.height = '';
+    msgInputManualHeight = 0;
+  }
+  const tip = tipNode(chat);
+  const parentId = tip ? tip.id : null;
+  if (!parentId || parentId === 'root') return;
+  typing = true;
+  typingAt = parentId;
+  chatStickToBottom = true;
+  streaming = { chatId: chat.id, text: '', role: 'user' };
+  renderChat();
+  try {
+    const r = await streamGenerate(`/chats/${chat.id}/generate`, { parentId, asUser: true, guidance }, (full) => {
+      if (streaming) streaming.text = full;
+      liveStreamUpdate();
+    });
+    if (r && r.chat) mergeChat(chat, r.chat);
+  } catch (e) {
+    console.error('Respond as me failed:', e.message);
+  }
+  typing = false;
+  typingAt = null;
+  streaming = null;
+  saveUi();
+  renderChat();
+}
+
+async function regenUserResponse() {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || typing) return;
+  const tip = tipNode(chat);
+  if (!tip || tip.role !== 'user') return;
+  const parentId = tip.parent;
+  if (!parentId || parentId === 'root') return;
+
+  const ta = $('#msg-input');
+  const guidance = ta ? ta.value.trim() : '';
+  if (ta) {
+    ta.value = '';
+    ta.style.height = '';
+    msgInputManualHeight = 0;
+  }
+
+  typing = true;
+  typingAt = parentId;
+  chatStickToBottom = true;
+  streaming = { chatId: chat.id, text: '', role: 'user' };
+  renderChat();
+  try {
+    const r = await streamGenerate(`/chats/${chat.id}/generate`, { parentId, asUser: true, guidance }, (full) => {
+      if (streaming) streaming.text = full;
+      liveStreamUpdate();
+    });
+    if (r && r.chat) mergeChat(chat, r.chat);
+  } catch (e) {
+    console.error('Regenerate user response failed:', e.message);
+    toast(e.message || 'Regeneration failed');
+  }
+  typing = false;
+  typingAt = null;
+  streaming = null;
+  saveUi();
+  renderChat();
 }
 
 async function saveEdit(id) {
@@ -956,6 +1397,32 @@ async function saveEdit(id) {
   saveUi();
   renderChat({ keepScroll: true });
   renderChatsMenu();
+}
+
+async function saveAiEdit(id) {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || !chat.tree.nodes[id]) return;
+  const input = $('#ai-edit-input');
+  const instruction = input ? input.value.trim() : '';
+  if (!instruction) { toast('Please describe what to change'); return; }
+  const btn = $('#ai-edit-submit-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = `${I.sparkles} Rewriting…`; }
+  try {
+    const r = await api(`/chats/${chat.id}/nodes/${id}/ai-edit`, {
+      method: 'POST',
+      body: JSON.stringify({ instruction }),
+    });
+    mergeChat(chat, r.chat);
+    aiEditingId = null;
+    saveUi();
+    renderChat({ keepScroll: true });
+    renderChatsMenu();
+    toast('Response rewritten');
+  } catch (e) {
+    toast(e.message || 'AI rewrite failed');
+    if (btn) { btn.disabled = false; btn.innerHTML = `${I.sparkles} Rewrite`; }
+  }
 }
 
 async function switchVariant(dir, nodeId) {
@@ -979,6 +1446,7 @@ async function switchVariant(dir, nodeId) {
 }
 
 let msgInputManualHeight = 0;
+let agentInputManualHeight = 0;
 
 function autoGrow() {
   const ta = $('#msg-input');
@@ -1011,17 +1479,24 @@ function autoGrow() {
 
 function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } = {}) {
   if (!ta) return () => {};
+  const isAgent = ta.id === 'agent-input';
+  const getManual = () => (isAgent ? agentInputManualHeight : msgInputManualHeight);
+  const setManual = (h) => {
+    if (isAgent) agentInputManualHeight = h;
+    else msgInputManualHeight = h;
+  };
 
   const resize = () => {
     if (isComposer && !ta.value.trim()) {
-      msgInputManualHeight = 0;
+      setManual(0);
       ta.style.height = '';
       ta.style.overflowY = 'hidden';
       ta.style.resize = 'none';
       return;
     }
-    if (isComposer && msgInputManualHeight > 0) {
-      ta.style.height = Math.max(msgInputManualHeight, ta.scrollHeight) + 'px';
+    const manualH = getManual();
+    if (isComposer && manualH > 0) {
+      ta.style.height = Math.max(manualH, ta.scrollHeight) + 'px';
       ta.style.overflowY = 'auto';
       ta.style.resize = 'vertical';
       return;
@@ -1041,10 +1516,10 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
 
   ta.addEventListener('input', resize);
 
-  // For composer, use the dedicated #composer-touch-handle below the row
+  // For composers, use their dedicated top touch handle
   let bar = null;
   if (isComposer) {
-    bar = document.getElementById('composer-touch-handle');
+    bar = isAgent ? document.getElementById('agent-touch-handle') : document.getElementById('composer-touch-handle');
   } else if (!ta.dataset.hasResizeBar && ta.parentNode) {
     ta.dataset.hasResizeBar = '1';
     bar = document.createElement('div');
@@ -1060,12 +1535,13 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
 
     const onPointerMove = (e) => {
       const clientY = e.clientY != null ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
-      const dy = clientY - startY;
-      const newH = Math.max(min, startH + dy);
+      const dy = isComposer ? (startY - clientY) : (clientY - startY);
+      const maxH = isComposer ? Math.min(Math.round(window.innerHeight * 0.65), 550) : 600;
+      const newH = Math.min(maxH, Math.max(min, startH + dy));
       ta.style.height = newH + 'px';
       ta.style.overflowY = 'auto';
       ta.style.resize = 'vertical';
-      if (isComposer) msgInputManualHeight = newH;
+      if (isComposer) setManual(newH);
       if (e.cancelable) e.preventDefault();
     };
 
@@ -1094,10 +1570,69 @@ function makeTextareaAutoResize(ta, { min = 50, max = 280, isComposer = false } 
         startDrag(e.touches[0].clientY);
       }
     });
+
+    bar.addEventListener('dblclick', () => {
+      if (isComposer) {
+        setManual(0);
+        ta.style.height = '';
+        resize();
+      }
+    });
   }
 
   resize();
-  return resize;
+}
+
+function makeElementResizable(el, { min = 110, max = 650, defaultHeight = null } = {}) {
+  if (!el || el.dataset.hasResizeBar || !el.parentNode) return;
+  el.dataset.hasResizeBar = '1';
+  const bar = document.createElement('div');
+  bar.className = 'touch-resize-handle';
+  bar.title = 'Drag to adjust height (double-click to reset)';
+  bar.innerHTML = '<span></span>';
+  el.parentNode.insertBefore(bar, el.nextSibling);
+  el._resizeBar = bar;
+  // Start in sync with the element's initial visibility — preview boxes boot
+  // hidden (Edit tab is the default), and a visible bar after a hidden box
+  // reads as a dead second handle under the editable textarea.
+  bar.classList.toggle('hidden', el.classList.contains('hidden'));
+
+  let startY = 0;
+  let startH = 0;
+
+  const onPointerMove = (e) => {
+    const clientY = e.clientY != null ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    const dy = clientY - startY;
+    const newH = Math.min(max, Math.max(min, startH + dy));
+    el.style.height = newH + 'px';
+    el.style.maxHeight = 'none';
+    if (e.cancelable) e.preventDefault();
+  };
+
+  const onPointerUp = () => {
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+    document.removeEventListener('touchmove', onPointerMove);
+    document.removeEventListener('touchend', onPointerUp);
+  };
+
+  const startDrag = (clientY) => {
+    startY = clientY;
+    startH = el.offsetHeight;
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('touchmove', onPointerMove, { passive: false });
+    document.addEventListener('touchend', onPointerUp);
+  };
+
+  bar.addEventListener('pointerdown', (e) => startDrag(e.clientY));
+  bar.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches[0]) startDrag(e.touches[0].clientY);
+  });
+  bar.addEventListener('dblclick', () => {
+    el.style.height = defaultHeight ? defaultHeight + 'px' : '';
+    el.style.maxHeight = '';
+  });
 }
 
 function closeMenus() {
@@ -1113,6 +1648,9 @@ function toggleMenu(wrapId) {
     if (wrapId === 'persona-wrap') renderPersonaMenu();
     if (wrapId === 'chats-wrap') renderChatsMenu();
     if (wrapId === 'preset-wrap') renderPresetMenu();
+    if (wrapId === 'more-wrap') renderMoreMenu();
+    if (wrapId === 'bg-wrap') renderBgMenu();
+    if (wrapId === 'composer-actions-wrap') renderComposerActionsMenu();
     menu.classList.add('open');
   }
 }
@@ -1139,6 +1677,13 @@ function renderChatsMenu() {
   const menu = $('#chats-menu');
   if (!c) { menu.innerHTML = ''; return; }
   const chat = activeChat(c);
+  const msgCount = chat ? pathOf(chat.tree).filter((n) => n.role !== 'scenario' && n.role !== 'root').length : 0;
+  const extraChatActs = (chat && msgCount >= 2) ? `
+    <div class="menu-sep"></div>
+    <div class="menu-title">Chat tools</div>
+    <button class="menu-item" id="cm-compact">${I.scroll}<span>Compact conversation</span></button>
+    <button class="menu-item" id="cm-gen-title">${I.sparkles}<span>Generate new title</span></button>
+  ` : '';
   menu.innerHTML = `
     <button class="menu-item primary" id="cm-new">${I.plus}<span>New chat</span></button>
     <div class="menu-title">Chats with ${esc(c.name)}</div>
@@ -1154,7 +1699,7 @@ function renderChatsMenu() {
         </span>
         <span class="row-del" data-del="${ch.id}" title="Delete chat">${I.trash}</span>
       </button>`;
-    }).join('')}`;
+    }).join('')}${extraChatActs}`;
 }
 
 async function setPersona(pid) {
@@ -1356,13 +1901,140 @@ async function requestCloseModal(modalOrId) {
   return true;
 }
 
+/* --- Fullscreen image viewer -------------------------------------------------
+   Any thumbnail (agent tool results, attachment chips, portraits...) opens
+   here. Wheel / pinch zooms toward the pointer, drag pans when zoomed,
+   double-click toggles 1x / 2.5x. Escape, ✕ or clicking the backdrop closes. */
+const LB_MIN = 1;
+const LB_MAX = 8;
+let lbZoom = { scale: 1, x: 0, y: 0 };
+
+const lbClamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+function viewerElCenter() {
+  const img = $('#img-viewer-img');
+  const r = img.getBoundingClientRect();
+  /* getBoundingClientRect may be transformed already — the untransformed
+     element center is that visual center minus the pan offset. */
+  return { x: r.left + r.width / 2 - lbZoom.x, y: r.top + r.height / 2 - lbZoom.y };
+}
+
+function viewerClampPan() {
+  const img = $('#img-viewer-img');
+  const w = img.offsetWidth * lbZoom.scale;
+  const h = img.offsetHeight * lbZoom.scale;
+  const maxX = Math.max(0, (w - window.innerWidth) / 2);
+  const maxY = Math.max(0, (h - window.innerHeight) / 2);
+  lbZoom.x = lbClamp(lbZoom.x, -maxX, maxX);
+  lbZoom.y = lbClamp(lbZoom.y, -maxY, maxY);
+}
+
+function viewerApply() {
+  const img = $('#img-viewer-img');
+  img.style.transform = `translate(${lbZoom.x}px, ${lbZoom.y}px) scale(${lbZoom.scale})`;
+  $('#img-viewer').classList.toggle('zoomed', lbZoom.scale > 1.001);
+}
+
+function viewerZoomAt(clientX, clientY, factor) {
+  const next = lbClamp(lbZoom.scale * factor, LB_MIN, LB_MAX);
+  if (next === lbZoom.scale) return;
+  factor = next / lbZoom.scale;
+  const c = viewerElCenter();
+  /* Keep the point currently under the pointer visually fixed while zooming. */
+  lbZoom.x += (clientX - c.x - lbZoom.x) * (1 - factor);
+  lbZoom.y += (clientY - c.y - lbZoom.y) * (1 - factor);
+  lbZoom.scale = next;
+  viewerClampPan();
+  viewerApply();
+}
+
 function openViewer(src) {
-  $('#img-viewer-img').src = src;
+  lbZoom = { scale: 1, x: 0, y: 0 };
+  const img = $('#img-viewer-img');
+  img.style.transform = '';
+  img.src = src;
   $('#img-viewer').classList.remove('hidden');
+  $('#img-viewer').classList.remove('zoomed', 'grabbing');
 }
 function closeViewer() {
   $('#img-viewer').classList.add('hidden');
+  $('#img-viewer').classList.remove('zoomed', 'grabbing');
   $('#img-viewer-img').src = '';
+}
+
+function viewerWire() {
+  const v = $('#img-viewer');
+  if (v.dataset.wired) return;
+  v.dataset.wired = '1';
+  const img = $('#img-viewer-img');
+  const pointers = new Map();
+  let lbMoved = false;
+  let pinch = null;
+
+  v.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    viewerZoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0016));
+  }, { passive: false });
+
+  v.addEventListener('pointerdown', (e) => {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    lbMoved = false;
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+    }
+    if (e.target === img || e.target === v) v.classList.add('grabbing');
+  });
+  v.addEventListener('pointermove', (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    const dx = e.clientX - prev.x;
+    const dy = e.clientY - prev.y;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2 && pinch) {
+      lbMoved = true;
+      const [a, b] = [...pointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const cx = (a.x + b.x) / 2;
+      const cy = (a.y + b.y) / 2;
+      if (dist > 0) viewerZoomAt(cx, cy, dist / pinch.dist);
+      lbZoom.x += cx - pinch.cx;
+      lbZoom.y += cy - pinch.cy;
+      viewerClampPan();
+      viewerApply();
+      pinch = { dist, cx, cy };
+    } else if (pointers.size === 1 && lbZoom.scale > 1) {
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) lbMoved = true;
+      lbZoom.x += dx;
+      lbZoom.y += dy;
+      viewerClampPan();
+      viewerApply();
+    } else if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      lbMoved = true;
+    }
+  });
+  const pointerUp = (e) => {
+    pointers.delete(e.pointerId);
+    pinch = null;
+    if (!pointers.size) v.classList.remove('grabbing');
+  };
+  v.addEventListener('pointerup', pointerUp);
+  v.addEventListener('pointercancel', pointerUp);
+  v.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    lbZoom = { scale: lbZoom.scale > 1.001 ? 1 : 2.5, x: 0, y: 0 };
+    viewerApply();
+  });
+  /* Close on a plain click, but not when the gesture was a pan or pinch. */
+  v.addEventListener('click', (e) => {
+    if (e.target === $('#img-viewer-close') || e.target.closest('#img-viewer-close')) return;
+    if (lbMoved) { lbMoved = false; return; }
+    closeViewer();
+  });
+  $('#img-viewer-close').addEventListener('click', closeViewer);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !v.classList.contains('hidden')) closeViewer();
+  });
 }
 
 let peMode = 'new';
@@ -1378,9 +2050,9 @@ function updatePfAvatarUI() {
     pv.style.backgroundImage = `url('${peAvatar}')`;
   } else {
     const p = peMode === 'edit' ? state.personalities.find((x) => x.id === peId) : null;
-    pv.classList.add('emoji');
+    pv.classList.add('emoji', 'letter');
     pv.style.backgroundImage = '';
-    pv.textContent = p && p.name ? p.name.trim().charAt(0).toUpperCase() : '🙂';
+    pv.textContent = p && p.name ? p.name.trim().charAt(0).toUpperCase() : 'P';
   }
   const full = $('#pf-preview-full');
   full.classList.toggle('hidden', !peImage);
@@ -1453,6 +2125,12 @@ function switchCeDescTab(tab) {
   $('#ce-tab-preview').classList.toggle('active', !isEdit);
   $('#ce-desc-edit-wrap').classList.toggle('hidden', !isEdit);
   $('#ce-desc-prev-wrap').classList.toggle('hidden', isEdit);
+  // The preview box's resize handle sits AFTER the box in the DOM — it must
+  // never stay visible while the box itself is hidden (it would show up as a
+  // dead second bar under the description textarea in Edit mode).
+  if ($('#ce-desc-prev-wrap')._resizeBar) {
+    $('#ce-desc-prev-wrap')._resizeBar.classList.toggle('hidden', isEdit);
+  }
   if (!isEdit) renderCeDescPreview();
 }
 
@@ -1460,6 +2138,25 @@ function renderCeDescPreview() {
   const raw = $('#ce-desc').value;
   const charName = $('#ce-name').value.trim() || 'Character';
   $('#ce-desc-prev-wrap').innerHTML = renderPreviewMarkdown(raw, ceId, null, charName);
+}
+
+function switchCeScenarioTab(tab) {
+  const isEdit = tab === 'edit';
+  $('#ce-scen-tab-edit')?.classList.toggle('active', isEdit);
+  $('#ce-scen-tab-preview')?.classList.toggle('active', !isEdit);
+  $('#ce-scen-edit-wrap')?.classList.toggle('hidden', !isEdit);
+  $('#ce-scen-prev-wrap')?.classList.toggle('hidden', isEdit);
+  if ($('#ce-scen-prev-wrap')?._resizeBar) {
+    $('#ce-scen-prev-wrap')._resizeBar.classList.toggle('hidden', isEdit);
+  }
+  if (!isEdit) renderCeScenarioPreview();
+}
+
+function renderCeScenarioPreview() {
+  const raw = $('#ce-scenario')?.value || '';
+  const charName = $('#ce-name').value.trim() || 'Character';
+  const el = $('#ce-scen-prev-wrap');
+  if (el) el.innerHTML = renderPreviewMarkdown(raw, ceId, null, charName, null, true);
 }
 
 let ceScenSelectedId = null;
@@ -1520,7 +2217,7 @@ function renderCeScenCards(query = '') {
       <div class="ce-scen-opt-card ${isSelected ? 'selected' : ''}" data-scen-id="${s.id}">
         <div class="ce-scen-opt-card-top">
           <div class="ce-scen-opt-title-group">
-            <span>🎬</span>
+            <span class="icon-scen">${I.clapper}</span>
             <span class="ce-scen-opt-card-title">${esc(s.title)}</span>
           </div>
           ${isSelected ? '<span class="ce-scen-opt-sel-tick">✓ Active</span>' : ''}
@@ -1773,6 +2470,9 @@ function updateCeScenPanelUI() {
         `;
       }
       varsList.innerHTML = html;
+      varsList.querySelectorAll('.ce-scen-var-input').forEach((input) => {
+        makeTextareaAutoResize(input, { min: 38, max: 240 });
+      });
     }
   }
 
@@ -1795,9 +2495,11 @@ function openCharModal(char) {
   $('#ce-poses-enabled').checked = !!(char && char.posesEnabled);
   $('#ce-name').value = char ? char.name : '';
   $('#ce-desc').value = char ? char.description : '';
+  if ($('#ce-scenario')) $('#ce-scenario').value = char ? char.scenario || '' : '';
   $('#ce-note').value = char ? char.note || '' : '';
 
   switchCeDescTab('edit');
+  switchCeScenarioTab('edit');
   closeCeScenPanel();
   renderCeScenActiveCard();
   switchCeScenTab('preview');
@@ -1861,6 +2563,7 @@ async function charFormSave() {
   const body = {
     name,
     description: $('#ce-desc').value.trim(),
+    scenario: ($('#ce-scenario')?.value || '').trim(),
     note: $('#ce-note').value.trim(),
     emoji: ceEmoji,
     avatar: ceAvatar,
@@ -1981,10 +2684,10 @@ let poseCreating = false;
 let poseUploadId = null;
 let poseDelArm = null;
 
-async function openPosesModal() {
+async function openPosesModal(charIdOverride) {
   const charModalOpen = $('#modal-char').classList.contains('open');
   if (charModalOpen && ceMode !== 'edit') { toast('Save the character first'); return; }
-  const charId = (charModalOpen && ceId) ? ceId : ui.activeCharacterId;
+  const charId = (charModalOpen && ceId) ? ceId : (charIdOverride || ui.activeCharacterId);
   const c = charId && state.characters.find((x) => x.id === charId);
   if (!c) { toast('Save the character first'); return; }
   poseCharId = charId;
@@ -2194,13 +2897,13 @@ function updateSettingsStatusCard() {
   const providerLabel = PROVIDERS[ai.provider]?.label || 'Custom';
   const modelName = ai.model || 'Default';
   card.innerHTML = live
-    ? `<div class="status-badge live">🟢 Ready to Chat</div>
+    ? `<div class="status-badge live"><span class="status-dot"></span>Ready to Chat</div>
        <div class="status-desc">Connected to <strong>${esc(providerLabel)}</strong> (${esc(modelName)}). Real AI replies are enabled.</div>`
-    : `<div class="status-badge sim">⚪ Simulated Mode</div>
+    : `<div class="status-badge sim"><span class="status-dot"></span>Simulated Mode</div>
        <div class="status-desc">No API key entered. AI replies are simulated samples until you add a key below.</div>`;
 }
 
-function openSettings() {
+function openSettings(tab = 'ai') {
   const s = state.settings;
   $('#prov-grid').innerHTML = provGridHtml(s.provider);
   $('#set-url').value = s.baseUrl;
@@ -2225,17 +2928,82 @@ function openSettings() {
   $('#pose-key').value = s.poseApiKey || '';
   $('#pose-model').value = s.poseModel || 'typesafe/jev-1.13';
   updatePoseProviderHints();
+  $('#set-agent-override').checked = !!s.agentOverride;
+  $('#agent-prov-grid').innerHTML = provGridHtml(s.agentProvider || 'openrouter');
+  $('#agent-url').value = s.agentBaseUrl || '';
+  $('#agent-key').value = s.agentApiKey || '';
+  $('#agent-key').type = 'password';
+  $('#agent-key-toggle').textContent = 'Show';
+  $('#agent-model').value = s.agentModel || '';
+  setComboModels($('#agent-model').closest('.combo'), PROVIDERS[s.agentProvider || 'openrouter']?.models || []);
+  $('#agent-reasoning').value = s.agentReasoning || 'default';
+  $('#agent-image-url').value = s.agentImageBaseUrl || '';
+  $('#agent-image-key').value = s.agentImageApiKey || '';
+  $('#agent-image-key').type = 'password';
+  $('#agent-image-key-toggle').textContent = 'Show';
+  $('#agent-image-model').value = s.agentImageModel || '';
+  $('#agent-image-edit-model').value = s.agentImageEditModel || '';
+  updateAgentConnUI();
   const posePct = Math.round((Number.isFinite(+s.poseLikelihood) ? +s.poseLikelihood : 0.6) * 100);
   $('#set-poselike').value = posePct;
   $('#poselike-val').textContent = posePct + '%';
   const poseCtx = Number.isFinite(+s.poseContextCount) ? +s.poseContextCount : 3;
   $('#set-posecontext').value = poseCtx;
   $('#posecontext-val').textContent = poseCtx === 0 ? 'None (latest reply only)' : `${poseCtx} message${poseCtx === 1 ? '' : 's'}`;
+
+  // Features & Chat tab
+  if ($('#set-feat-agent')) $('#set-feat-agent').checked = s.agentSidebarEnabled !== false;
+  if ($('#set-feat-ai-edit')) $('#set-feat-ai-edit').checked = s.aiEditEnabled !== false;
+  if ($('#set-feat-auto-title')) $('#set-feat-auto-title').checked = s.autoTitleEnabled !== false;
+  if ($('#set-title-interval')) $('#set-title-interval').value = s.autoTitleInterval || 6;
+  if ($('#set-title-idle')) $('#set-title-idle').value = s.autoTitleIdleMinutes || 60;
+  if ($('#set-long-strategy')) $('#set-long-strategy').value = s.longChatStrategy || 'nothing';
+  if ($('#set-max-tokens')) $('#set-max-tokens').value = s.maxContextTokens || 8192;
+  const compThresh = s.compactThreshold != null ? s.compactThreshold : 80;
+  if ($('#set-compact-thresh')) {
+    $('#set-compact-thresh').value = compThresh;
+    $('#compact-thresh-val').textContent = compThresh + '%';
+  }
+  const compKeep = s.compactKeepRatio != null ? s.compactKeepRatio : 25;
+  if ($('#set-compact-keep')) {
+    $('#set-compact-keep').value = compKeep;
+    $('#compact-keep-val').textContent = compKeep + '%';
+  }
+  if ($('#set-feat-multi-char')) $('#set-feat-multi-char').checked = s.multiCharEnabled !== false;
+  if ($('#set-multi-max-rounds')) $('#set-multi-max-rounds').value = s.multiCharMaxRounds || 2;
+  updateFeaturesUI();
+
   renderPresetList();
-  switchSettingsTab('ai');
+  switchSettingsTab(tab);
   updateSettingsStatusCard();
   openModal('modal-settings');
   takeModalSnapshot('modal-settings');
+}
+
+function updateFeaturesUI() {
+  const strat = $('#set-long-strategy')?.value || 'nothing';
+  const dtWrap = $('#long-chat-details-wrap');
+  if (dtWrap) dtWrap.style.display = strat === 'nothing' ? 'none' : 'block';
+  const keepWrap = $('#compact-keep-wrap');
+  if (keepWrap) keepWrap.style.display = strat === 'compact' ? 'block' : 'none';
+  const titleWrap = $('#auto-title-fields-wrap');
+  if (titleWrap) titleWrap.style.display = $('#set-feat-auto-title')?.checked ? 'block' : 'none';
+  const roundsWrap = $('#multi-char-rounds-wrap');
+  if (roundsWrap) roundsWrap.style.display = $('#set-feat-multi-char')?.checked ? 'block' : 'none';
+}
+
+function updateAgentConnUI() {
+  const el = $('#agent-conn-fields');
+  if (el) el.hidden = !$('#set-agent-override').checked;
+}
+
+function setAgentProviderUI(pv) {
+  $$('#agent-prov-grid .prov').forEach((b) => b.classList.toggle('selected', b.dataset.pv === pv));
+  const meta = PROVIDERS[pv];
+  if (!meta) return;
+  $('#agent-url').value = meta.baseUrl || '';
+  setComboModels($('#agent-model').closest('.combo'), meta.models || []);
+  $('#agent-model').value = (meta.models && meta.models[0]) || '';
 }
 
 function updatePoseProviderHints() {
@@ -2441,7 +3209,10 @@ function setProviderUI(pv) {
   updateSettingsStatusCard();
 }
 
-async function fetchModelList(baseUrl, apiKey, combo, btn) {
+async function fetchModelList(baseUrl, apiKey, combo, btn, provSel = '#prov-grid .prov.selected') {
+  /* Empty base URL fields mean "provider default" — resolve it the same way the
+     AI calls do, so Fetch list works out of the box for OpenRouter & co. */
+  if (!baseUrl) baseUrl = PROVIDERS[$(provSel)?.dataset.pv || '']?.baseUrl || '';
   if (!baseUrl) { toast('Set a base URL first'); return; }
   const old = btn.textContent;
   btn.textContent = '…';
@@ -2488,6 +3259,7 @@ function renderPresetList() {
 
 async function settingsSave() {
   const selected = $('#prov-grid .prov.selected');
+  const agentProv = $('#agent-prov-grid .prov.selected');
   const body = {
     provider: selected ? selected.dataset.pv : 'custom',
     baseUrl: $('#set-url').value.trim(),
@@ -2505,12 +3277,36 @@ async function settingsSave() {
     poseModel: $('#pose-model').value.trim(),
     poseLikelihood: (+$('#set-poselike').value || 0) / 100,
     poseContextCount: Math.round(+$('#set-posecontext').value || 0),
+    agentOverride: $('#set-agent-override').checked,
+    agentProvider: agentProv ? agentProv.dataset.pv : 'custom',
+    agentBaseUrl: $('#agent-url').value.trim(),
+    agentApiKey: $('#agent-key').value.trim(),
+    agentModel: $('#agent-model').value.trim(),
+    agentReasoning: $('#agent-reasoning').value || 'default',
+    agentImageBaseUrl: $('#agent-image-url').value.trim(),
+    agentImageApiKey: $('#agent-image-key').value.trim(),
+    agentImageModel: $('#agent-image-model').value.trim(),
+    agentImageEditModel: $('#agent-image-edit-model').value.trim(),
+    agentSidebarEnabled: Boolean($('#set-feat-agent')?.checked),
+    aiEditEnabled: Boolean($('#set-feat-ai-edit')?.checked),
+    autoTitleEnabled: Boolean($('#set-feat-auto-title')?.checked),
+    autoTitleInterval: +$('#set-title-interval')?.value || 6,
+    autoTitleIdleMinutes: +$('#set-title-idle')?.value || 60,
+    longChatStrategy: $('#set-long-strategy')?.value || 'nothing',
+    maxContextTokens: +$('#set-max-tokens')?.value || 8192,
+    compactThreshold: +$('#set-compact-thresh')?.value || 80,
+    compactKeepRatio: +$('#set-compact-keep')?.value || 25,
+    multiCharEnabled: Boolean($('#set-feat-multi-char')?.checked),
+    multiCharMaxRounds: +$('#set-multi-max-rounds')?.value || 2,
   };
   try {
     state.settings = await api('/settings', { method: 'PUT', body: JSON.stringify(body) });
     closeModal('modal-settings');
+    applyFeatureToggles();
     setHint();
     applyChatBg();
+    const agentSub = agentEl('#agent-model-label');
+    if (agentSub) agentSub.textContent = agentModelLabel();
     toast('Settings saved');
     if (body.poseAgent) poseAgentHint();
   } catch (e) { toast(e.message); }
@@ -2554,6 +3350,157 @@ function renderPresetMenu() {
       </button>`).join('')}
     <div class="menu-sep"></div>
     <button class="menu-item manage" id="ps-manage">${I.gear}<span>Manage presets</span></button>`;
+}
+
+/* Mobile overflow menu (the "⋯" header button): the persona + preset switchers
+   live here on phones so the header stays to two tidy buttons — see styles.css. */
+function renderMoreMenu() {
+  const menu = $('#more-menu');
+  const c = activeChar();
+  const pr = activePreset();
+  const pid = state.settings.activePersonalityId;
+  menu.innerHTML = `
+    <div class="menu-title">Playing as</div>
+    ${state.personalities.map((p) => `
+      <button class="menu-item ${p.id === pid ? 'active' : ''}" data-pid="${p.id}">
+        ${personaAvatarHtml(p, 'sm')}
+        <span class="mi-main">
+          <span class="mi-name">${esc(p.name)}</span>
+          <span class="mi-desc">${esc(p.note || p.description)}</span>
+        </span>
+        ${p.id === pid ? `<span class="mi-check">${I.check}</span>` : ''}
+      </button>`).join('')}
+    <div class="menu-sep"></div>
+    <div class="menu-title">AI preset</div>
+    <button class="menu-item ${!pr ? 'active' : ''}" data-pset="">
+      <span class="mi-main">
+        <span class="mi-name">Provider settings</span>
+        <span class="mi-desc">Uses the main Settings configuration</span>
+      </span>
+      ${!pr ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>
+    ${state.presets.map((p) => `
+      <button class="menu-item ${pr && p.id === pr.id ? 'active' : ''}" data-pset="${p.id}">
+        <span class="mi-main">
+          <span class="mi-name">${esc(p.name)}</span>
+          <span class="mi-desc">${esc(presetSummary(p))}</span>
+        </span>
+        ${pr && p.id === pr.id ? `<span class="mi-check">${I.check}</span>` : ''}
+      </button>`).join('')}
+    <div class="menu-sep"></div>
+    ${c ? `<button class="menu-item" id="mf-edit-char">${I.pencil}<span>Edit ${esc(c.name)}</span></button>` : ''}
+    <button class="menu-item" id="mf-agent">${I.sparkles}<span>AI Agent</span></button>
+    <button class="menu-item" id="mf-manage-presets">${I.gear}<span>Manage presets</span></button>
+    <button class="menu-item" id="mf-settings">${I.gear}<span>Settings</span></button>`;
+}
+
+/* Quick background menu (header image icon, group chats only). Group scenes
+   can split the backdrop between two characters; one-character views always
+   show the whole image without cropping. Changes here save immediately. */
+function renderBgMenu() {
+  const menu = $('#bg-menu');
+  if (!menu) return;
+  const s = state.settings;
+  const mode = ['split-tb', 'split-lr'].includes(s.bgMode) ? s.bgMode : 'single';
+  const fit = s.bgFit === 'cover' ? 'cover' : 'contain';
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  const group = (chat && Array.isArray(chat.characterIds))
+    ? chat.characterIds.map((id) => state.characters.find((x) => x.id === id)).filter(Boolean)
+    : [];
+  const picked = s.bgSingleCharId && group.some((x) => x.id === s.bgSingleCharId) ? s.bgSingleCharId : '';
+  const singleActive = !!picked || mode === 'single';
+  const layoutHtml = [
+    { id: 'single', name: 'One character', desc: 'Whole image behind the chat' },
+    { id: 'split-tb', name: 'Top / bottom split', desc: 'The two characters share the screen' },
+    { id: 'split-lr', name: 'Left / right split', desc: 'The two characters share the screen' },
+  ].map((o) => {
+    const active = o.id === 'single' ? singleActive : (!picked && mode === o.id);
+    return `
+    <button class="menu-item ${active ? 'active' : ''}" data-layout="${o.id}">
+      <span class="mi-main">
+        <span class="mi-name">${o.name}</span>
+        <span class="mi-desc">${o.desc}</span>
+      </span>
+      ${active ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>`;
+  }).join('');
+  const charHtml = `
+    <button class="menu-item ${!picked ? 'active' : ''}" data-bgchar="">
+      <span class="mi-main">
+        <span class="mi-name">Auto</span>
+        <span class="mi-desc">Follows the chat's starting character</span>
+      </span>
+      ${!picked ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>` +
+    group.map((g) => `
+    <button class="menu-item ${picked === g.id ? 'active' : ''}" data-bgchar="${g.id}">
+      ${avatarHtml(g, 'sm')}
+      <span class="mi-main"><span class="mi-name">${esc(g.name)}</span></span>
+      ${picked === g.id ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>`).join('');
+  const fitHtml = [
+    { id: 'cover', name: 'Crop to screen', desc: 'Each half fills edge to edge' },
+    { id: 'contain', name: 'Whole image', desc: 'Original aspect, smaller on screen' },
+  ].map((o) => `
+    <button class="menu-item ${fit === o.id ? 'active' : ''}" data-bgfit="${o.id}">
+      <span class="mi-main">
+        <span class="mi-name">${o.name}</span>
+        <span class="mi-desc">${o.desc}</span>
+      </span>
+      ${fit === o.id ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>`).join('');
+  menu.innerHTML = `
+    <div class="menu-title">Background layout</div>
+    ${layoutHtml}
+    <div class="menu-sep"></div>
+    <div class="menu-title">Show only one</div>
+    ${charHtml}
+    <div class="menu-sep"></div>
+    <div class="menu-title">Display in splits</div>
+    ${fitHtml}`;
+}
+
+/* Tiny popover above the composer's ⚡ button: the two "special send" actions
+   (OOC steering and writing as your persona) so the composer row itself only
+   ever carries one un-accidental button — see styles.css .composer-actions-*. */
+function renderComposerActionsMenu() {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+  let extraCharsHtml = '';
+  if (isMulti) {
+    const chars = chat.characterIds.map((id) => state.characters.find((x) => x.id === id)).filter(Boolean);
+    extraCharsHtml = `
+      <div class="menu-sep"></div>
+      <div class="menu-title">Chime in as character</div>
+      ${chars.map((ch) => `
+        <button class="menu-item" data-act="speak-as-char" data-char-id="${esc(ch.id)}">
+          ${avatarHtml(ch, 'sm')}
+          <span class="mi-main">
+            <span class="mi-name">Let ${esc(ch.name)} speak</span>
+            <span class="mi-desc">Generate reply as ${esc(ch.name)}</span>
+          </span>
+        </button>`).join('')}`;
+  }
+  $('#composer-actions-menu').innerHTML = `
+    <div class="menu-title">Composer actions</div>
+    <button class="menu-item ${isSteerMode ? 'active' : ''}" data-act="steer">
+      ${I.zap}
+      <span class="mi-main">
+        <span class="mi-name">Steer scene (OOC)</span>
+        <span class="mi-desc">Direct what happens next, without speaking as your character</span>
+      </span>
+      ${isSteerMode ? `<span class="mi-check">${I.check}</span>` : ''}
+    </button>
+    <button class="menu-item" data-act="respond-me">
+      ${I.user}
+      <span class="mi-main">
+        <span class="mi-name">Respond as me</span>
+        <span class="mi-desc">AI writes your next message${$('#msg-input').value.trim() ? ' — input text is used as a hint' : ''}</span>
+      </span>
+    </button>
+    ${extraCharsHtml}`;
 }
 
 let prMode = 'new';
@@ -2716,7 +3663,7 @@ function renderSidebarScenarios() {
   }
   list.innerHTML = state.scenarios.map((s) => `
     <div class="scen-item" data-id="${s.id}">
-      <span class="scen-icon">🎬</span>
+      <span class="scen-icon">${I.clapper}</span>
       <span class="scen-main">
         <span class="scen-row">
           <span class="scen-name">${esc(s.title)}</span>
@@ -2787,6 +3734,11 @@ function switchSeTab(tab) {
   $('#se-tab-preview').classList.toggle('active', !isEdit);
   $('#se-content-edit-wrap').classList.toggle('hidden', !isEdit);
   $('#se-content-prev-wrap').classList.toggle('hidden', isEdit);
+  // Same as the character description: hide the preview box's resize handle
+  // whenever the box is hidden, so Edit mode shows only the textarea's own bar.
+  if ($('#se-content-prev-wrap')._resizeBar) {
+    $('#se-content-prev-wrap')._resizeBar.classList.toggle('hidden', isEdit);
+  }
   const pill = $('#se-char-swap-wrap');
   if (pill) pill.classList.toggle('hidden', isEdit);
   if (!isEdit) {
@@ -2835,7 +3787,7 @@ function renderSeCharActiveCard() {
     switchBtn.textContent = 'Choose ▾';
     if (avatar) {
       avatar.className = 'avatar sm letter';
-      avatar.textContent = '👤';
+      avatar.innerHTML = I.user;
       avatar.style.backgroundImage = '';
     }
     if (prevName) prevName.textContent = 'None';
@@ -3038,6 +3990,9 @@ function renderSeVarsForm() {
   }
 
   form.innerHTML = html;
+  form.querySelectorAll('.se-var-input').forEach((input) => {
+    makeTextareaAutoResize(input, { min: 38, max: 240 });
+  });
 }
 
 function openScenarioModal(sc = null) {
@@ -3048,6 +4003,7 @@ function openScenarioModal(sc = null) {
   $('#se-title-text').textContent = sc ? 'Edit scenario' : 'New scenario';
   $('#se-title').value = sc ? sc.title : '';
   $('#se-desc').value = sc ? sc.description : '';
+  $('#se-notes').value = sc ? (sc.specialNotes || '') : '';
   $('#se-content').value = sc ? sc.content : '';
 
   const initialCharId = pickScenarioChar ? pickScenarioChar.id : (ui.activeCharacterId || (state.characters[0] ? state.characters[0].id : null));
@@ -3097,6 +4053,7 @@ async function scenarioFormSave() {
     title,
     description: $('#se-desc').value.trim(),
     content,
+    specialNotes: $('#se-notes')?.value || '',
     accessMode: 'all',
     characterIds: [],
     characterVariables: seCharacterVariables,
@@ -3161,7 +4118,7 @@ function openMissingVarsModal(character, scenario, requiredVars, missingVars) {
       ${avatarHtml(character, 'md')}
       <div class="msv-char-info">
         <span class="msv-char-name">${esc(character.name)}</span>
-        <span class="msv-scen-title">🎬 ${esc(scenario.title)}</span>
+        <span class="msv-scen-title">${I.clapper} ${esc(scenario.title)}</span>
       </div>
     `;
   }
@@ -3301,7 +4258,7 @@ function renderPsGrid(query = '') {
   if (allowed.length === 0) {
     grid.innerHTML = q
       ? `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No scenarios matching "${esc(query)}".</div>`
-      : `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No accessible scenarios for ${esc(pickScenarioChar.name)}. Create one or start freeform.</div>`;
+      : `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No accessible scenarios for ${esc(pickScenarioChar.name)}. Create one or start with their Signature scenario above.</div>`;
   } else {
     grid.innerHTML = allowed.map((s) => {
       const reqVars = getScenarioRequiredVariables(s.content);
@@ -3339,8 +4296,62 @@ function openScenarioPicker(c) {
   const sInp = $('#ps-search');
   if (sInp) sInp.value = '';
   renderPsGrid('');
+
+  const sigTitle = $('#ps-signature-title');
+  const sigDesc = $('#ps-signature-desc');
+  const sigAction = $('#ps-signature-action');
+  if (sigTitle && sigDesc) {
+    if (c.scenario && c.scenario.trim()) {
+      sigTitle.textContent = 'Signature scenario';
+      sigDesc.textContent = c.scenario.length > 130 ? c.scenario.slice(0, 130).trim() + '…' : c.scenario;
+      if (sigAction) sigAction.textContent = 'Start';
+    } else {
+      sigTitle.textContent = 'Signature scenario (not set)';
+      sigDesc.textContent = `No signature scenario written for ${c.name} yet. Click to create one in character edit.`;
+      if (sigAction) sigAction.textContent = 'Create';
+    }
+  }
+
   openModal('modal-pick-scenario');
   setTimeout(() => { if (sInp) sInp.focus(); }, 60);
+}
+
+let selectedGroupCharIds = new Set();
+
+function openGroupChatModal() {
+  selectedGroupCharIds = new Set();
+  const grid = $('#mc-char-grid');
+  if (!grid) return;
+  grid.innerHTML = (state.characters || []).map((c) => `
+    <div class="mc-char-item" data-char-id="${esc(c.id)}">
+      <div class="mc-char-check"></div>
+      ${avatarHtml(c, 'sm')}
+      <div class="mc-char-name"><strong>${esc(c.name)}</strong></div>
+    </div>
+  `).join('');
+  updateGroupChatUI();
+  openModal('modal-multi-char');
+}
+
+function updateGroupChatUI() {
+  const count = selectedGroupCharIds.size;
+  const canStart = count >= 2;
+  const fbBtn = $('#mc-freeform-btn');
+  const genBtn = $('#mc-agent-gen-btn');
+  if (fbBtn) fbBtn.style.opacity = canStart ? '1' : '0.5';
+  if (genBtn) genBtn.style.opacity = canStart ? '1' : '0.5';
+}
+
+function detectContextTokens(modelName) {
+  const m = String(modelName || '').toLowerCase();
+  if (m.includes('claude-3-5') || m.includes('claude-3')) return 200000;
+  if (m.includes('gpt-4o') || m.includes('gpt-4.1')) return 128000;
+  if (m.includes('gemini-2') || m.includes('gemini-1.5')) return 1000000;
+  if (m.includes('llama-3.1') || m.includes('llama-3.2') || m.includes('llama-3.3')) return 128000;
+  if (m.includes('mistral-large') || m.includes('mistral-small')) return 128000;
+  if (m.includes('qwen-2.5') || m.includes('qwen2.5')) return 128000;
+  if (m.includes('deepseek')) return 64000;
+  return 8192;
 }
 
 let pickCharScenario = null;
@@ -3720,16 +4731,28 @@ function wireEvents() {
   }
   const autoTextareas = [
     { id: '#ce-desc', min: 80, max: 260 },
+    { id: '#ce-scenario', min: 80, max: 260 },
     { id: '#ce-note', min: 54, max: 180 },
     { id: '#se-content', min: 120, max: 340 },
     { id: '#se-desc', min: 54, max: 180 },
+    { id: '#se-notes', min: 60, max: 240 },
     { id: '#pf-desc', min: 70, max: 220 },
     { id: '#pf-note', min: 54, max: 160 },
+    { id: '#pr-sys', min: 80, max: 300 },
+    { id: '#pose-desc', min: 54, max: 180 },
+    { id: '#sa-idea-input', min: 54, max: 180 },
+    { id: '#sa-refine-input', min: 54, max: 180 },
+    { id: '#sa-draft-scenario', min: 88, max: 260 },
   ];
   for (const item of autoTextareas) {
     const el = $(item.id);
     if (el) makeTextareaAutoResize(el, item);
   }
+
+  makeElementResizable($('#se-content-prev-wrap'), { min: 110, max: 550, defaultHeight: 180 });
+  makeElementResizable($('#ce-scen-preview-text'), { min: 110, max: 550, defaultHeight: 220 });
+  makeElementResizable($('#ce-desc-prev-wrap'), { min: 110, max: 550, defaultHeight: 180 });
+  makeElementResizable($('#ce-scen-prev-wrap'), { min: 110, max: 550, defaultHeight: 180 });
 
   $('#persona-sidebar-list')?.addEventListener('click', (e) => {
     const editBtn = e.target.closest('[data-edit-persona]');
@@ -3840,7 +4863,7 @@ function wireEvents() {
     }
   });
   $('#menu-btn').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
-  $('#scrim').addEventListener('click', closeSidebar);
+  $('#scrim').addEventListener('click', () => { closeSidebar(); closeAgentDrawer(); });
 
   // Variables Directory in Sidebar (if present)
   $('#vars-search')?.addEventListener('input', (e) => {
@@ -3975,15 +4998,57 @@ function wireEvents() {
   $('#ps-search').addEventListener('input', (e) => {
     renderPsGrid(e.target.value);
   });
-  $('#ps-freeform-btn').addEventListener('click', async () => {
+  const sigBtn = $('#ps-signature-btn') || $('#ps-freeform-btn');
+  sigBtn?.addEventListener('click', async () => {
     if (!pickScenarioChar) return;
+    const char = pickScenarioChar;
     closeModal('modal-pick-scenario');
+    if (!char.scenario || !char.scenario.trim()) {
+      openCharModal(char);
+      setTimeout(() => {
+        $('#ce-scenario')?.focus();
+        toast('Write a signature scenario for ' + char.name);
+      }, 100);
+      return;
+    }
     try {
-      await createChatFor(pickScenarioChar, null);
+      ui.activeCharacterId = char.id;
+      await createChatFor(char, 'signature');
       saveUi();
+      closeSidebar();
       renderSidebar();
       renderChat();
+      loadPoses(char.id);
     } catch (e) { toast(e.message); }
+  });
+  $('#ps-agent-gen-btn')?.addEventListener('click', async () => {
+    if (!pickScenarioChar) return;
+    const char = pickScenarioChar;
+    const btn = $('#ps-agent-gen-btn');
+    const badge = $('#ps-agent-gen-badge');
+    if (btn?.classList.contains('loading')) return;
+    btn?.classList.add('loading');
+    if (badge) badge.textContent = 'Generating…';
+    try {
+      const r = await api('/agent/generate-scenario', {
+        method: 'POST',
+        body: JSON.stringify({ characterId: char.id }),
+      });
+      closeModal('modal-pick-scenario');
+      ui.activeCharacterId = char.id;
+      await createChatFor(char, null, { scenario: r.scenario, messages: r.messages });
+      saveUi();
+      closeSidebar();
+      renderSidebar();
+      renderChat();
+      loadPoses(char.id);
+    } catch (e) {
+      toast(e.message || 'Failed to generate scenario');
+      alert('Scenario generation failed: ' + (e.message || 'Unknown error'));
+    } finally {
+      btn?.classList.remove('loading');
+      if (badge) badge.textContent = 'Generate';
+    }
   });
   $('#ps-grid').addEventListener('click', async (e) => {
     const card = e.target.closest('.ps-item-card');
@@ -3997,6 +5062,258 @@ function wireEvents() {
   $('#ps-new-btn').addEventListener('click', () => {
     closeModal('modal-pick-scenario');
     openScenarioModal(null);
+  });
+
+  $('#ps-assist-btn')?.addEventListener('click', () => {
+    if (!pickScenarioChar) return;
+    openScenarioAssistant([pickScenarioChar.id], false);
+  });
+
+  // Multi-Character Group Chat events
+  $('#new-group-chat-btn')?.addEventListener('click', openGroupChatModal);
+  $('#mc-char-grid')?.addEventListener('click', (e) => {
+    const item = e.target.closest('.mc-char-item');
+    if (!item) return;
+    const cid = item.dataset.charId;
+    if (selectedGroupCharIds.has(cid)) {
+      selectedGroupCharIds.delete(cid);
+      item.classList.remove('selected');
+      const chk = item.querySelector('.mc-char-check');
+      if (chk) chk.innerHTML = '';
+    } else {
+      selectedGroupCharIds.add(cid);
+      item.classList.add('selected');
+      const chk = item.querySelector('.mc-char-check');
+      if (chk) chk.innerHTML = I.check;
+    }
+    updateGroupChatUI();
+  });
+  $('#mc-freeform-btn')?.addEventListener('click', async () => {
+    if (selectedGroupCharIds.size < 2) {
+      toast('Select at least 2 characters for a group chat');
+      return;
+    }
+    const charIds = Array.from(selectedGroupCharIds);
+    const firstChar = state.characters.find((c) => c.id === charIds[0]);
+    if (!firstChar) return;
+    closeModal('modal-multi-char');
+    try {
+      ui.activeCharacterId = firstChar.id;
+      await createChatFor(firstChar, null, null, charIds);
+      saveUi();
+      closeSidebar();
+      renderSidebar();
+      renderChat();
+      loadPoses(firstChar.id);
+    } catch (e) { toast(e.message); }
+  });
+  $('#mc-agent-gen-btn')?.addEventListener('click', async () => {
+    if (selectedGroupCharIds.size < 2) {
+      toast('Select at least 2 characters for a group chat');
+      return;
+    }
+    const charIds = Array.from(selectedGroupCharIds);
+    const firstChar = state.characters.find((c) => c.id === charIds[0]);
+    if (!firstChar) return;
+    const btn = $('#mc-agent-gen-btn');
+    const badge = $('#mc-agent-gen-badge');
+    if (btn?.classList.contains('loading')) return;
+    btn?.classList.add('loading');
+    if (badge) badge.textContent = 'Generating…';
+    try {
+      const r = await api('/agent/generate-group-scenario', {
+        method: 'POST',
+        body: JSON.stringify({ characterIds: charIds }),
+      });
+      closeModal('modal-multi-char');
+      ui.activeCharacterId = firstChar.id;
+      await createChatFor(firstChar, null, { scenario: r.scenario, messages: r.messages }, charIds);
+      saveUi();
+      closeSidebar();
+      renderSidebar();
+      renderChat();
+      loadPoses(firstChar.id);
+    } catch (e) {
+      toast(e.message || 'Failed to generate group scenario');
+      alert('Group scenario generation failed: ' + (e.message || 'Unknown error'));
+    } finally {
+      btn?.classList.remove('loading');
+      if (badge) badge.textContent = 'Generate';
+    }
+  });
+
+  $('#mc-assist-btn')?.addEventListener('click', () => {
+    if (selectedGroupCharIds.size < 2) {
+      toast('Select at least 2 characters for a group chat');
+      return;
+    }
+    openScenarioAssistant(Array.from(selectedGroupCharIds), true);
+  });
+
+  // AI Assisted Scenario Generator
+  let saCtx = null;   // { charIds: [], isMulti: boolean }
+  let saDraft = null; // { scenario: '', messages: [{ characterId, characterName, content }] }
+
+  function openScenarioAssistant(charIds, isMulti) {
+    const chars = (charIds || []).map((id) => state.characters.find((x) => x.id === id)).filter(Boolean);
+    if (!chars.length) return;
+    saCtx = { charIds: chars.map((ch) => ch.id), isMulti: Boolean(isMulti) };
+    saDraft = null;
+    $('#sa-title').textContent = isMulti ? 'AI Assisted Group Scenario' : 'AI Assisted Scenario';
+    $('#sa-sub').textContent = isMulti
+      ? 'Collaborate with AI to draft the group opening scene'
+      : `Collaborate with AI to draft the opening scene with ${chars[0].name}`;
+    $('#sa-participants').innerHTML =
+      `<span class="sa-chip sa-chip-you">${I.user} ${esc(activePersona()?.name || 'You')}</span>` +
+      chars.map((ch) => `<span class="sa-chip">${esc(ch.emoji || '')} ${esc(ch.name)}</span>`).join('');
+    $('#sa-idea-input').value = '';
+    $('#sa-refine-input').value = '';
+    $('#sa-draft-container').classList.add('hidden');
+    $('#sa-draft-messages-list').innerHTML = '';
+    $('#sa-start-chat-btn').disabled = true;
+    closeModal(isMulti ? 'modal-multi-char' : 'modal-pick-scenario');
+    openModal('modal-scenario-assistant');
+  }
+
+  function saSetLoading(on, which) {
+    const genBtn = $('#sa-gen-draft-btn');
+    const refBtn = $('#sa-refine-btn');
+    const genLabel = genBtn?.querySelector('.sa-gen-label');
+    const refLabel = refBtn?.querySelector('.sa-refine-label');
+    if (which === 'gen') {
+      if (genBtn) genBtn.disabled = on;
+      if (genLabel) genLabel.textContent = on ? 'Generating…' : 'Generate draft';
+    } else if (which === 'refine') {
+      if (refBtn) refBtn.disabled = on;
+      if (refLabel) refLabel.textContent = on ? 'Refining…' : 'Refine draft';
+    }
+  }
+
+  function renderAssistantDraft() {
+    const wrap = $('#sa-draft-container');
+    if (!saDraft) {
+      wrap.classList.add('hidden');
+      $('#sa-start-chat-btn').disabled = true;
+      return;
+    }
+    $('#sa-draft-scenario').value = saDraft.scenario || '';
+    $('#sa-draft-messages-list').innerHTML = (saDraft.messages || []).map((m, i) => `
+      <div class="sa-msg-card" data-sa-index="${i}">
+        <div class="sa-msg-card-head">
+          <span class="sa-msg-name">${esc(m.characterName || 'Character')}</span>
+          <button class="mini sa-msg-regen" type="button" data-sa-regen="${i}" title="Ask AI to rewrite this opening">↻ Rewrite</button>
+        </div>
+        <textarea class="sa-textarea sa-msg-input" data-sa-content="${i}" rows="2">${esc(m.content || '')}</textarea>
+      </div>`).join('');
+    for (const ta of $$('.sa-msg-input')) makeTextareaAutoResize(ta, { min: 54, max: 200 });
+    wrap.classList.remove('hidden');
+    $('#sa-start-chat-btn').disabled = false;
+  }
+
+  function syncAssistantDraft() {
+    if (!saDraft) return;
+    const sc = $('#sa-draft-scenario');
+    if (sc) saDraft.scenario = sc.value;
+    for (const ta of $$('.sa-msg-input[data-sa-content]')) {
+      const i = Number(ta.dataset.saContent);
+      if (saDraft.messages && saDraft.messages[i]) saDraft.messages[i].content = ta.value;
+    }
+  }
+
+  async function aiDraft(idea = '', { feedback = '', currentDraft = null } = {}) {
+    if (!saCtx) return;
+    const body = { characterIds: saCtx.charIds, characterId: saCtx.charIds[0], idea, feedback, currentDraft };
+    const hasDraft = Boolean(currentDraft);
+    saSetLoading(true, hasDraft ? 'refine' : 'gen');
+    try {
+      const r = await api('/agent/assist-scenario', { method: 'POST', body: JSON.stringify(body) });
+      saDraft = {
+        scenario: typeof r.scenario === 'string' ? r.scenario : '',
+        messages: Array.isArray(r.messages) && r.messages.length
+          ? r.messages
+          : (saDraft && saDraft.messages) || [],
+      };
+      renderAssistantDraft();
+    } catch (e) {
+      toast(e.message || 'Scenario drafting failed');
+    } finally {
+      saSetLoading(false, hasDraft ? 'refine' : 'gen');
+    }
+  }
+
+  $('#sa-gen-draft-btn').addEventListener('click', () => aiDraft($('#sa-idea-input').value.trim()));
+  $('#sa-refine-btn').addEventListener('click', () => {
+    syncAssistantDraft();
+    const feedback = $('#sa-refine-input').value.trim();
+    if (!saDraft) { toast('Generate a draft first'); return; }
+    if (!feedback) { toast('Describe what to change'); return; }
+    $('#sa-refine-input').value = '';
+    aiDraft('', { feedback, currentDraft: saDraft });
+  });
+  $('#sa-draft-messages-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sa-regen]');
+    if (!b || !saCtx) return;
+    const i = Number(b.dataset.saRegen);
+    const m = saDraft && saDraft.messages && saDraft.messages[i];
+    if (!m) return;
+    aiDraft('', {
+      feedback: `Rewrite ONLY the opening message of "${m.characterName}" — keep the scene setting and the other characters' messages untouched.`,
+      currentDraft: saDraft,
+    });
+  });
+  $('#sa-refine-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      $('#sa-refine-btn').click();
+    }
+  });
+  $('#sa-start-chat-btn').addEventListener('click', async () => {
+    if (!saCtx || !saDraft) return;
+    syncAssistantDraft();
+    const chars = saCtx.charIds.map((id) => state.characters.find((x) => x.id === id)).filter(Boolean);
+    const firstChar = chars[0];
+    if (!firstChar) return;
+    const btn = $('#sa-start-chat-btn');
+    btn.disabled = true;
+    try {
+      closeModal('modal-scenario-assistant');
+      ui.activeCharacterId = firstChar.id;
+      await createChatFor(firstChar, null, {
+        scenario: saDraft.scenario,
+        messages: (saDraft.messages || []).map((m) => ({
+          characterId: m.characterId,
+          characterName: m.characterName,
+          content: m.content,
+        })),
+      }, saCtx.isMulti ? saCtx.charIds : null);
+      saCtx = null;
+      saDraft = null;
+      saveUi();
+      closeSidebar();
+      renderSidebar();
+      renderChat();
+      loadPoses(firstChar.id);
+    } catch (e) {
+      toast(e.message || 'Failed to start chat');
+      btn.disabled = false;
+    }
+  });
+
+  // Features Settings inputs
+  $('#set-long-strategy')?.addEventListener('change', updateFeaturesUI);
+  $('#set-feat-auto-title')?.addEventListener('change', updateFeaturesUI);
+  $('#set-feat-multi-char')?.addEventListener('change', updateFeaturesUI);
+  $('#set-compact-thresh')?.addEventListener('input', (e) => {
+    $('#compact-thresh-val').textContent = e.target.value + '%';
+  });
+  $('#set-compact-keep')?.addEventListener('input', (e) => {
+    $('#compact-keep-val').textContent = e.target.value + '%';
+  });
+  $('#set-detect-tokens-btn')?.addEventListener('click', () => {
+    const curModel = $('#set-model')?.value || state.settings?.model || '';
+    const detected = detectContextTokens(curModel);
+    $('#set-max-tokens').value = detected;
+    toast(`Detected ${detected} tokens for ${curModel || 'default model'}`);
   });
 
   // Character Picker for Scenario modal events
@@ -4077,13 +5394,48 @@ function wireEvents() {
   $('#persona-btn').addEventListener('click', () => toggleMenu('persona-wrap'));
   $('#chats-btn').addEventListener('click', () => toggleMenu('chats-wrap'));
   $('#preset-btn').addEventListener('click', () => toggleMenu('preset-wrap'));
+  $('#more-btn').addEventListener('click', () => toggleMenu('more-wrap'));
+  $('#bg-btn').addEventListener('click', () => toggleMenu('bg-wrap'));
+  $('#bg-menu').addEventListener('click', async (e) => {
+    const lay = e.target.closest('[data-layout]');
+    const bc = e.target.closest('[data-bgchar]');
+    const bf = e.target.closest('[data-bgfit]');
+    if (!lay && !bc && !bf) return;
+    const patch = lay
+      ? { bgMode: lay.dataset.layout, bgSingleCharId: null }
+      : bf
+        ? { bgFit: bf.dataset.bgfit }
+        : { bgSingleCharId: bc.dataset.bgchar || null };
+    try {
+      const out = await api('/settings', { method: 'PUT', body: JSON.stringify(patch) });
+      state.settings = out || state.settings;
+      applyChatBg();
+      renderBgMenu();
+    } catch (err) { console.error('Background setting failed:', err.message); }
+  });
   $('#settings-btn').addEventListener('click', () => { closeMenus(); openSettings(); });
   $('#edit-char-btn').addEventListener('click', () => { closeMenus(); const c = activeChar(); if (c) openCharModal(c); });
+
+  $('#more-menu').addEventListener('click', (e) => {
+    const pid = e.target.closest('[data-pid]');
+    if (pid) { setPersona(pid.dataset.pid); closeMenus(); return; }
+    const pset = e.target.closest('[data-pset]');
+    if (pset) { setPreset(pset.dataset.pset); closeMenus(); return; }
+    if (e.target.closest('#mf-edit-char')) {
+      closeMenus();
+      const c = activeChar();
+      if (c) openCharModal(c);
+      return;
+    }
+    if (e.target.closest('#mf-agent')) { closeMenus(); openAgentDrawer(); return; }
+    if (e.target.closest('#mf-manage-presets')) { closeMenus(); openSettings('presets'); return; }
+    if (e.target.closest('#mf-settings')) { closeMenus(); openSettings(); }
+  });
 
   $('#preset-menu').addEventListener('click', (e) => {
     const item = e.target.closest('[data-pset]');
     if (item) { setPreset(item.dataset.pset); closeMenus(); return; }
-    if (e.target.closest('#ps-manage')) { closeMenus(); openSettings(); }
+    if (e.target.closest('#ps-manage')) { closeMenus(); openSettings('presets'); }
   });
 
   $('#preset-list').addEventListener('click', async (e) => {
@@ -4128,14 +5480,17 @@ function wireEvents() {
     /* Same fallback the server does at generation time: an empty preset key
        means "use the global one", so the list fetch must send it too. */
     const key = $('#pr-key').value.trim() || state.settings.apiKey;
-    fetchModelList($('#pr-url').value.trim(), key, $('#pr-model').closest('.combo'), $('#pr-fetch-models'));
+    fetchModelList($('#pr-url').value.trim(), key, $('#pr-model').closest('.combo'), $('#pr-fetch-models'), '#pr-prov-grid .prov.selected');
   });
   $('#pr-save').addEventListener('click', presetFormSave);
   $('#pr-cancel').addEventListener('click', () => requestCloseModal('modal-preset'));
   $('#pr-delete').addEventListener('click', presetDelete);
 
   $('#set-fetch-models').addEventListener('click', () => {
-    fetchModelList($('#set-url').value.trim(), $('#set-key').value.trim(), $('#set-model').closest('.combo'), $('#set-fetch-models'));
+    fetchModelList($('#set-url').value.trim(), $('#set-key').value.trim(), $('#set-model').closest('.combo'), $('#set-fetch-models'), '#prov-grid .prov.selected');
+  });
+  $('#agent-fetch-models').addEventListener('click', () => {
+    fetchModelList($('#agent-url').value.trim(), $('#agent-key').value.trim(), $('#agent-model').closest('.combo'), $('#agent-fetch-models'), '#agent-prov-grid .prov.selected');
   });
   $('#set-bgop').addEventListener('input', (e) => {
     $('#bgop-val').textContent = e.target.value + '%';
@@ -4157,7 +5512,7 @@ function wireEvents() {
     $('#posecontext-val').textContent = v === 0 ? 'None (latest reply only)' : `${v} message${v === 1 ? '' : 's'}`;
   });
 
-  $('#img-viewer').addEventListener('click', closeViewer);
+  viewerWire();
   $('#chat-feed').addEventListener('click', (e) => {
     const nav = e.target.closest('[data-nav]');
     if (nav) {
@@ -4185,6 +5540,35 @@ function wireEvents() {
         renderChat({ keepScroll: true });
       } else if (act.dataset.act === 'esave') {
         saveEdit(id);
+      } else if (act.dataset.act === 'ai-edit') {
+        aiEditingId = id;
+        editingId = null;
+        renderChat({ keepScroll: true });
+        const input = $('#ai-edit-input');
+        if (input) {
+          makeTextareaAutoResize(input, { min: 72, max: 280 });
+          input.focus();
+        }
+      } else if (act.dataset.act === 'ai-edit-cancel') {
+        aiEditingId = null;
+        renderChat({ keepScroll: true });
+      } else if (act.dataset.act === 'ai-edit-submit') {
+        saveAiEdit(id);
+      } else if (act.dataset.act === 'copy') {
+        const c = activeChar();
+        const chat = c && activeChat(c);
+        const node = chat && chat.tree.nodes[id];
+        if (node && node.content) {
+          navigator.clipboard.writeText(node.content);
+          act.innerHTML = I.check;
+          act.classList.add('copied');
+          setTimeout(() => {
+            act.innerHTML = I.copy;
+            act.classList.remove('copied');
+          }, 1200);
+        }
+      } else if (act.dataset.act === 'ooc') {
+        insertOocAt(id);
       } else if (act.dataset.act === 'regen') {
         regenMsg(id);
       } else if (act.dataset.act === 'del') {
@@ -4199,9 +5583,14 @@ function wireEvents() {
     const c = activeChar();
     const chat = c && activeChat(c);
     const node = (msg && chat && chat.tree.nodes[msg.dataset.id]) || null;
+    // In multi-character chats each message belongs to the character that spoke it,
+    // so open that speaker's portrait / pose — not the chat's primary character.
+    const speaking = (chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1)
+      ? (state.characters.find((x) => x.id === ((node && node.characterId) || chat.characterId)) || c)
+      : c;
     const src = msg && msg.classList.contains('user')
       ? fullImageSrc(activePersona())
-      : (poseImg(node && poseById(chat.characterId, node.poseId)) || fullImageSrc(c));
+      : (poseImg(node && poseById(speaking && speaking.id, node.poseId)) || fullImageSrc(speaking));
     if (src) { e.stopPropagation(); openViewer(src); }
   }, true);
   $('#char-info').addEventListener('click', (e) => {
@@ -4216,10 +5605,40 @@ function wireEvents() {
     if (e.target.closest('#pm-manage')) { closeMenus(); openPersonaModal(); }
   });
 
-  $('#chats-menu').addEventListener('click', (e) => {
+  $('#chats-menu').addEventListener('click', async (e) => {
     if (e.target.closest('#cm-new')) { newChat(); closeMenus(); return; }
     const del = e.target.closest('[data-del]');
     if (del) { delChat(del.dataset.del); return; }
+    if (e.target.closest('#cm-compact')) {
+      const c = activeChar();
+      const chat = c && activeChat(c);
+      if (chat) {
+        closeMenus();
+        try {
+          const r = await api(`/chats/${chat.id}/compact`, { method: 'POST' });
+          mergeChat(chat, r.chat);
+          renderChat({ keepScroll: true });
+          renderChatsMenu();
+          toast('Conversation compacted & summarized');
+        } catch (err) { toast(err.message); }
+      }
+      return;
+    }
+    if (e.target.closest('#cm-gen-title')) {
+      const c = activeChar();
+      const chat = c && activeChat(c);
+      if (chat) {
+        closeMenus();
+        try {
+          const r = await api(`/chats/${chat.id}/generate-title`, { method: 'POST' });
+          if (r.chat) mergeChat(chat, r.chat);
+          renderHeader();
+          renderChatsMenu();
+          toast('Title generated: ' + (r.title || 'Updated'));
+        } catch (err) { toast(err.message); }
+      }
+      return;
+    }
     const row = e.target.closest('[data-cid]');
     if (row) {
       ui.activeChatIds[activeChar().id] = row.dataset.cid;
@@ -4237,15 +5656,41 @@ function wireEvents() {
       sendUser();
     }
   });
-  $('#steer-toggle-btn')?.addEventListener('click', () => {
-    setSteerMode(!isSteerMode);
-    $('#msg-input').focus();
+  $('#composer-actions-btn')?.addEventListener('click', () => toggleMenu('composer-actions-wrap'));
+  $('#composer-actions-menu')?.addEventListener('click', (e) => {
+    if (e.target.closest('[data-act="steer"]')) {
+      setSteerMode(!isSteerMode);
+      closeMenus();
+      if (isSteerMode) $('#msg-input').focus();
+      return;
+    }
+    if (e.target.closest('[data-act="respond-me"]')) {
+      closeMenus();
+      // The two modes are mutually exclusive: writing as your persona
+      // cancels an armed OOC directive styling.
+      if (isSteerMode) setSteerMode(false);
+      respondAsMe();
+      return;
+    }
+    const speakBtn = e.target.closest('[data-act="speak-as-char"]');
+    if (speakBtn) {
+      closeMenus();
+      const cid = speakBtn.dataset.charId;
+      const c = activeChar();
+      const chat = c && activeChat(c);
+      const tip = chat && tipNode(chat);
+      if (tip && !typing) generateReplyAt(tip.id, { characterId: cid });
+      return;
+    }
   });
   $('#cd-generate-btn')?.addEventListener('click', () => {
     const c = activeChar();
     const chat = c && activeChat(c);
     const tip = chat && tipNode(chat);
     if (tip && !typing) generateReplyAt(tip.id);
+  });
+  $('#cd-regen-btn')?.addEventListener('click', () => {
+    if (!typing) regenUserResponse();
   });
   $('#inject-btn')?.addEventListener('click', sendInjection);
   $('#generate-btn')?.addEventListener('click', () => {
@@ -4291,6 +5736,10 @@ function wireEvents() {
         requestCloseModal(top);
         return;
       }
+      if (document.body.classList.contains('agent-open')) {
+        closeAgentDrawer();
+        return;
+      }
       closeMenus(); closeSidebar(); closeViewer();
       if (editingId) { editingId = null; renderChat({ keepScroll: true }); }
     }
@@ -4309,6 +5758,23 @@ function wireEvents() {
   $('#prov-grid').addEventListener('click', (e) => {
     const card = e.target.closest('.prov');
     if (card) setProviderUI(card.dataset.pv);
+  });
+  $('#agent-prov-grid').addEventListener('click', (e) => {
+    const card = e.target.closest('.prov');
+    if (card) setAgentProviderUI(card.dataset.pv);
+  });
+  $('#set-agent-override').addEventListener('change', updateAgentConnUI);
+  $('#agent-key-toggle').addEventListener('click', () => {
+    const input = $('#agent-key');
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    $('#agent-key-toggle').textContent = showing ? 'Show' : 'Hide';
+  });
+  $('#agent-image-key-toggle')?.addEventListener('click', () => {
+    const input = $('#agent-image-key');
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    $('#agent-image-key-toggle').textContent = showing ? 'Show' : 'Hide';
   });
   $('#key-toggle').addEventListener('click', () => {
     const input = $('#set-key');
@@ -4418,12 +5884,18 @@ function wireEvents() {
   // Character Modal Tabs & Variables events
   $('#ce-tab-edit').addEventListener('click', () => switchCeDescTab('edit'));
   $('#ce-tab-preview').addEventListener('click', () => switchCeDescTab('preview'));
+  $('#ce-scen-tab-edit')?.addEventListener('click', () => switchCeScenarioTab('edit'));
+  $('#ce-scen-tab-preview')?.addEventListener('click', () => switchCeScenarioTab('preview'));
+  $('#ce-scenario')?.addEventListener('input', () => {
+    if ($('#ce-scen-tab-preview')?.classList.contains('active')) renderCeScenarioPreview();
+  });
   $('#ce-desc').addEventListener('input', () => {
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
     updateCeScenPanelUI();
   });
   $('#ce-name').addEventListener('input', () => {
     if ($('#ce-tab-preview').classList.contains('active')) renderCeDescPreview();
+    if ($('#ce-scen-tab-preview')?.classList.contains('active')) renderCeScenarioPreview();
     updateCeScenPanelUI();
   });
 
@@ -4699,8 +6171,1326 @@ function wireEvents() {
   });
 }
 
+/* ---- AI Agent drawer ------------------------------------------------------ */
+
+const AGENT_TOOL_LABELS = {
+  read_chat: 'Reading chat',
+  site_overview: 'Read the site',
+  list_characters: 'Listing characters',
+  get_character: 'Reading character',
+  create_character: 'Created character',
+  update_character: 'Updated character',
+  set_character_variables: 'Set variables',
+  delete_character: 'Deleted character',
+  list_scenarios: 'Listing scenarios',
+  get_scenario: 'Reading scenario',
+  create_scenario: 'Created scenario',
+  update_scenario: 'Updated scenario',
+  set_scenario_character_variables: 'Attached variables to scenario',
+  delete_scenario: 'Deleted scenario',
+  list_personas: 'Listing personas',
+  create_persona: 'Created persona',
+  update_persona: 'Updated persona',
+  set_active_persona: 'Switched active persona',
+  generate_image: 'Generated image',
+  edit_image: 'Edited image',
+  apply_image: 'Applied image',
+  list_presets: 'Listing presets',
+  get_preset: 'Inspecting preset',
+};
+
+const AGENT_SUGGESTIONS = [
+  'Let\'s create a new character together — a full set with a scenario.',
+  'Create a character and generate a portrait plus two poses for her.',
+  'I attached an image — turn it into my character\'s avatar.',
+  'What characters and scenarios do I have?',
+];
+
+let agentOpen = false;
+let agentBusy = false;
+let agentStatus = '';
+let agentLoaded = false;
+let agentAttachments = []; // { id, name, dataUrl } surfaced as chips above the input
+
+function renderAgentAttachments() {
+  const row = agentEl('#agent-attachments');
+  if (!row) return;
+  if (!agentAttachments.length) { row.classList.add('hidden'); row.innerHTML = ''; return; }
+  row.classList.remove('hidden');
+  row.innerHTML = agentAttachments.map((a) => `
+    <span class="agent-attach-chip" data-att-id="${esc(a.id)}" title="${esc(a.name)}">
+      <img src="${esc(a.dataUrl)}" alt="${esc(a.name)}">
+      <span>${esc(a.name)}</span>
+      <button type="button" class="att-x" data-att-remove="${esc(a.id)}" aria-label="Remove attachment">×</button>
+    </span>`).join('');
+}
+
+async function agentAttachFiles(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+  for (const f of list) {
+    if (agentAttachments.length >= 6) { toast('Maximum 6 attachments per message'); break; }
+    const isImage = /^image\//i.test(f.type || '') || /\.(png|jpe?g|webp|avif|gif|bmp|heic|heif)$/i.test(f.name || '');
+    if (!isImage) { toast(`"${f.name || 'File'}" is not an image`); continue; }
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = () => reject(new Error('Could not read that file'));
+        fr.readAsDataURL(f);
+      });
+      const normalized = await normalizeImageDataUrl(String(dataUrl));
+      if (normalized.length > 12 * 1024 * 1024) {
+        toast(`"${f.name}" is too large even after scaling (max ~9 MB)`);
+        continue;
+      }
+      const r = await api('/agent/attach', { method: 'POST', body: JSON.stringify({ name: f.name, dataUrl: normalized }) });
+      agentAttachments.push({ id: r.id, name: r.name || f.name, dataUrl: normalized });
+    } catch (e) {
+      console.error('[agent] attach failed:', e);
+      toast(e.message || 'Attachment failed');
+    }
+  }
+  renderAgentAttachments();
+}
+
+/* Every attached image — png, jpg, webp, avif, gif, heic… — is decoded and
+   normalized before upload: oversized dimensions are scaled to ≤1536px and the
+   result is re-encoded into a compact, universally accepted format (WebP for
+   opaque content, PNG to preserve transparency). Small PNG/JPEG/WebP sources pass
+   through untouched. This keeps POST bodies far below the payload cap, where
+   re-encoding camera photos to PNG could blow past it. */
+function normalizeImageDataUrl(dataUrl, maxDim = 1536) {
+  const mime = (dataUrl.match(/^data:(image\/[a-z0-9.+-]+);/i) || [])[1] || '';
+  const draw = (source) => new Promise((resolve, reject) => {
+    const sw = source.naturalWidth || source.width || 0;
+    const sh = source.naturalHeight || source.height || 0;
+    const big = Math.max(sw, sh);
+    if (!big) return reject(new Error('Empty image'));
+    const k = big > maxDim ? maxDim / big : 1;
+    /* Small PNG/JPEG/WEBP under cap is compact and accepted as-is. */
+    if (k === 1 && /^image\/(png|jpe?g|webp)$/i.test(mime) && dataUrl.length <= 4 * 1024 * 1024) {
+      return resolve(dataUrl);
+    }
+    const w = Math.max(1, Math.round(sw * k));
+    const h = Math.max(1, Math.round(sh * k));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(source, 0, 0, w, h);
+    /* Preserve transparency when present; otherwise pick the smallest encoder
+       the browser offers — WebP first, JPEG fallback (photos encode ~10x
+       smaller than PNG), PNG as the last resort. */
+    let hasAlpha = false;
+    try {
+      const d = ctx.getImageData(0, 0, w, h).data;
+      for (let i = 3; i < d.length; i += 16) { if (d[i] < 250) { hasAlpha = true; break; } }
+    } catch { hasAlpha = true; }
+    let out = '';
+    try {
+      if (!hasAlpha) {
+        out = canvas.toDataURL('image/webp', 0.9);
+        if (!out.startsWith('data:image/webp')) out = canvas.toDataURL('image/jpeg', 0.92);
+      }
+      if (!out) out = canvas.toDataURL('image/png');
+    } catch { out = ''; }
+    if (!out) reject(new Error('Could not re-encode that image'));
+    else resolve(out);
+  });
+  const decodeViaImg = () => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+  return decodeViaImg()
+    .then(draw, async () => {
+      /* Some browsers decode exotic formats (avif/heic) only through
+         createImageBitmap — try that before giving up. */
+      try {
+        const blob = await (await fetch(dataUrl)).blob();
+        return await draw(await createImageBitmap(blob));
+      } catch {
+        if (/^data:image\/(?:png|jpe?g|webp|gif|avif);base64,/i.test(dataUrl) && dataUrl.length <= 12 * 1024 * 1024) {
+          return dataUrl;
+        }
+        throw new Error(`This browser can't decode ${fMimeLabel(mime)} images — try converting it to PNG or JPEG`);
+      }
+    });
+}
+function fMimeLabel(mime) {
+  const m = String(mime || '').replace('image/', '').toUpperCase();
+  return m && m.length < 6 ? m : 'THAT';
+}
+let agentMessages = [];
+
+function agentEl(sel) { return document.querySelector(sel); }
+
+async function loadAgent() {
+  try {
+    const r = await api('/agent/messages');
+    agentMessages = r.messages || [];
+    agentLoaded = true;
+    renderAgent();
+    refreshAgentChanges();
+  } catch { /* agent log is optional */ }
+}
+
+function openAgentDrawer() {
+  document.body.classList.add('agent-open');
+  agentOpen = true;
+  agentStickToBottom = true;
+  closeMenus(); closeSidebar();
+  agentEl('#agent-model-label').textContent = agentModelLabel();
+  refreshAgentChanges();
+  if (!agentLoaded) loadAgent(); else renderAgent();
+  setTimeout(() => agentEl('#agent-input')?.focus(), 240);
+}
+
+function closeAgentDrawer() {
+  document.body.classList.remove('agent-open');
+  agentOpen = false;
+}
+
+function agentModelLabel() {
+  try {
+    const s = state.settings;
+    let ai;
+    if (s.agentOverride) {
+      ai = {
+        provider: s.agentProvider || 'openrouter',
+        model: s.agentModel || '',
+        apiKey: s.agentApiKey || '',
+      };
+    } else {
+      ai = effectiveAi();
+    }
+    const label = (PROVIDERS[ai.provider] ? PROVIDERS[ai.provider].label.split(' ')[0] : ai.provider);
+    return ai.model ? `via ${ai.model} · ${label}` : 'no AI connection configured';
+  } catch { return ''; }
+}
+
+function agentToolLabel(name) {
+  return AGENT_TOOL_LABELS[name] || name;
+}
+
+function agentToolSummary(name, args, result) {
+  args = args || {};
+  switch (name) {
+    case 'read_chat': return (args.chat_id ? 'chat ' + String(args.chat_id) : 'open chat') + ' · ' + (args.mode === 'tree' ? 'full tree' : 'transcript');
+    case 'create_character':
+    case 'update_character':
+    case 'delete_character':
+    case 'get_character': return args.name || String(args.id || '');
+    case 'create_scenario':
+    case 'update_scenario':
+    case 'delete_scenario':
+    case 'get_scenario': return args.title || String(args.id || '');
+    case 'create_persona':
+    case 'update_persona':
+    case 'set_active_persona': return args.name || String(args.id || '');
+    case 'get_preset': return args.name || String(args.id || '');
+    case 'set_character_variables': return Object.keys(args.variables || {}).join(', ');
+    case 'set_scenario_character_variables': return Object.keys(args.variables || {}).join(', ');
+    case 'generate_image': {
+      const p = agentTrimLocal(args.prompt, 60);
+      if (args.target === 'pose') return `${p} → pose ${args.pose_id ? '' : (args.pose_name || '(new)')}`;
+      if (args.pose_id) return `${p} → pose ${args.pose_id}`;
+      if (args.character_id && (args.target === 'portrait' || args.apply)) return `${p} → portrait`;
+      return p;
+    }
+    case 'edit_image': {
+      const src = args.source_type === 'last' ? 'last image' : args.source_type || 'image';
+      return `${agentTrimLocal(args.prompt, 50)} · from ${src}`;
+    }
+    case 'apply_image': {
+      const src = args.source_type === 'attachment' ? (args.source_id || 'attachment') : 'last image';
+      return `${src} → ${args.target === 'pose' ? ('pose ' + (args.pose_name || args.pose_id || '(new)')) : 'portrait'}`;
+    }
+    default: return '';
+  }
+}
+
+function agentRoles(mi) {
+  // Returns 'user' | 'agent' | 'tool' | 'error' for one feed item.
+  if (mi.kind === 'error') return 'error';
+  if (mi.kind === 'tool') return 'tool';
+  if (mi.role === 'assistant') return 'agent';
+  return mi.role;
+}
+
+/* User messages may carry [attached image: att-… — name] markers the server
+   stores for history replay. Render them as clickable thumbnails instead. */
+const AGENT_ATTACH_RE = /\[attached image:\s*(att-[\w-]+)\s*(?:—\s*([^\]]*))?\]/g;
+
+function agentUserHtml(content) {
+  const imgs = [];
+  const text = String(content || '').replace(AGENT_ATTACH_RE, (_m0, id, name) => {
+    imgs.push({ id, name: (name || 'image').trim() });
+    return '';
+  });
+  const chips = imgs.map((a) => `
+    <span class="agent-attach-chip" data-att-id="${esc(a.id)}" title="${esc(a.name)}">
+      <img src="/api/agent/${esc(a.id)}/file" alt="${esc(a.name)}" loading="lazy">
+      <span>${esc(a.name)}</span>
+    </span>`).join('');
+  const md = agentMd(text.trim());
+  return chips ? `${md}<div class="agent-attach-row">${chips}</div>` : md;
+}
+
+function agentToolCardHtml(mi) {
+  // Loaded rows use toolName/toolArgs/toolResult/toolError; live events use name/args/result/ok.
+  const name = mi.name || mi.toolName;
+  mi = { ...mi, name, args: (mi.args !== undefined ? mi.args : mi.toolArgs), result: (mi.result !== undefined ? mi.result : mi.toolResult), ok: (mi.ok !== undefined ? mi.ok : !mi.toolError) };
+
+  const label = agentToolLabel(name);
+  const sub = agentToolSummary(name, mi.args, mi.result) || (mi.ok === false && mi.error ? agentTrimLocal(mi.error, 70) : 'done');
+  const okCls = mi.ok === false ? 'err' : (mi.pending ? 'pending' : '');
+  const acts = mi.pending ? '' : agentToolActions(mi);
+  let html = `<div class="agent-tool ${okCls}" data-agent-tool="${mi.id || ''}">`;
+  html += `<div class="agent-tool-row">`;
+  html += `<span class="agent-tool-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>`;
+  html += `<div class="agent-tool-main"><div class="agent-tool-name">${esc(label)}</div><div class="agent-tool-sub">${esc(sub)}</div></div>`;
+  html += `<svg class="agent-tool-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
+  html += `</div>`;
+  if (!mi.pending) {
+    html += `<div class="agent-tool-details">`;
+    if (mi.args) html += `<div class="dt-label">Arguments</div><pre>${esc(JSON.stringify(mi.args, null, 2))}</pre>`;
+    if (name === 'read_chat' && mi.ok !== false && mi.result && (mi.result.messages || mi.result.tree)) {
+      html += agentReadChatDetailsHtml(mi.result);
+    } else if (mi.result !== null && mi.result !== undefined) {
+      html += `<div class="dt-label">${mi.ok === false ? 'Error' : 'Result'}</div><pre>${esc(JSON.stringify(mi.result, null, 2))}</pre>`;
+    }
+    html += `</div>`;
+    if (acts) html += `<div class="agent-tool-acts">${acts}</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function agentTrimLocal(s, n) {
+  const t = String(s || '');
+  return t.length > n ? t.slice(0, n - 1) + '…' : t;
+}
+
+/* Images a tool produced (generate_image / edit_image / apply_image). The
+   server saves each one as an agent attachment and references it via
+   imageId/imageUrl in the result — the raw data URL is sanitized out of the
+   stored JSON, so only the id survives reloads. Live events carry both. */
+function agentToolResultImages(mi) {
+  const r = mi.result !== undefined ? mi.result : mi.toolResult;
+  if (!r || typeof r !== 'object') return [];
+  const src = r.imageUrl || (r.imageId ? `/api/agent/${r.imageId}/file` : null);
+  if (src) return [{ src, name: r.imageName || (r.applied_to ? 'Applied image' : 'Generated image') }];
+  if (typeof r.image === 'string' && r.image !== '[image data url, hidden from the model]' &&
+    (r.image.startsWith('data:image') || /^https?:\/\//.test(r.image))) {
+    return [{ src: r.image, name: 'Generated image' }];
+  }
+  return [];
+}
+
+/* Thumbnail strip rendered under an assistant reply. */
+function agentMsgImgsHtml(imgs) {
+  if (!imgs.length) return '';
+  return `<div class="agent-msg-imgs">${imgs.map((im) => `
+    <button type="button" class="agent-msg-img" title="${esc(im.name || 'Generated image')}">
+      <img src="${esc(im.src)}" alt="${esc(im.name || 'Generated image')}" loading="lazy">
+    </button>`).join('')}</div>`;
+}
+
+/* read_chat tool results render as a readable transcript / tree in the card
+   instead of raw JSON. */
+function agentReadChatDetailsHtml(r) {
+  const windowed = (r.next_start != null || (r.start || 0) > 0) && (r.start != null && r.end != null);
+  const count = r.mode === 'tree'
+    ? `${r.total_lines != null ? r.total_lines : '?'} lines`
+    : `${r.total_turns != null ? r.total_turns : (r.turns != null ? r.turns : '?')} msgs`;
+  const range = windowed ? ` · showing ${r.start}–${r.end}` : '';
+  const head = `${r.title || 'Chat'} · ${r.character || ''} · ${count}${range}`;
+  let html = `<div class="dt-label">${esc(head)}</div>`;
+  if (r.tree) return html + `<pre class="agent-rc-tree">${esc(r.tree)}</pre>`;
+  const roleCls = { user: 'u', char: 'c', injection: 'i', scenario: 's' };
+  for (const m of r.messages || []) {
+    html += `<div class="agent-rc-row"><span class="agent-rc-role ${roleCls[m.role] || ''}">${esc(m.role)}</span><span class="agent-rc-text">${esc(m.content)}</span></div>`;
+  }
+  return html;
+}
+
+/* --- Agent markdown --------------------------------------------------------
+   The Agent drafts content in markdown (headings, lists, tables, code
+   fences) which the chat's simple md() doesn't cover, so agent bubbles use
+   this richer renderer. Input is esc()ed; every tag added below is ours. */
+function agentInline(t) {
+  return t
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+function agentMd(src) {
+  const lines = esc(String(src || '')).replace(/\r/g, '').split('\n');
+  let html = '';
+  let list = null;      // 'ul' | 'ol' while a list is open
+  let para = [];        // pending paragraph lines
+  let code = null;      // fenced code lines
+  let table = null;     // pending pipe-table rows
+
+  const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
+  const flushPara = () => {
+    if (para.length) { html += `<p>${para.map(agentInline).join('<br>')}</p>`; para = []; }
+  };
+  const closeCode = () => {
+    if (code) { html += `<pre class="agent-pre">${code.join('\n')}</pre>`; code = null; }
+  };
+  const tableRow = (row) => {
+    let cells = row.split('|');
+    if (cells.length && cells[0].trim() === '') cells = cells.slice(1);
+    if (cells.length && cells[cells.length - 1].trim() === '') cells = cells.slice(0, -1);
+    return cells.map((c) => c.trim());
+  };
+  const closeTable = () => {
+    if (!table) return;
+    const first = tableRow(table[0]);
+    const sep = /^:?-{1,}:?$/;
+    const isSep = (cells) => cells.length && cells.every((c) => sep.test(c));
+    html += '<div class="agent-table-wrap"><table>';
+    html += `<thead><tr>${first.map((c) => `<th>${agentInline(c)}</th>`).join('')}</tr></thead>`;
+    html += '<tbody>';
+    table.slice(1).forEach((row) => {
+      const cells = tableRow(row);
+      if (isSep(cells)) return;
+      const n = Math.max(first.length, cells.length);
+      const tds = [];
+      for (let i = 0; i < n; i++) tds.push(`<td>${agentInline(cells[i] || '')}</td>`);
+      html += `<tr>${tds.join('')}</tr>`;
+    });
+    html += '</tbody></table></div>';
+    table = null;
+  };
+
+  for (const ln of lines) {
+    const t = ln.trim();
+    if (/^```/.test(t)) {
+      if (code) closeCode();
+      else { flushPara(); closeList(); closeTable(); code = []; }
+      continue;
+    }
+    if (code !== null) { code.push(ln); continue; }
+
+    if (/^\|.*\|$/.test(t)) { flushPara(); closeList(); if (table) table.push(t); else { closeTable(); table = [t]; } continue; }
+    if (table) closeTable();
+
+    if (!t) { flushPara(); closeList(); continue; }
+
+    const h = t.match(/^#{1,4}\s+(.+)$/);
+    if (h) { flushPara(); closeList(); html += `<h3>${agentInline(h[1])}</h3>`; continue; }
+
+    if (/^(-{3,}|\*{3,})$/.test(t)) { flushPara(); closeList(); html += '<hr>'; continue; }
+
+    const ul = t.match(/^[-*•]\s+(.*)$/);
+    const ol = t.match(/^(\d+)[.)]\s+(.+)$/);
+    if (ul || ol) {
+      flushPara();
+      const want = ul ? 'ul' : 'ol';
+      if (list !== want) { closeList(); html += `<${want}>`; list = want; }
+      html += `<li>${agentInline(ul ? ul[1] : ol[2])}</li>`;
+      continue;
+    }
+
+    const bq = t.match(/^&gt;\s?(.*)$/);
+    if (bq) { flushPara(); closeList(); html += `<blockquote>${agentInline(bq[1])}</blockquote>`; continue; }
+
+    if (list) closeList();
+    para.push(t);
+  }
+  flushPara(); closeList(); closeCode(); closeTable();
+  return html;
+}
+
+function agentToolActions(mi) {
+  // Build "Open" style actions once the newer site state is loaded.
+  let chain = [];
+  try {
+    if (['create_character', 'update_character'].includes(mi.name) && mi.result) {
+      const id = (mi.result.created && mi.result.created.id) || (mi.result.updated && mi.result.updated.id) || mi.result.character_id;
+      const c = id && state.characters.find((x) => x.id === id);
+      if (c) {
+        chain = [
+          `<button type="button" class="btn btn-ghost tiny" data-agent-open-chat="${esc(c.id)}">Open chat</button>`,
+          `<button type="button" class="btn btn-ghost tiny" data-agent-edit-char="${esc(c.id)}">Edit</button>`,
+        ];
+      }
+    } else if (['create_scenario', 'update_scenario'].includes(mi.name) && mi.result) {
+      const id = (mi.result.created && mi.result.created.id) || (mi.result.updated && mi.result.updated.id);
+      const s = id && state.scenarios.find((x) => x.id === id);
+      if (s) {
+        chain = [`<button type="button" class="btn btn-ghost tiny" data-agent-edit-scen="${esc(s.id)}">Edit scenario</button>`];
+      }
+    } else if (['generate_image', 'edit_image', 'apply_image'].includes(mi.name) && mi.result) {
+      const ap = mi.result.applied_to;
+      const cid = typeof ap === 'string' ? ap : ap && ap.character_id;
+      const c = cid && state.characters.find((x) => x.id === cid);
+      if (c) {
+        chain = [
+          `<button type="button" class="btn btn-ghost tiny" data-agent-open-char="${esc(c.id)}">Open chat</button>`,
+          `<button type="button" class="btn btn-ghost tiny" ${ap && ap.pose_id ? `data-agent-open-poses="${esc(c.id)}"` : `data-agent-edit-char="${esc(c.id)}"`}>${ap && ap.pose_id ? 'Poses' : 'Edit character'}</button>`,
+        ];
+      }
+    } else if (mi.name === 'create_persona' && mi.result && mi.result.created) {
+      const pi = mi.result.created.id;
+      const pp = state.personalities.find((x) => x.id === pi);
+      if (pp) chain = [`<button type="button" class="btn btn-ghost tiny" data-agent-activate-persona="${esc(pp.id)}">Set active</button>`];
+    } else if (mi.name === 'get_preset' && mi.result && mi.result.id) {
+      const pr = state.presets.find((x) => x.id === mi.result.id);
+      if (pr) chain = [`<button type="button" class="btn btn-ghost tiny" data-agent-open-preset="${esc(pr.id)}">Open preset</button>`];
+    }
+  } catch { /* state may be mid-refresh */ }
+  return chain.length ? chain.join('') : '';
+}
+
+function renderAgent(opts = {}) {
+  const feed = agentEl('#agent-feed');
+  if (!feed) return;
+  const sc = agentEl('#agent-scroll');
+  const prevScroll = sc ? sc.scrollTop : 0;
+  let html = '';
+  if (!agentMessages.length) {
+    const suggestion = AGENT_SUGGESTIONS.map((s) => `<button type="button" class="btn btn-ghost tiny" data-agent-suggest="${esc(s)}">${esc(s)}</button>`).join('');
+    html = `<div class="agent-msg agent empty"><div class="agent-empty">
+      <svg class="ae-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.7-1.9a2 2 0 0 0 1.3-1.3Z"/></svg>
+      <h4>Hi — I'm your build agent</h4>
+      <p>I can design characters, draft scenarios, split them into scaffolds + variables, and wire everything up — with your approval at each step. I can also generate, edit and place portraits &amp; pose images, or work with images you attach. And I can answer anything about this site.</p>
+      <div class="ae-suggest">${suggestion}</div>
+    </div></div>`;
+  } else {
+    let openToolGroup = false;
+    /* Images this turn's tools produced, flushed under the next assistant
+       reply (or right after the tool group when no reply followed). */
+    let turnImgs = [];
+    const flushTurnImgs = () => {
+      if (turnImgs.length) { html += agentMsgImgsHtml(turnImgs); turnImgs = []; }
+    };
+    for (const mi of agentMessages) {
+      const role = agentRoles(mi);
+      if (role !== 'tool' && openToolGroup) {
+        html += '</div>'; openToolGroup = false;
+        if (role !== 'agent') flushTurnImgs();
+      }
+      if (role === 'user') {
+        turnImgs = [];
+        const idAttr = mi.id ? ` data-id="${mi.id}"` : '';
+        html += `<div class="agent-msg user"${idAttr}><div class="agent-bubble agent-md">${agentUserHtml(mi.content || '')}</div>
+          <div class="agent-msg-meta"><span class="m-acts-wrap"><span class="m-acts">
+            <button data-agent-act="copy" title="Copy message text">${I.copy}</button>
+            <button data-agent-act="del" class="danger" title="Delete this message and everything after it">${I.trash}</button>
+          </span></span></div>
+        </div>`;
+      } else if (role === 'agent') {
+        const idAttr = mi.id ? ` data-id="${mi.id}"` : '';
+        if ((mi.content || '').trim()) {
+          const acts = !mi.streaming ? `<div class="agent-msg-meta"><span class="m-acts-wrap"><span class="m-acts">
+            <button data-agent-act="copy" title="Copy message text">${I.copy}</button>
+            <button data-agent-act="regen" title="Regenerate this reply">${I.rotr}</button>
+            <button data-agent-act="del" class="danger" title="Delete this reply and everything after it">${I.trash}</button>
+          </span></span></div>` : '';
+          html += `<div class="agent-msg agent"${idAttr}><div class="agent-bubble agent-md${mi.streaming ? ' streaming' : ''}">${agentMd(mi.content)}</div>${acts}</div>`;
+          flushTurnImgs();
+        } else if (mi.streaming) {
+          html += `<div class="agent-msg agent"${idAttr}><div class="agent-bubble agent-md streaming"></div></div>`;
+        }
+      } else if (role === 'tool') {
+        if (!openToolGroup) { html += `<div class="agent-msg agent tool-group">`; openToolGroup = true; }
+        if (!mi.pending) {
+          for (const im of agentToolResultImages(mi)) {
+            if (!turnImgs.some((x) => x.src === im.src)) turnImgs.push(im);
+          }
+        }
+        html += agentToolCardHtml(mi);
+      } else if (role === 'error') {
+        html += `<div class="agent-msg agent err"><div class="agent-bubble">${esc(mi.text || 'Something went wrong.')}</div></div>`;
+      }
+    }
+    if (openToolGroup) html += '</div>';
+    flushTurnImgs();
+  }
+  feed.innerHTML = html;
+  if (sc) {
+    if (opts.keepScroll || !agentStickToBottom) {
+      sc.scrollTop = prevScroll;
+    } else {
+      sc.scrollTop = sc.scrollHeight;
+    }
+  }
+  const sendBtn = agentEl('#agent-send-btn');
+  if (sendBtn) sendBtn.disabled = agentBusy;
+}
+
+function closeAgentStreamingRow() {
+  const cur = agentMessages[agentMessages.length - 1];
+  if (cur && cur.role === 'assistant' && cur.streaming) {
+    cur.streaming = false;
+    if (!(cur.content || '').trim()) agentMessages.pop();
+  }
+}
+
+function setAgentStatus(status) {
+  agentStatus = status || '';  const bar = agentEl('#agent-status-bar');
+  const txt = agentEl('#agent-status-text');
+  if (agentBusy && agentStatus) {
+    bar.classList.remove('hidden');
+    if (agentStatus === 'thinking') txt.textContent = 'Thinking…';
+    else if (agentStatus.startsWith('running_tool:')) txt.textContent = 'Running ' + agentToolLabel(agentStatus.slice(13).toLowerCase()) + '…';
+    else txt.textContent = agentStatus;
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+
+async function refreshAgentChanges() {
+  const revBtn = $('#agent-revert-btn');
+  if (!revBtn) return;
+  try {
+    const r = await api('/agent/changes');
+    const changes = r.changes || [];
+    revBtn.textContent = `Revert (${changes.length})`;
+    if (changes.length > 0) {
+      revBtn.classList.remove('hidden');
+    } else {
+      revBtn.classList.add('hidden');
+    }
+  } catch {
+    revBtn.classList.add('hidden');
+  }
+}
+
+async function agentSendText(text) {
+  const ta = agentEl('#agent-input');
+  if (ta) ta.value = text;
+  return agentSend();
+}
+
+async function refreshDataAfterAgent() {
+  try { await bootstrap(); } catch { return; }
+  await refreshAgentChanges();
+  renderSidebar();
+  renderSidebarScenarios();
+  renderSidebarPersonas();
+  renderHeader();
+  const c = activeChar();
+  if (c) renderChat({ keepScroll: true });
+  else showWelcome();
+}
+
+async function recoverAgentGeneration() {
+  const maxWait = 120000;
+  const start = Date.now();
+  while (Date.now() - start < maxWait) {
+    try {
+      const r = await fetch('/api/agent/generation');
+      if (r.ok) {
+        const data = await r.json();
+        if (data.active) {
+          await new Promise((res) => setTimeout(res, 1000));
+          continue;
+        }
+        if (data.done) {
+          if (data.error) throw new Error(data.error);
+          return { done: true, text: data.text || '' };
+        }
+      }
+    } catch (e) {
+      if (e.message && !e.message.includes('fetch')) throw e;
+      await new Promise((res) => setTimeout(res, 1500));
+    }
+    break;
+  }
+  return null;
+}
+
+async function streamAgent(body, onEvent) {
+  const r = await fetch('/api/agent/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok || !(r.headers.get('content-type') || '').includes('text/event-stream')) {
+    const d = await r.json().catch(() => ({}));
+    throw new Error(d.error || 'Agent stream failed');
+  }
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n\n')) !== -1) {
+        const chunk = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+        if (!line) continue;
+        let ev;
+        try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+        onEvent(ev);
+      }
+    }
+  } catch (err) {
+    const rec = await recoverAgentGeneration();
+    if (rec) {
+      onEvent({ type: 'done', text: rec.text });
+      return;
+    }
+    throw err;
+  }
+}
+
+async function agentSend() {
+  const ta = agentEl('#agent-input');
+  let text = (ta.value || '').trim();
+  const atts = agentAttachments.slice();
+  if ((!text && !atts.length) || agentBusy) return;
+  if (!text && atts.length) text = 'Please take a look at the attached image(s).';
+  ta.value = '';
+  ta.style.height = '';
+  agentInputManualHeight = 0;
+  const markers = atts.map((a) => `[attached image: ${a.id} — ${a.name}]`).join('\n');
+  agentMessages.push({ role: 'user', content: text + (markers ? '\n\n' + markers : '') });
+  agentAttachments = [];
+  renderAgentAttachments();
+  agentBusy = true;
+  agentStickToBottom = true;
+  setAgentStatus('thinking');
+  renderAgent();
+  try {
+    const openChat = activeChar();
+    const openChatId = openChat ? (ui.activeChatIds[openChat.id] || null) : null;
+    await streamAgent({ message: text, attachments: atts.map((a) => a.id), activeChatId: openChatId }, (ev) => {
+      if (ev.type === 'status') {
+        agentStatus = 'thinking';
+      } else if (ev.type === 'delta') {
+        /* Live text from whatever turn the provider is currently streaming.
+           The partial narration may be superseded by tool calls in the same
+           turn — it stays in its own row either way. */
+        let cur = agentMessages[agentMessages.length - 1];
+        if (!cur || cur.role !== 'assistant' || !cur.streaming) {
+          cur = { role: 'assistant', content: '', streaming: true };
+          agentMessages.push(cur);
+        }
+        cur.content += ev.text;
+      } else if (ev.type === 'tool_call') {
+        agentStatus = 'running_tool:' + ev.name;
+        closeAgentStreamingRow();
+        agentMessages.push({ kind: 'tool', pending: true, id: ev.id, name: ev.name, args: ev.args });
+      } else if (ev.type === 'tool_result') {
+        agentStatus = 'thinking';
+        const t = agentMessages.find((m) => m.kind === 'tool' && m.pending && m.id === ev.id);
+        if (t) { t.pending = false; t.ok = ev.ok; t.error = ev.error; t.result = ev.result; }
+      } else if (ev.type === 'done') {
+        /* The server persisted the exact final text — snap the live row to it. */
+        const cur = agentMessages[agentMessages.length - 1];
+        if (cur && cur.role === 'assistant' && cur.streaming) {
+          cur.content = ev.text || '';
+          cur.streaming = false;
+        } else {
+          agentMessages.push({ role: 'assistant', content: ev.text || '' });
+        }
+        agentBusy = false;
+        agentStatus = '';
+      } else if (ev.type === 'error') {
+        closeAgentStreamingRow();
+        agentMessages.push({ kind: 'error', text: ev.error || 'Agent failed' });
+        agentBusy = false;
+        agentStatus = '';
+      }
+      renderAgent();
+    });
+  } catch (e) {
+    closeAgentStreamingRow();
+    agentMessages.push({ kind: 'error', text: e.message || 'Agent failed' });
+    agentBusy = false;
+    agentStatus = '';
+  }
+  setAgentStatus('');
+  renderAgent();
+  if (!agentBusy) {
+    await refreshDataAfterAgent();
+    await loadAgent();
+    renderAgent();
+  }
+}
+
+async function agentRegenerate(msgId) {
+  if (agentBusy) return;
+  agentBusy = true;
+  agentStickToBottom = true;
+  setAgentStatus('thinking');
+  const idx = agentMessages.findIndex((m) => m.id === msgId);
+  if (idx !== -1) {
+    let userIdx = idx;
+    while (userIdx >= 0 && agentMessages[userIdx].role !== 'user') userIdx--;
+    if (userIdx >= 0) {
+      agentMessages = agentMessages.slice(0, userIdx + 1);
+    }
+  }
+  renderAgent();
+  try {
+    const openChat = activeChar();
+    const openChatId = openChat ? (ui.activeChatIds[openChat.id] || null) : null;
+    await streamAgent({ regenerateMessageId: msgId, activeChatId: openChatId }, (ev) => {
+      if (ev.type === 'status') {
+        agentStatus = 'thinking';
+      } else if (ev.type === 'delta') {
+        let cur = agentMessages[agentMessages.length - 1];
+        if (!cur || cur.role !== 'assistant' || !cur.streaming) {
+          cur = { role: 'assistant', content: '', streaming: true };
+          agentMessages.push(cur);
+        }
+        cur.content += ev.text;
+      } else if (ev.type === 'tool_call') {
+        agentStatus = 'running_tool:' + ev.name;
+        closeAgentStreamingRow();
+        agentMessages.push({ kind: 'tool', pending: true, id: ev.id, name: ev.name, args: ev.args });
+      } else if (ev.type === 'tool_result') {
+        agentStatus = 'thinking';
+        const t = agentMessages.find((m) => m.kind === 'tool' && m.pending && m.id === ev.id);
+        if (t) { t.pending = false; t.ok = ev.ok; t.error = ev.error; t.result = ev.result; }
+      } else if (ev.type === 'done') {
+        const cur = agentMessages[agentMessages.length - 1];
+        if (cur && cur.role === 'assistant' && cur.streaming) {
+          cur.content = ev.text || '';
+          cur.streaming = false;
+        } else {
+          agentMessages.push({ role: 'assistant', content: ev.text || '' });
+        }
+        agentBusy = false;
+        agentStatus = '';
+      } else if (ev.type === 'error') {
+        closeAgentStreamingRow();
+        agentMessages.push({ kind: 'error', text: ev.error || 'Agent failed' });
+        agentBusy = false;
+        agentStatus = '';
+      }
+      renderAgent();
+    });
+  } catch (e) {
+    closeAgentStreamingRow();
+    agentMessages.push({ kind: 'error', text: e.message || 'Agent failed' });
+    agentBusy = false;
+    agentStatus = '';
+  }
+  setAgentStatus('');
+  renderAgent();
+  if (!agentBusy) {
+    await refreshDataAfterAgent();
+    await loadAgent();
+    renderAgent();
+  }
+}
+
+function initAgentDrawerResize() {
+  const drawer = $('#agent-drawer');
+  const handle = $('#agent-resize-handle');
+  if (!drawer || !handle) return;
+
+  const DEFAULT_WIDTH = 645;
+  const MIN_WIDTH = 340;
+  const getMaxWidth = () => Math.max(MIN_WIDTH, window.innerWidth - 30);
+
+  // Restore saved width if any
+  try {
+    const saved = parseInt(localStorage.getItem('zerochat_agent_drawer_width'), 10);
+    if (saved && Number.isFinite(saved)) {
+      const clamped = Math.min(Math.max(saved, MIN_WIDTH), getMaxWidth());
+      drawer.style.width = clamped + 'px';
+    }
+  } catch {}
+
+  let isDragging = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    isDragging = true;
+    startX = e.clientX;
+    startWidth = drawer.getBoundingClientRect().width;
+    try { handle.setPointerCapture(e.pointerId); } catch {}
+    document.body.classList.add('agent-resizing');
+    handle.classList.add('active');
+    e.preventDefault();
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    const dx = startX - e.clientX; // dragging to the left makes it wider
+    const newWidth = Math.min(Math.max(startWidth + dx, MIN_WIDTH), getMaxWidth());
+    drawer.style.width = newWidth + 'px';
+  });
+
+  const stopDrag = (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    document.body.classList.remove('agent-resizing');
+    handle.classList.remove('active');
+    try {
+      if (handle.hasPointerCapture?.(e.pointerId)) {
+        handle.releasePointerCapture(e.pointerId);
+      }
+    } catch {}
+    const finalWidth = Math.round(drawer.getBoundingClientRect().width);
+    if (finalWidth >= MIN_WIDTH) {
+      try { localStorage.setItem('zerochat_agent_drawer_width', String(finalWidth)); } catch {}
+    }
+  };
+
+  handle.addEventListener('pointerup', stopDrag);
+  handle.addEventListener('pointercancel', stopDrag);
+
+  // Double click resets to default
+  handle.addEventListener('dblclick', () => {
+    drawer.style.width = Math.min(DEFAULT_WIDTH, getMaxWidth()) + 'px';
+    try { localStorage.removeItem('zerochat_agent_drawer_width'); } catch {}
+  });
+
+  window.addEventListener('resize', () => {
+    const curWidth = drawer.getBoundingClientRect().width;
+    const maxW = getMaxWidth();
+    if (curWidth > maxW) {
+      drawer.style.width = maxW + 'px';
+    }
+  });
+
+  // Mobile swipe right to close drawer
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isSwiping = false;
+
+  drawer.addEventListener('touchstart', (e) => {
+    if (!agentOpen || e.touches.length !== 1 || window.innerWidth > 640) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    isSwiping = false;
+  }, { passive: true });
+
+  drawer.addEventListener('touchmove', (e) => {
+    if (!agentOpen || e.touches.length !== 1 || window.innerWidth > 640) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = Math.abs(e.touches[0].clientY - touchStartY);
+    if (dx > 45 && dx > dy * 1.4) {
+      isSwiping = true;
+    }
+  }, { passive: true });
+
+  drawer.addEventListener('touchend', () => {
+    if (isSwiping) {
+      isSwiping = false;
+      closeAgentDrawer();
+    }
+  }, { passive: true });
+}
+
+/* Resize the left sidebar by dragging its right edge, mirroring the agent
+   drawer handle. The width lives in the `--sidebar-w` grid variable of #app
+   and persists in localStorage; double-click reverts to the 300px default.
+   Phones (≤940px) use the fixed slide-over instead, so the handle is hidden
+   there and calls are guarded out. */
+function initSidebarResize() {
+  const app = $('#app');
+  const sidebar = $('#sidebar');
+  const handle = $('#sidebar-resize-handle');
+  if (!app || !sidebar || !handle) return;
+
+  const DEFAULT_WIDTH = 300;
+  const MIN_WIDTH = 230;
+  const getMaxWidth = () => Math.min(640, Math.max(MIN_WIDTH, window.innerWidth - 380));
+
+  // Restore saved width if any
+  try {
+    const saved = parseInt(localStorage.getItem('zerochat_sidebar_width'), 10);
+    if (saved && Number.isFinite(saved) && window.innerWidth > 940) {
+      app.style.setProperty('--sidebar-w', Math.min(Math.max(saved, MIN_WIDTH), getMaxWidth()) + 'px');
+    }
+  } catch {}
+
+  let isDragging = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    isDragging = true;
+    startX = e.clientX;
+    startWidth = sidebar.getBoundingClientRect().width;
+    try { handle.setPointerCapture(e.pointerId); } catch {}
+    document.body.classList.add('sidebar-resizing');
+    handle.classList.add('active');
+    e.preventDefault();
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX; // dragging to the right makes it wider
+    const newWidth = Math.min(Math.max(startWidth + dx, MIN_WIDTH), getMaxWidth());
+    app.style.setProperty('--sidebar-w', newWidth + 'px');
+  });
+
+  const stopDrag = (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    document.body.classList.remove('sidebar-resizing');
+    handle.classList.remove('active');
+    try {
+      if (handle.hasPointerCapture?.(e.pointerId)) {
+        handle.releasePointerCapture(e.pointerId);
+      }
+    } catch {}
+    const finalWidth = Math.round(sidebar.getBoundingClientRect().width);
+    if (finalWidth >= MIN_WIDTH) {
+      try { localStorage.setItem('zerochat_sidebar_width', String(finalWidth)); } catch {}
+    }
+  };
+
+  handle.addEventListener('pointerup', stopDrag);
+  handle.addEventListener('pointercancel', stopDrag);
+
+  // Double click resets to default
+  handle.addEventListener('dblclick', () => {
+    app.style.setProperty('--sidebar-w', DEFAULT_WIDTH + 'px');
+    try { localStorage.removeItem('zerochat_sidebar_width'); } catch {}
+  });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth <= 940) return;
+    const curWidth = sidebar.getBoundingClientRect().width;
+    const maxW = getMaxWidth();
+    if (curWidth > maxW) {
+      app.style.setProperty('--sidebar-w', maxW + 'px');
+    }
+  });
+}
+
+function wireAgent() {
+  initAgentDrawerResize();
+  $('#agent-btn')?.addEventListener('click', () => {
+    if (agentOpen) closeAgentDrawer(); else openAgentDrawer();
+  });
+  $('#welcome-agent-btn')?.addEventListener('click', () => { openAgentDrawer(); setTimeout(() => agentEl('#agent-input')?.focus(), 240); });
+  $('#agent-close-btn').addEventListener('click', closeAgentDrawer);
+  $('#agent-revert-btn')?.addEventListener('click', async () => {
+    try {
+      const r = await api('/agent/changes');
+      const changes = r.changes || [];
+      if (!changes.length) return;
+      const list = changes.map((c) => '• ' + c.action).join('\n');
+      const ok = await customConfirm({
+        title: 'Revert agent session changes?',
+        message: `The agent made the following changes in this session:\n\n${list}\n\nReverting will restore the website state to before this whole agent session. This cannot be undone.`,
+        confirmText: 'Revert website state',
+        danger: true,
+      });
+      if (!ok) return;
+      await api('/agent/revert', { method: 'POST' });
+      await refreshDataAfterAgent();
+      await refreshAgentChanges();
+      agentMessages.push({ role: 'assistant', content: '✓ Website state has been reverted to the checkpoint before this session.' });
+      renderAgent();
+    } catch (e) {
+      console.error('Revert failed:', e.message);
+      agentMessages.push({ role: 'assistant', content: `✗ Revert failed: ${e.message}` });
+      renderAgent();
+    }
+  });
+  $('#agent-clear-btn').addEventListener('click', async () => {
+    if (!agentMessages.length) return;
+    const clearOk = await customConfirm({
+      title: 'Clear agent conversation?',
+      message: 'The whole Agent chat history will be deleted. Created characters and scenarios stay.',
+      confirmText: 'Clear chat',
+      danger: true,
+    });
+    if (!clearOk) return;
+    try { await api('/agent/clear', { method: 'POST' }); } catch (e) { /* ignore */ }
+    agentMessages = [];
+    agentAttachments = [];
+    renderAgentAttachments();
+    renderAgent();
+    await refreshAgentChanges();
+  });
+
+  const ta = $('#agent-input');
+  makeTextareaAutoResize(ta, {
+    min: 44,
+    max: () => (window.innerWidth <= 768 ? 180 : 280),
+    isComposer: true,
+  });
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      agentSend();
+    }
+  });
+  $('#agent-send-btn').addEventListener('click', agentSend);
+  $('#agent-attach-btn').addEventListener('click', () => $('#agent-file-input').click());
+  $('#agent-file-input').addEventListener('change', (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length) agentAttachFiles(files);
+  });
+  ta.addEventListener('paste', (e) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imgFiles = items
+      .filter((it) => it.kind === 'file' && (it.type.startsWith('image/') || it.type === ''))
+      .map((it) => it.getAsFile())
+      .filter(Boolean);
+    if (imgFiles.length) {
+      e.preventDefault();
+      agentAttachFiles(imgFiles);
+    }
+  });
+
+  const drawer = $('#agent-drawer');
+  const composer = $('#agent-composer');
+  drawer.addEventListener('dragover', (e) => {
+    if (e.dataTransfer?.types?.includes('Files')) {
+      e.preventDefault();
+      composer.classList.add('drag-over');
+    }
+  });
+  drawer.addEventListener('dragleave', (e) => {
+    if (!drawer.contains(e.relatedTarget)) composer.classList.remove('drag-over');
+  });
+  drawer.addEventListener('drop', (e) => {
+    composer.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer?.files || []).filter((f) =>
+      /^image\//i.test(f.type || '') || /\.(png|jpe?g|webp|avif|gif|bmp|heic|heif)$/i.test(f.name || '')
+    );
+    if (files.length) {
+      e.preventDefault();
+      agentAttachFiles(files);
+    }
+  });
+
+  $('#agent-attachments').addEventListener('click', (e) => {
+    const x = e.target.closest('[data-att-remove]');
+    if (x) {
+      agentAttachments = agentAttachments.filter((a) => a.id !== x.dataset.attRemove);
+      renderAgentAttachments();
+      return;
+    }
+    const chipImg = e.target.closest('.agent-attach-chip img');
+    if (chipImg && chipImg.src) {
+      openViewer(chipImg.src);
+    }
+  });
+
+  // Feed interactions: toggle tool details, run actions
+  $('#agent-feed').addEventListener('click', async (e) => {
+    const act = e.target.closest('[data-agent-act]');
+    if (act) {
+      const msgEl = act.closest('.agent-msg[data-id]');
+      const id = msgEl && msgEl.dataset.id ? Number(msgEl.dataset.id) : null;
+      const action = act.dataset.agentAct;
+      if (action === 'copy') {
+        const mi = id ? agentMessages.find((m) => m.id === id) : null;
+        let text = mi ? (mi.content || '') : '';
+        if (!text && msgEl) {
+          const bubble = msgEl.querySelector('.agent-bubble');
+          if (bubble) text = bubble.innerText;
+        }
+        if (text) {
+          text = text.replace(AGENT_ATTACH_RE, '').trim();
+          const markCopied = () => {
+            act.innerHTML = I.check;
+            act.classList.add('copied');
+            setTimeout(() => {
+              act.innerHTML = I.copy;
+              act.classList.remove('copied');
+            }, 1200);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(markCopied).catch(() => {
+              try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                markCopied();
+              } catch {}
+            });
+          } else {
+            try {
+              const ta = document.createElement('textarea');
+              ta.value = text;
+              ta.style.position = 'fixed';
+              ta.style.opacity = '0';
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+              markCopied();
+            } catch {}
+          }
+        }
+        return;
+      }
+      if (action === 'del') {
+        if (!id || agentBusy) return;
+        const ok = await customConfirm({
+          title: 'Delete agent message?',
+          message: 'Delete this message and everything after it? Any changes made by the agent in these messages will be rolled back.',
+          confirmText: 'Delete message',
+          danger: true,
+        });
+        if (!ok) return;
+        try {
+          const r = await api('/agent/messages/' + id, { method: 'DELETE' });
+          if (r.rolledBack) toast('Message deleted and website state rolled back');
+          else toast('Message deleted');
+          await refreshDataAfterAgent();
+          await loadAgent();
+        } catch (err) {
+          toast(err.message);
+        }
+        return;
+      }
+      if (action === 'regen') {
+        if (!id || agentBusy) return;
+        let hasChanges = false;
+        try {
+          const cr = await api('/agent/changes');
+          hasChanges = cr && cr.changes && cr.changes.length > 0;
+        } catch {}
+        if (hasChanges) {
+          const ok = await customConfirm({
+            title: 'Regenerate agent reply?',
+            message: 'Regenerating will roll back any changes made by the agent in this reply and generate a new response.',
+            confirmText: 'Regenerate reply',
+          });
+          if (!ok) return;
+        }
+        await agentRegenerate(id);
+        return;
+      }
+    }
+    const actBtn = e.target.closest('[data-agent-open-chat]');
+    if (actBtn) {
+      closeAgentDrawer();
+      openCharacter(actBtn.dataset.agentOpenChat);
+      return;
+    }
+    const openChar = e.target.closest('[data-agent-open-char]');
+    if (openChar) {
+      closeAgentDrawer();
+      openCharacter(openChar.dataset.agentOpenChar);
+      return;
+    }
+    const openPoses = e.target.closest('[data-agent-open-poses]');
+    if (openPoses) {
+      closeAgentDrawer();
+      openPosesModal(openPoses.dataset.agentOpenPoses);
+      return;
+    }
+    const editChar = e.target.closest('[data-agent-edit-char]');
+    if (editChar) {
+      const c = state.characters.find((x) => x.id === editChar.dataset.agentEditChar);
+      if (c) openCharModal(c);
+      return;
+    }
+    const editScen = e.target.closest('[data-agent-edit-scen]');
+    if (editScen) {
+      const s = state.scenarios.find((x) => x.id === editScen.dataset.agentEditScen);
+      if (s) openScenarioModal(s);
+      return;
+    }
+    const openPreset = e.target.closest('[data-agent-open-preset]');
+    if (openPreset) {
+      const p = state.presets.find((x) => x.id === openPreset.dataset.agentOpenPreset);
+      if (p) openPresetModal(p);
+      return;
+    }
+    const activateP = e.target.closest('[data-agent-activate-persona]');
+    if (activateP) {
+      setPersona(activateP.dataset.agentActivatePersona);
+      refreshDataAfterAgent().then(renderAgent);
+      return;
+    }
+    const sug = e.target.closest('[data-agent-suggest]');
+    if (sug) {
+      $('#agent-input').value = sug.dataset.agentSuggest;
+      agentEl('#agent-input').focus();
+      return;
+    }
+    const galImg = e.target.closest('.agent-msg-img');
+    if (galImg) {
+      const im = galImg.querySelector('img');
+      if (im) openViewer(im.src);
+      return;
+    }
+    const chipImg = e.target.closest('.agent-attach-chip[data-att-id] img');
+    if (chipImg) { openViewer(chipImg.src); return; }
+    const row = e.target.closest('.agent-tool-row');
+    if (row) row.closest('.agent-tool').classList.toggle('open');
+  });
+
+  const chatSc = $('#chat-scroll');
+  if (chatSc) {
+    chatSc.addEventListener('scroll', () => {
+      const atBottom = chatSc.scrollHeight - chatSc.scrollTop - chatSc.clientHeight <= 40;
+      chatStickToBottom = atBottom;
+    }, { passive: true });
+  }
+  const agentSc = agentEl('#agent-scroll');
+  if (agentSc) {
+    agentSc.addEventListener('scroll', () => {
+      const atBottom = agentSc.scrollHeight - agentSc.scrollTop - agentSc.clientHeight <= 40;
+      agentStickToBottom = atBottom;
+    }, { passive: true });
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      const c = activeChar();
+      const chat = c && activeChat(c);
+      if (typing && chat) {
+        api(`/chats/${chat.id}/generation`).then((g) => {
+          if (g && !g.active && g.chat) {
+            mergeChat(chat, g.chat);
+            typing = false;
+            typingAt = null;
+            streaming = null;
+            saveUi();
+            renderChat();
+            renderChatsMenu();
+          }
+        }).catch(() => {});
+      }
+      if (agentBusy) {
+        api('/agent/generation').then((ag) => {
+          if (ag && !ag.active) {
+            agentBusy = false;
+            setAgentStatus('');
+            loadAgent();
+            refreshDataAfterAgent();
+          }
+        }).catch(() => {});
+      }
+    }
+  });
+}
+
 (async function init() {
   wireEvents();
+  initSidebarResize();
   try {
     await bootstrap();
   } catch (e) {
@@ -4711,4 +7501,6 @@ function wireEvents() {
     return;
   }
   renderAll();
+  wireAgent();
+  loadAgent();
 })();

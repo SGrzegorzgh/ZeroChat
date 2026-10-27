@@ -38,6 +38,12 @@
               New character
             </span>
           </button>
+          <button id="new-group-chat-btn" class="btn btn-ghost" style="width:100%;margin-bottom:6px">
+            <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Multi-character chat
+            </span>
+          </button>
           <div class="sidebar-foot-row">
             <button id="import-chars-btn" type="button" class="btn btn-ghost sm" title="Import characters from JSON" style="flex:1">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -96,6 +102,7 @@
           </div>
         </div>
       </div>
+      <div id="sidebar-resize-handle" class="sidebar-resize-handle" title="Drag to resize bar (double-click to reset)"><span></span></div>
     </aside>
 
     <main id="main">
@@ -104,6 +111,12 @@
           <div class="w-badge">Sample build · UI preview</div>
           <h1>Who will you talk to tonight?</h1>
           <p id="w-sub">Pick a character below to start a conversation, or create your own. Replies are simulated until you add an API key in Settings.</p>
+          <div class="welcome-agent-row">
+            <button id="welcome-agent-btn" class="btn btn-ghost" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;margin-right:6px;vertical-align:-2px"><path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.7-1.9a2 2 0 0 0 1.3-1.3Z"/></svg>
+              Ask the Agent to build one
+            </button>
+          </div>
           <div id="welcome-grid"></div>
         </div>
       </section>
@@ -143,15 +156,35 @@
               <div class="menu" id="persona-menu"></div>
             </div>
 
-            <div class="menu-wrap hidden" id="preset-wrap">
-              <button id="preset-btn" class="pill" title="AI preset">
+            <div class="menu-wrap" id="preset-wrap">
+              <button id="preset-btn" class="pill header-preset-pill" title="AI preset (who the chat AI is)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="preset-ico" style="width:13px;height:13px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                 <span class="label" id="preset-label">AI</span>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
               </button>
               <div class="menu" id="preset-menu"></div>
             </div>
 
+            <div class="menu-wrap hidden" id="bg-wrap">
+              <button id="bg-btn" class="icon-btn" aria-label="Background" title="Background layout (group chats)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              </button>
+              <div class="menu" id="bg-menu"></div>
+            </div>
+
+            <div class="menu-wrap" id="more-wrap">
+              <button id="more-btn" class="icon-btn" aria-label="More options" title="Persona, AI preset, edit &amp; settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+              </button>
+              <div class="menu" id="more-menu"></div>
+            </div>
+
             <button id="edit-char-btn" class="icon-btn" aria-label="Edit character" title="Edit character">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </button>
+
+            <button id="agent-btn" class="icon-btn" aria-label="AI Agent" title="AI Agent — build characters &amp; scenarios with me">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.7-1.9a2 2 0 0 0 1.3-1.3Z"/></svg>
             </button>
 
             <button id="settings-btn" class="icon-btn" aria-label="Settings" title="Settings &amp; AI Configuration">
@@ -168,15 +201,28 @@
           <div class="composer-inner">
             <div id="composer-directive-bar" class="composer-directive-bar hidden">
               <div class="cd-info">
-                <span class="cd-icon">⚡</span>
+                <span class="cd-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
                 <span class="cd-text" id="cd-text">Directive waiting · The AI will incorporate your instruction into the next reply</span>
               </div>
-              <button type="button" id="cd-generate-btn" class="btn btn-primary sm">Generate reply now ➔</button>
+              <div class="cd-actions">
+                <button type="button" id="cd-regen-btn" class="btn btn-ghost sm hidden" title="Regenerate this response">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:-2px"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg>
+                  <span>Regenerate</span>
+                </button>
+                <button type="button" id="cd-generate-btn" class="btn btn-primary sm">
+                  <span>Generate reply now</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:-2px"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </button>
+              </div>
             </div>
+            <div class="touch-resize-handle" id="composer-touch-handle" title="Drag up to extend height, down to shrink"><span></span></div>
             <div class="composer-row">
-              <button type="button" id="steer-toggle-btn" class="steer-btn" title="Steer reply (OOC) — Tell the AI what should happen next without speaking as your character">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-              </button>
+              <div class="menu-wrap composer-actions-wrap" id="composer-actions-wrap">
+                <button type="button" id="composer-actions-btn" class="steer-btn" aria-label="Composer actions" title="Actions — Steer the scene (OOC) or respond as your persona">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                </button>
+                <div class="menu composer-actions-menu" id="composer-actions-menu"></div>
+              </div>
               <textarea id="msg-input" rows="1" placeholder="Say something..."></textarea>
               <button id="inject-btn" class="comp-btn hidden" aria-label="Send as directive" disabled></button>
               <button id="generate-btn" class="comp-btn hidden" aria-label="Generate reply now" disabled></button>
@@ -184,7 +230,6 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 22-8z"/></svg>
               </button>
             </div>
-            <div class="touch-resize-handle" id="composer-touch-handle" title="Drag to adjust input height"><span></span></div>
             <div class="composer-hint" id="composer-hint"></div>
           </div>
         </div>
@@ -192,7 +237,50 @@
     </main>
   </div>
 
-  <div id="scrim"></div>
+  <div id="agent-drawer" aria-label="AI Agent">
+  <div id="agent-resize-handle" class="agent-resize-handle" title="Drag to resize pane (double-click to reset)"><span></span></div>
+  <div id="agent-head">
+    <div class="agent-head-info">
+      <div class="agent-head-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="agent-spark"><path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.7-1.9a2 2 0 0 0 1.3-1.3Z"/></svg>
+        Agent
+      </div>
+      <div class="agent-head-sub" id="agent-model-label"></div>
+    </div>
+    <button id="agent-revert-btn" class="btn btn-ghost sm hidden" type="button" title="Revert all changes made by the agent in this session">Revert (0)</button>
+    <button id="agent-clear-btn" class="btn btn-ghost sm" type="button" title="Clear conversation">Clear</button>
+    <button id="agent-close-btn" class="icon-btn" aria-label="Close Agent" title="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <div id="agent-scroll">
+    <div id="agent-feed"></div>
+  </div>
+
+  <div id="agent-status-bar" class="hidden">
+    <span class="agent-status-dots"><i></i><i></i><i></i></span>
+    <span id="agent-status-text"></span>
+  </div>
+
+  <div id="agent-composer">
+    <div class="touch-resize-handle" id="agent-touch-handle" title="Drag up to extend height, down to shrink"><span></span></div>
+    <div id="agent-attachments" class="agent-attachments hidden"></div>
+    <div class="agent-composer-row">
+      <button type="button" id="agent-attach-btn" class="agent-attach" aria-label="Attach image" title="Attach images — apply them as a portrait or poses">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      </button>
+      <input type="file" id="agent-file-input" accept="image/*,.png,.jpg,.jpeg,.webp,.avif,.gif,.heic" multiple hidden>
+      <textarea id="agent-input" rows="1" placeholder="Describe what you want to build..."></textarea>
+      <button id="agent-send-btn" class="agent-send" aria-label="Send to agent" title="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+      </button>
+    </div>
+    <div class="agent-hint" id="agent-hint">The Agent can create characters, scenarios and personas — including images: attach or let it generate portraits &amp; poses.</div>
+  </div>
+</div>
+
+<div id="scrim"></div>
 
   <div class="modal" id="modal-settings">
     <div class="modal-card modal-lg">
@@ -209,20 +297,24 @@
       <!-- Settings Tab Bar -->
       <div class="settings-tabs-nav">
         <button type="button" class="settings-tab-btn active" data-stab="ai">
-          <span class="tab-icon">⚡</span>
+          <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
           <span class="tab-label">AI Connection</span>
         </button>
         <button type="button" class="settings-tab-btn" data-stab="visuals">
-          <span class="tab-icon">🎨</span>
+          <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg></span>
           <span class="tab-label">Visuals &amp; Poses</span>
         </button>
         <button type="button" class="settings-tab-btn" data-stab="presets">
-          <span class="tab-icon">🎭</span>
+          <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M2 10s3-4 10-4 10 4 10 4-3 10-10 10S2 10 2 10Z"/><circle cx="8" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/><path d="M9 15c1.5 1 4.5 1 6 0"/></svg></span>
           <span class="tab-label">AI Presets</span>
         </button>
         <button type="button" class="settings-tab-btn" data-stab="data">
-          <span class="tab-icon">💾</span>
+          <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>
           <span class="tab-label">Backup &amp; Data</span>
+        </button>
+        <button type="button" class="settings-tab-btn" data-stab="features">
+          <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+          <span class="tab-label">Features</span>
         </button>
       </div>
 
@@ -279,6 +371,91 @@
               </div>
             </div>
           </details>
+
+          <div class="pf-sep"></div>
+
+          <div class="settings-section-title">AI Agent</div>
+          <div class="field">
+            <div class="set-toggle-card">
+              <div class="set-toggle-info">
+                <label for="set-agent-override" class="set-toggle-title">Give the Agent its own model &amp; provider</label>
+                <p class="set-toggle-desc">By default the site Agent runs on your active AI preset. Enable this to connect a separate provider just for it — a fast, cheap model works well.</p>
+              </div>
+              <input type="checkbox" id="set-agent-override">
+            </div>
+          </div>
+          <div id="agent-conn-fields" hidden>
+            <div class="field">
+              <label>Agent provider</label>
+              <div id="agent-prov-grid" class="prov-grid"></div>
+            </div>
+            <div class="field">
+              <label>Agent API key</label>
+              <div class="key-row">
+                <input type="password" id="agent-key" placeholder="sk-..." autocomplete="off">
+                <button id="agent-key-toggle" class="mini" type="button">Show</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>Agent model</label>
+              <div class="combo" data-combo>
+                <div class="key-row">
+                  <input type="text" id="agent-model" class="combo-value" placeholder="e.g. openai/gpt-4o-mini, gemini-2.0-flash, haiku..." autocomplete="off" spellcheck="false">
+                  <button id="agent-fetch-models" class="mini" type="button">Fetch list</button>
+                </div>
+                <div class="combo-pop" hidden>
+                  <input type="text" class="combo-search" placeholder="Search models…" autocomplete="off" spellcheck="false">
+                  <div class="combo-list" role="listbox"></div>
+                  <div class="combo-foot">
+                    <span class="combo-foot-label">Custom id</span>
+                    <code class="combo-custom">—</code>
+                  </div>
+                </div>
+              </div>
+              <p class="m-note" style="margin-top:6px">The Agent mostly picks tools and drafts text — a small model handles that fine. Type any custom model ID your provider supports.</p>
+            </div>
+            <div class="field">
+              <label>Agent base URL (optional)</label>
+              <input type="url" id="agent-url" placeholder="Leave empty for provider defaults">
+              <p class="m-note">Set for custom or local OpenAI-compatible endpoints (e.g. LM Studio, Ollama).</p>
+            </div>
+            <div class="field">
+              <label for="agent-reasoning">Model reasoning effort</label>
+              <select id="agent-reasoning" style="width:100%">
+                <option value="default">Default (model default)</option>
+                <option value="off">Off (disable reasoning / thinking)</option>
+                <option value="low">Low effort (~2k tokens budget)</option>
+                <option value="medium">Medium effort (~8k tokens budget)</option>
+                <option value="high">High effort (~16k tokens budget)</option>
+              </select>
+              <p class="m-note" style="margin-top:6px">Configures thinking / reasoning tokens for reasoning models (e.g. Claude 3.7 Sonnet, DeepSeek-R1, o1/o3-mini).</p>
+            </div>
+          </div>
+
+          <div class="settings-section-title">Agent image generation &amp; editing</div>
+          <div class="field">
+            <label>Image generation endpoint URL (optional)</label>
+            <input type="url" id="agent-image-url" placeholder="Leave empty to use the Agent's base URL">
+            <p class="m-note" style="margin-top:6px">Connect a different provider or local API specifically for image generation/edits (e.g. Automatic1111 / ComfyUI / custom OpenAI-compatible API).</p>
+          </div>
+          <div class="field">
+            <label>Image generation API key (optional)</label>
+            <div class="key-row">
+              <input type="password" id="agent-image-key" placeholder="Leave empty to use the Agent's API key" autocomplete="off">
+              <button id="agent-image-key-toggle" class="mini" type="button">Show</button>
+            </div>
+            <p class="m-note" style="margin-top:6px">API key for your dedicated image generation endpoint.</p>
+          </div>
+          <div class="field">
+            <label>Agent image model</label>
+            <input type="text" id="agent-image-model" placeholder="dall-e-3" spellcheck="false">
+            <p class="m-note" style="margin-top:6px">Used by the Agent to generate character portraits and pose images (OpenAI-compatible <code>/images/generations</code> endpoints). Leave empty for <code>dall-e-3</code>.</p>
+          </div>
+          <div class="field">
+            <label>Agent image-edit model</label>
+            <input type="text" id="agent-image-edit-model" placeholder="gpt-image-1" spellcheck="false">
+            <p class="m-note" style="margin-top:6px">Used to edit existing images (portraits, poses or ones you attach) via <code>/images/edits</code> multipart endpoints. Leave empty for <code>gpt-image-1</code>.</p>
+          </div>
         </div>
 
         <!-- Tab 2: Visuals & Poses -->
@@ -394,6 +571,103 @@
             </div>
           </div>
         </div>
+
+        <!-- Tab 5: Features & Chat Controls -->
+        <div class="settings-tab-pane hidden" id="set-pane-features">
+          <div class="settings-section-title">General Features &amp; Sidebar</div>
+
+          <div class="field">
+            <div class="set-check">
+              <label for="set-feat-agent">Enable AI Build Agent drawer</label>
+              <input type="checkbox" id="set-feat-agent">
+            </div>
+            <p class="m-note" style="margin-top:6px">Displays the assistant drawer button in the header for interactive character/scenario creation and site management.</p>
+          </div>
+
+          <div class="field">
+            <div class="set-check">
+              <label for="set-feat-ai-edit">Enable on-the-fly AI response editing</label>
+              <input type="checkbox" id="set-feat-ai-edit">
+            </div>
+            <p class="m-note" style="margin-top:6px">Adds an AI rewrite button next to character messages to quickly prompt the AI to modify or adjust the response.</p>
+          </div>
+
+          <div class="pf-sep"></div>
+
+          <div class="settings-section-title">Long Chats &amp; Context Limits</div>
+          <div class="field">
+            <label for="set-long-strategy">When conversation approaches token limit:</label>
+            <select id="set-long-strategy" style="width:100%">
+              <option value="nothing">Do nothing (fail on limit)</option>
+              <option value="compact">Compact conversation (summarize with AI)</option>
+              <option value="delete">Delete older messages (keep opening scene)</option>
+            </select>
+            <p class="m-note" style="margin-top:6px">Determines what happens when a chat's history approaches the model's context window capacity.</p>
+          </div>
+
+          <div id="long-chat-details-wrap">
+            <div class="field">
+              <label>Max context tokens</label>
+              <div class="key-row">
+                <input type="number" id="set-max-tokens" min="512" max="2000000" step="256" placeholder="8192">
+                <button type="button" id="set-detect-tokens-btn" class="mini" title="Auto-detect context window from model">Detect from model</button>
+              </div>
+              <p class="m-note" style="margin-top:6px">Total token capacity for the active model (e.g. 8192, 16384, 32768, 128000).</p>
+            </div>
+
+            <div class="field">
+              <label>Compact trigger threshold <span class="val" id="compact-thresh-val"></span></label>
+              <input type="range" id="set-compact-thresh" min="50" max="95" step="1">
+              <p class="m-note">Percentage of max tokens where compaction or deletion begins.</p>
+            </div>
+
+            <div class="field" id="compact-keep-wrap">
+              <label>Messages to keep for context <span class="val" id="compact-keep-val"></span></label>
+              <input type="range" id="set-compact-keep" min="10" max="50" step="5">
+              <p class="m-note">Percentage of recent messages kept intact after compaction. The rest are summarized into a narrative overview.</p>
+            </div>
+          </div>
+
+          <div class="pf-sep"></div>
+
+          <div class="settings-section-title">Automatic Chat Title Generation</div>
+          <div class="field">
+            <div class="set-check">
+              <label for="set-feat-auto-title">Enable automatic title generation</label>
+              <input type="checkbox" id="set-feat-auto-title">
+            </div>
+            <p class="m-note" style="margin-top:6px">Uses the Agent AI to generate concise, thematic titles (under 40 characters) as your conversation progresses.</p>
+          </div>
+
+          <div id="auto-title-fields-wrap">
+            <div class="field">
+              <label>Generate title every N messages</label>
+              <input type="number" id="set-title-interval" min="2" max="50" step="1" placeholder="6">
+              <p class="m-note">Interval of messages between automatic title updates.</p>
+            </div>
+            <div class="field">
+              <label>Generate for untitled chats idle for (minutes)</label>
+              <input type="number" id="set-title-idle" min="5" max="1440" step="5" placeholder="60">
+              <p class="m-note">Automatically titles conversations left as "New chat" after this period of inactivity (default: 60 minutes = 1 hour).</p>
+            </div>
+          </div>
+
+          <div class="pf-sep"></div>
+
+          <div class="settings-section-title">Multi-Character Group Chats</div>
+          <div class="field">
+            <div class="set-check">
+              <label for="set-feat-multi-char">Enable multi-character conversations</label>
+              <input type="checkbox" id="set-feat-multi-char">
+            </div>
+            <p class="m-note" style="margin-top:6px">Enables group conversations featuring two or more characters who interact with each other and you.</p>
+          </div>
+          <div class="field" id="multi-char-rounds-wrap">
+            <label>Max character replies per turn</label>
+            <input type="number" id="set-multi-max-rounds" min="1" max="5" step="1" placeholder="2">
+            <p class="m-note">Number of character responses before pausing for you to speak (prevents bots from talking endlessly).</p>
+          </div>
+        </div>
       </div>
 
       <div class="m-foot">
@@ -456,7 +730,7 @@
         <h3 id="ce-title">New character</h3>
         <div class="ce-head-actions">
           <button type="button" class="btn btn-ghost sm" id="ce-scen-panel-toggle" title="Test character against a scenario">
-            <span class="icon-scen">🎬</span> <span id="ce-scen-btn-text">Test with scenario</span>
+            <span class="icon-scen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><rect width="20" height="20" x="2" y="2" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg></span> <span id="ce-scen-btn-text">Test with scenario</span>
           </button>
           <button class="icon-btn tiny" data-close aria-label="Close">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -515,6 +789,23 @@
             </div>
 
             <div class="field">
+              <div class="field-tab-header">
+                <label>Signature scenario</label>
+                <div class="field-actions-row">
+                  <div class="field-tabs">
+                    <button type="button" class="field-tab-btn active" id="ce-scen-tab-edit">Edit</button>
+                    <button type="button" class="field-tab-btn" id="ce-scen-tab-preview">Preview</button>
+                  </div>
+                </div>
+              </div>
+              <div id="ce-scen-edit-wrap">
+                <textarea id="ce-scenario" rows="3" placeholder="Write this character's exclusive signature opening scene... (supports {{char}} and {{user}})"></textarea>
+              </div>
+              <div id="ce-scen-prev-wrap" class="field-preview-box hidden"></div>
+              <p class="m-note">Exclusive scenario for this character only. Supports {{char}} and {{user}} variables (no custom variables). Does not appear in the Scenarios tab.</p>
+            </div>
+
+            <div class="field">
               <label>Note for user</label>
               <textarea id="ce-note" rows="2" placeholder="A private reminder shown under their name — the model never sees this."></textarea>
             </div>
@@ -530,7 +821,7 @@
         <div class="ce-scen-panel hidden" id="ce-scen-panel">
           <div class="ce-scen-panel-head">
             <div class="ce-scen-panel-title">
-              <span class="icon-scen">🎬</span>
+              <span class="icon-scen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><rect width="20" height="20" x="2" y="2" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg></span>
               <span>Scenario Preview &amp; Checker</span>
             </div>
             <button type="button" class="icon-btn tiny" id="ce-scen-panel-close" title="Close scenario panel">
@@ -543,7 +834,7 @@
               <div class="ce-scen-active-card" id="ce-scen-active-card">
                 <div class="ce-scen-active-top">
                   <div class="ce-scen-active-title-row">
-                    <span class="ce-scen-active-icon">🎬</span>
+                    <span class="ce-scen-active-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><rect width="20" height="20" x="2" y="2" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg></span>
                     <span class="ce-scen-active-title" id="ce-scen-active-title">Select a scenario to test against…</span>
                   </div>
                   <button type="button" class="btn btn-ghost sm ce-scen-switch-btn" id="ce-scen-switch-btn">
@@ -764,6 +1055,11 @@
               <textarea id="se-desc" rows="2" placeholder="A one-line teaser or summary of the situation"></textarea>
             </div>
             <div class="field">
+              <label>Special scenario notes (sent to AI)</label>
+              <textarea id="se-notes" rows="3" placeholder="Small, newline-separated important details for this scenario only&#10;e.g. {{char}} has a secret crush on {{user}}&#10;e.g. Magic is forbidden in this realm"></textarea>
+              <p class="m-note">Important details for this scenario only, one per line. The roleplay AI receives these rules as authoritative for this scene.</p>
+            </div>
+            <div class="field">
               <div class="field-tab-header">
                 <label>Scenario prompt / Opening scene</label>
                 <div class="se-preview-controls">
@@ -792,7 +1088,7 @@
         <div class="se-vars-panel" id="se-vars-panel">
           <div class="se-vars-panel-head">
             <div class="se-vars-panel-title">
-              <span class="icon-scen">⚙</span>
+              <span class="icon-scen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
               <span>Character Variables</span>
             </div>
           </div>
@@ -838,6 +1134,58 @@
     </div>
   </div>
 
+  <div class="modal" id="modal-multi-char">
+    <div class="modal-card modal-lg">
+      <div class="m-head">
+        <div>
+          <h3>Multi-Character Conversation</h3>
+          <p class="m-sub">Select 2 or more characters to chat together in a shared scene</p>
+        </div>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body">
+        <div class="sidebar-label" style="padding-left:0;margin:0 0 8px">Select participating characters</div>
+        <div id="mc-char-grid" class="mc-char-grid"></div>
+
+        <div class="sidebar-label" style="padding-left:0;margin:18px 0 8px">Opening scene</div>
+        <p class="m-note" style="margin-bottom:12px">Static scenarios and variables are not supported in multi-character chats. Start an open scene or let the AI craft a custom opening scene bringing everyone together.</p>
+
+        <div class="ps-quick-card" id="mc-freeform-btn">
+          <div class="ps-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></div>
+          <div class="ps-card-info">
+            <div class="ps-card-title">Open scene</div>
+            <div class="ps-card-desc">Start an open group conversation without any pre-set script.</div>
+          </div>
+          <span class="btn btn-ghost sm">Start</span>
+        </div>
+
+        <div class="ps-quick-card" id="mc-agent-gen-btn">
+          <div class="ps-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+          <div class="ps-card-info">
+            <div class="ps-card-title">AI Generated Group Opening</div>
+            <div class="ps-card-desc">Use the agent model to craft an opening scene introducing all selected characters together.</div>
+          </div>
+          <span class="btn btn-ghost sm" id="mc-agent-gen-badge">Generate</span>
+        </div>
+
+        <div class="ps-quick-card" id="mc-assist-btn">
+          <div class="ps-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="m15 4-2 2m4 2-2-2m-2 6 7-7a2.12 2.12 0 1 0-3-3l-7 7m-4 5-5 5h4l4-4M3 21l3-3m-1-4 1-1m-2 4 1-1"/></svg></div>
+          <div class="ps-card-info">
+            <div class="ps-card-title">AI Assisted Scenario Generator</div>
+            <div class="ps-card-desc">Collaborate with AI: give an idea or let it invent one, refine character opening lines and setting, then start.</div>
+          </div>
+          <span class="btn btn-ghost sm">Assist</span>
+        </div>
+      </div>
+      <div class="m-foot">
+        <span class="spacer"></span>
+        <button class="btn btn-ghost" data-close type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="modal-pick-scenario">
     <div class="modal-card modal-lg">
       <div class="m-head">
@@ -850,13 +1198,29 @@
         </button>
       </div>
       <div class="m-body">
-        <div class="ps-quick-card" id="ps-freeform-btn">
-          <div class="ps-card-icon">✨</div>
+        <div class="ps-quick-card" id="ps-signature-btn">
+          <div class="ps-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></svg></div>
           <div class="ps-card-info">
-            <div class="ps-card-title">Freeform / No scenario</div>
-            <div class="ps-card-desc">Start an open chat without any pre-set opening scene or instructions.</div>
+            <div class="ps-card-title" id="ps-signature-title">Signature scenario</div>
+            <div class="ps-card-desc" id="ps-signature-desc">Start this character's exclusive signature opening scene.</div>
           </div>
-          <span class="btn btn-ghost sm">Start</span>
+          <span class="btn btn-ghost sm" id="ps-signature-action">Start</span>
+        </div>
+        <div class="ps-quick-card" id="ps-agent-gen-btn">
+          <div class="ps-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+          <div class="ps-card-info">
+            <div class="ps-card-title">AI Generated Opening</div>
+            <div class="ps-card-desc">Use the agent model to dynamically create an opening scene tailored to this character and preset.</div>
+          </div>
+          <span class="btn btn-ghost sm" id="ps-agent-gen-badge">Generate</span>
+        </div>
+        <div class="ps-quick-card" id="ps-assist-btn">
+          <div class="ps-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="m15 4-2 2m4 2-2-2m-2 6 7-7a2.12 2.12 0 1 0-3-3l-7 7m-4 5-5 5h4l4-4M3 21l3-3m-1-4 1-1m-2 4 1-1"/></svg></div>
+          <div class="ps-card-info">
+            <div class="ps-card-title">AI Assisted Scenario Generator</div>
+            <div class="ps-card-desc">Collaborate with AI: give an idea or let it invent one, review the draft, tell it what to change, and start.</div>
+          </div>
+          <span class="btn btn-ghost sm">Assist</span>
         </div>
         <div class="ps-filter-bar">
           <div class="sidebar-label" style="padding-left:0;margin:0">Available scenarios</div>
@@ -870,6 +1234,68 @@
         <button id="ps-new-btn" class="btn btn-ghost sm" type="button">+ New scenario</button>
         <span class="spacer"></span>
         <button class="btn btn-ghost" data-close type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-scenario-assistant">
+    <div class="modal-card modal-lg">
+      <div class="m-head">
+        <div>
+          <h3 id="sa-title">AI Assisted Scenario Generator</h3>
+          <p class="m-sub" id="sa-sub">Collaborate with AI to draft and fine-tune your opening scene</p>
+        </div>
+        <button class="icon-btn tiny" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="m-body sa-body">
+        <div class="sa-participants" id="sa-participants"></div>
+
+        <div class="sa-idea-section">
+          <label for="sa-idea-input" class="sidebar-label" style="padding-left:0;margin:0 0 6px">Scene idea or premise (optional)</label>
+          <div class="sa-input-row">
+            <div class="sa-input-wrap">
+              <textarea id="sa-idea-input" class="sa-textarea" rows="2" placeholder="Describe an idea (e.g. 'Stuck in an archive during a storm', 'Meeting as rivals at a summit') or leave empty for AI to create one…"></textarea>
+            </div>
+            <button id="sa-gen-draft-btn" class="btn btn-ghost" type="button">
+              <span class="sa-gen-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg></span>
+              <span class="sa-gen-label">Generate draft</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="sa-draft-container" class="sa-draft-container hidden">
+          <div class="sidebar-label" style="padding-left:0;margin:16px 0 6px">Opening Scene Draft</div>
+          
+          <div class="sa-draft-card">
+            <div class="sa-draft-label">Scene Setting &amp; Atmosphere</div>
+            <textarea id="sa-draft-scenario" class="sa-textarea sa-draft-scenario-input" rows="3" placeholder="Scene atmosphere and setup…"></textarea>
+          </div>
+
+          <div id="sa-draft-messages-wrap" class="sa-draft-messages-wrap">
+            <div class="sa-draft-label" style="margin:12px 0 6px">Character Opening Responses</div>
+            <div id="sa-draft-messages-list" class="sa-draft-messages-list"></div>
+          </div>
+
+          <div class="sa-refine-section">
+            <label for="sa-refine-input" class="sidebar-label" style="padding-left:0;margin:14px 0 6px">Tell AI what to change</label>
+            <div class="sa-input-row">
+              <div class="sa-input-wrap">
+                <textarea id="sa-refine-input" class="sa-textarea" rows="2" placeholder="e.g. 'Make Marlowe more skeptical', 'Set it in a neon-lit alley at night', 'Add more tension between the characters'…"></textarea>
+              </div>
+              <button id="sa-refine-btn" class="btn btn-ghost" type="button">
+                <span class="sa-refine-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="m15 4-2 2m4 2-2-2m-2 6 7-7a2.12 2.12 0 1 0-3-3l-7 7m-4 5-5 5h4l4-4M3 21l3-3m-1-4 1-1m-2 4 1-1"/></svg></span>
+                <span class="sa-refine-label">Refine draft</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="m-foot">
+        <button class="btn btn-ghost" data-close type="button">Cancel</button>
+        <span class="spacer"></span>
+        <button id="sa-start-chat-btn" class="btn btn-primary" type="button" disabled>Start chat</button>
       </div>
     </div>
   </div>
@@ -965,6 +1391,7 @@
 
   <div id="img-viewer" class="hidden">
     <img id="img-viewer-img" alt="Full size image">
+    <button id="img-viewer-close" aria-label="Close image" title="Close (Esc)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   </div>
 
   <div id="toast"></div>
