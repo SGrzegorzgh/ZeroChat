@@ -940,11 +940,29 @@ function updateComposerButtons() {
 
   const bar = $('#composer-directive-bar');
   if (bar) {
-    const hasPendingDirective = !!tip && tip.role === 'injection' && !tip.pending;
-    bar.classList.toggle('hidden', !hasPendingDirective);
-    if (hasPendingDirective) {
+    const isInj = !!tip && tip.role === 'injection' && !tip.pending;
+    const isUserTip = !!tip && tip.role === 'user' && !tip.pending;
+    const showBar = (isInj || isUserTip) && !typing;
+    bar.classList.toggle('hidden', !showBar);
+    bar.classList.toggle('ready-user', isUserTip);
+    if (showBar) {
+      const cdIcon = bar.querySelector('.cd-icon');
+      const cdText = $('#cd-text');
       const cdGen = $('#cd-generate-btn');
       if (cdGen) cdGen.disabled = typing;
+      const cdArrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:-2px"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+
+      if (isInj) {
+        if (cdIcon) cdIcon.innerHTML = I.zap;
+        if (cdText) cdText.textContent = 'Directive waiting · The AI will incorporate your instruction into the next reply';
+        if (cdGen) cdGen.innerHTML = `Generate reply now ${cdArrow}`;
+      } else if (isUserTip) {
+        const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
+        const responder = isMulti ? 'the characters' : (c ? c.name : 'the character');
+        if (cdIcon) cdIcon.innerHTML = I.user;
+        if (cdText) cdText.textContent = `Response ready · Let ${responder} reply to your message`;
+        if (cdGen) cdGen.innerHTML = `Generate reply now ${cdArrow}`;
+      }
     }
   }
 }

@@ -3762,18 +3762,22 @@ function parseOpeningGeneration(text, characters) {
     // In group chats, regenerating a character message redoes the whole
     // character talk: rewind to the start of that turn (the node the last
     // user message / opening spawned) and write the turn in one request.
-    // A manual "let X speak" (appending after the current tip) is untouched.
+    // Replying to a user/injection node without a character specified also runs
+    // a full group turn. A manual "let X speak" (body.characterId) is untouched.
     const hasReplacedChild = !!db.activeChildId(chat.tree, parentId);
-    const isGroupRegen = !asUser && Array.isArray(chat.characterIds) && chat.characterIds.length > 1 && hasReplacedChild;
+    const isExplicitSingle = Boolean(body.characterId);
+    const isGroup = !asUser && !isExplicitSingle && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
     let groupAnchorId = parentId;
-    if (isGroupRegen) {
-      let cur = parentId;
-      for (let i = 0; i < 200; i++) {
-        const n = chat.tree.nodes[cur];
-        if (!n || n.role !== 'char') break;
-        cur = n.parent;
+    if (isGroup) {
+      if (hasReplacedChild) {
+        let cur = parentId;
+        for (let i = 0; i < 200; i++) {
+          const n = chat.tree.nodes[cur];
+          if (!n || n.role !== 'char') break;
+          cur = n.parent;
+        }
+        if (cur && cur !== 'root' && chat.tree.nodes[cur] && cur !== parentId) groupAnchorId = cur;
       }
-      if (cur && cur !== 'root' && chat.tree.nodes[cur] && cur !== parentId) groupAnchorId = cur;
     }
     const path = db.pathNodes(chat.tree, parentId);
     const poses = db.getPoses(chat.characterId, { withImages: false });
@@ -3817,11 +3821,11 @@ function parseOpeningGeneration(text, characters) {
           const p = resetPose ? poses.find((x) => x.id === resetPose) : null;
           emit({ type: 'pose', poseId: resetPose, poseName: p ? p.name : null, reset: true });
         }
-        await manageChatContextWindow(chat, isGroupRegen ? groupAnchorId : parentId, settings);
+        await manageChatContextWindow(chat, isGroup ? groupAnchorId : parentId, settings);
         const latestChat = db.getChat(chat.id);
         // In a group, regenerating rewrites the character talk in one request
         // (anchored at the turn start); single chats and manual prompts below.
-        if (isGroupRegen && !ctrl.signal.aborted) {
+        if (isGroup && !ctrl.signal.aborted) {
           const turn = await runGroupTurn({
             chat, anchorId: groupAnchorId, primary: char, persona, settings,
             poses, posesEnabled: poseEnabled, signal: ctrl.signal, emit, genRecord,

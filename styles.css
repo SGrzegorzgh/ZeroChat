@@ -1193,6 +1193,13 @@ body.sidebar-open #scrim {
 .composer-directive-bar.hidden {
   display: none !important;
 }
+.composer-directive-bar.ready-user {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+.composer-directive-bar.ready-user .cd-info {
+  color: #93c5fd;
+}
 .cd-info {
   display: flex;
   align-items: center;
