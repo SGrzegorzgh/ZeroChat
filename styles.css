@@ -1200,6 +1200,27 @@ body.sidebar-open #scrim {
 .composer-directive-bar.ready-user .cd-info {
   color: #93c5fd;
 }
+.cd-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.cd-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+@media (max-width: 600px) {
+  .composer-directive-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .cd-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
 .cd-info {
   display: flex;
   align-items: center;

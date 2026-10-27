@@ -949,19 +949,24 @@ function updateComposerButtons() {
       const cdIcon = bar.querySelector('.cd-icon');
       const cdText = $('#cd-text');
       const cdGen = $('#cd-generate-btn');
+      const cdRegen = $('#cd-regen-btn');
       if (cdGen) cdGen.disabled = typing;
+      if (cdRegen) {
+        cdRegen.disabled = typing;
+        cdRegen.classList.toggle('hidden', !isUserTip);
+      }
       const cdArrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:-2px"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
 
       if (isInj) {
         if (cdIcon) cdIcon.innerHTML = I.zap;
         if (cdText) cdText.textContent = 'Directive waiting · The AI will incorporate your instruction into the next reply';
-        if (cdGen) cdGen.innerHTML = `Generate reply now ${cdArrow}`;
+        if (cdGen) cdGen.innerHTML = `<span>Generate reply now</span> ${cdArrow}`;
       } else if (isUserTip) {
         const isMulti = chat && Array.isArray(chat.characterIds) && chat.characterIds.length > 1;
         const responder = isMulti ? 'the characters' : (c ? c.name : 'the character');
         if (cdIcon) cdIcon.innerHTML = I.user;
         if (cdText) cdText.textContent = `Response ready · Let ${responder} reply to your message`;
-        if (cdGen) cdGen.innerHTML = `Generate reply now ${cdArrow}`;
+        if (cdGen) cdGen.innerHTML = `<span>Generate reply now</span> ${cdArrow}`;
       }
     }
   }
@@ -1328,6 +1333,45 @@ async function respondAsMe() {
     if (r && r.chat) mergeChat(chat, r.chat);
   } catch (e) {
     console.error('Respond as me failed:', e.message);
+  }
+  typing = false;
+  typingAt = null;
+  streaming = null;
+  saveUi();
+  renderChat();
+}
+
+async function regenUserResponse() {
+  const c = activeChar();
+  const chat = c && activeChat(c);
+  if (!chat || typing) return;
+  const tip = tipNode(chat);
+  if (!tip || tip.role !== 'user') return;
+  const parentId = tip.parent;
+  if (!parentId || parentId === 'root') return;
+
+  const ta = $('#msg-input');
+  const guidance = ta ? ta.value.trim() : '';
+  if (ta) {
+    ta.value = '';
+    ta.style.height = '';
+    msgInputManualHeight = 0;
+  }
+
+  typing = true;
+  typingAt = parentId;
+  chatStickToBottom = true;
+  streaming = { chatId: chat.id, text: '', role: 'user' };
+  renderChat();
+  try {
+    const r = await streamGenerate(`/chats/${chat.id}/generate`, { parentId, asUser: true, guidance }, (full) => {
+      if (streaming) streaming.text = full;
+      liveStreamUpdate();
+    });
+    if (r && r.chat) mergeChat(chat, r.chat);
+  } catch (e) {
+    console.error('Regenerate user response failed:', e.message);
+    toast(e.message || 'Regeneration failed');
   }
   typing = false;
   typingAt = null;
@@ -5644,6 +5688,9 @@ function wireEvents() {
     const chat = c && activeChat(c);
     const tip = chat && tipNode(chat);
     if (tip && !typing) generateReplyAt(tip.id);
+  });
+  $('#cd-regen-btn')?.addEventListener('click', () => {
+    if (!typing) regenUserResponse();
   });
   $('#inject-btn')?.addEventListener('click', sendInjection);
   $('#generate-btn')?.addEventListener('click', () => {
