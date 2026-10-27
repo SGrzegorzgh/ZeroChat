@@ -21,6 +21,13 @@ const I = {
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
   star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
   starFilled: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+  clapper: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>',
+  scroll: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></svg>',
+  users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  wand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 4-2 2m4 2-2-2m-2 6 7-7a2.12 2.12 0 1 0-3-3l-7 7m-4 5-5 5h4l4-4M3 21l3-3m-1-4 1-1m-2 4 1-1"/></svg>',
+  palette: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>',
+  masks: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10s3-4 10-4 10 4 10 4-3 10-10 10S2 10 2 10Z"/><circle cx="8" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/><path d="M9 15c1.5 1 4.5 1 6 0"/></svg>',
+  save: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>',
 };
 
 const EMOJIS = ['🧙','🧝','🧛','🧜','🐉','🦊','🐺','🦉','🤖','👾','🕵️','🚀','🌸','🌙','⭐','✨','👑','⚔️','🛡️','🎭','👻','💀','🌌','🔥'];
@@ -440,7 +447,7 @@ function renderHeader() {
       <div class="ch-text">
         <div class="ch-name-row">
           <span class="ch-name">${esc(names)}</span>
-          <span class="ch-scenario-badge" title="Multi-character chat">👥 Group Chat</span>
+          <span class="ch-scenario-badge" title="Multi-character chat">${I.users} Group Chat</span>
         </div>
         <div class="ch-tag">${groupChars.length} characters in conversation</div>
       </div>`;
@@ -449,7 +456,7 @@ function renderHeader() {
       <div class="ch-text">
         <div class="ch-name-row">
           <span class="ch-name">${esc(c.name)}</span>
-          ${scenTitle ? `<span class="ch-scenario-badge" title="Scenario: ${esc(scenTitle)}">🎬 ${esc(scenTitle)}</span>` : ''}
+          ${scenTitle ? `<span class="ch-scenario-badge" title="Scenario: ${esc(scenTitle)}">${I.clapper} ${esc(scenTitle)}</span>` : ''}
         </div>
         <div class="ch-tag">${esc(c.description)}</div>
       </div>`;
@@ -651,7 +658,7 @@ function aiEditBoxHtml(n) {
     <textarea id="ai-edit-input" placeholder="e.g. Make them speak more hesitantly, bring up the storm outside, remove the apology..."></textarea>
     <div class="ai-edit-actions">
       <button data-act="ai-edit-cancel" class="mini">Cancel</button>
-      <button data-act="ai-edit-submit" class="mini primary" id="ai-edit-submit-btn">✨ Rewrite</button>
+      <button data-act="ai-edit-submit" class="mini primary" id="ai-edit-submit-btn">${I.sparkles} Rewrite</button>
     </div>
   </div>`;
 }
@@ -864,7 +871,7 @@ function msgHtml(c, p, n, chat) {
     body = editBoxHtml(n);
   } else if (n.role === 'summary') {
     return `<div class="msg-summary" data-id="${n.id}">
-      <div class="summary-head"><span>📜 Previous conversation summarized</span></div>
+      <div class="summary-head">${I.scroll}<span>Previous conversation summarized</span></div>
       <div class="summary-body">${md(n.content)}</div>
     </div>`;
   } else if (n.role === 'injection') {
@@ -1338,7 +1345,7 @@ async function saveAiEdit(id) {
   const instruction = input ? input.value.trim() : '';
   if (!instruction) { toast('Please describe what to change'); return; }
   const btn = $('#ai-edit-submit-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '✨ Rewriting…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = `${I.sparkles} Rewriting…`; }
   try {
     const r = await api(`/chats/${chat.id}/nodes/${id}/ai-edit`, {
       method: 'POST',
@@ -1352,7 +1359,7 @@ async function saveAiEdit(id) {
     toast('Response rewritten');
   } catch (e) {
     toast(e.message || 'AI rewrite failed');
-    if (btn) { btn.disabled = false; btn.textContent = '✨ Rewrite'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = `${I.sparkles} Rewrite`; }
   }
 }
 
@@ -1612,8 +1619,8 @@ function renderChatsMenu() {
   const extraChatActs = (chat && msgCount >= 2) ? `
     <div class="menu-sep"></div>
     <div class="menu-title">Chat tools</div>
-    <button class="menu-item" id="cm-compact"><span>📜</span><span>Compact conversation</span></button>
-    <button class="menu-item" id="cm-gen-title"><span>✨</span><span>Generate new title</span></button>
+    <button class="menu-item" id="cm-compact">${I.scroll}<span>Compact conversation</span></button>
+    <button class="menu-item" id="cm-gen-title">${I.sparkles}<span>Generate new title</span></button>
   ` : '';
   menu.innerHTML = `
     <button class="menu-item primary" id="cm-new">${I.plus}<span>New chat</span></button>
@@ -1981,9 +1988,9 @@ function updatePfAvatarUI() {
     pv.style.backgroundImage = `url('${peAvatar}')`;
   } else {
     const p = peMode === 'edit' ? state.personalities.find((x) => x.id === peId) : null;
-    pv.classList.add('emoji');
+    pv.classList.add('emoji', 'letter');
     pv.style.backgroundImage = '';
-    pv.textContent = p && p.name ? p.name.trim().charAt(0).toUpperCase() : '🙂';
+    pv.textContent = p && p.name ? p.name.trim().charAt(0).toUpperCase() : 'P';
   }
   const full = $('#pf-preview-full');
   full.classList.toggle('hidden', !peImage);
@@ -2148,7 +2155,7 @@ function renderCeScenCards(query = '') {
       <div class="ce-scen-opt-card ${isSelected ? 'selected' : ''}" data-scen-id="${s.id}">
         <div class="ce-scen-opt-card-top">
           <div class="ce-scen-opt-title-group">
-            <span>🎬</span>
+            <span class="icon-scen">${I.clapper}</span>
             <span class="ce-scen-opt-card-title">${esc(s.title)}</span>
           </div>
           ${isSelected ? '<span class="ce-scen-opt-sel-tick">✓ Active</span>' : ''}
@@ -2828,9 +2835,9 @@ function updateSettingsStatusCard() {
   const providerLabel = PROVIDERS[ai.provider]?.label || 'Custom';
   const modelName = ai.model || 'Default';
   card.innerHTML = live
-    ? `<div class="status-badge live">🟢 Ready to Chat</div>
+    ? `<div class="status-badge live"><span class="status-dot"></span>Ready to Chat</div>
        <div class="status-desc">Connected to <strong>${esc(providerLabel)}</strong> (${esc(modelName)}). Real AI replies are enabled.</div>`
-    : `<div class="status-badge sim">⚪ Simulated Mode</div>
+    : `<div class="status-badge sim"><span class="status-dot"></span>Simulated Mode</div>
        <div class="status-desc">No API key entered. AI replies are simulated samples until you add a key below.</div>`;
 }
 
@@ -3594,7 +3601,7 @@ function renderSidebarScenarios() {
   }
   list.innerHTML = state.scenarios.map((s) => `
     <div class="scen-item" data-id="${s.id}">
-      <span class="scen-icon">🎬</span>
+      <span class="scen-icon">${I.clapper}</span>
       <span class="scen-main">
         <span class="scen-row">
           <span class="scen-name">${esc(s.title)}</span>
@@ -3718,7 +3725,7 @@ function renderSeCharActiveCard() {
     switchBtn.textContent = 'Choose ▾';
     if (avatar) {
       avatar.className = 'avatar sm letter';
-      avatar.textContent = '👤';
+      avatar.innerHTML = I.user;
       avatar.style.backgroundImage = '';
     }
     if (prevName) prevName.textContent = 'None';
@@ -4049,7 +4056,7 @@ function openMissingVarsModal(character, scenario, requiredVars, missingVars) {
       ${avatarHtml(character, 'md')}
       <div class="msv-char-info">
         <span class="msv-char-name">${esc(character.name)}</span>
-        <span class="msv-scen-title">🎬 ${esc(scenario.title)}</span>
+        <span class="msv-scen-title">${I.clapper} ${esc(scenario.title)}</span>
       </div>
     `;
   }
@@ -5095,8 +5102,8 @@ function wireEvents() {
       ? 'Collaborate with AI to draft the group opening scene'
       : `Collaborate with AI to draft the opening scene with ${chars[0].name}`;
     $('#sa-participants').innerHTML =
-      `<span class="sa-chip sa-chip-you">👤 ${esc(activePersona()?.name || 'You')}</span>` +
-      chars.map((ch) => `<span class="sa-chip">${esc(ch.emoji || '🎭')} ${esc(ch.name)}</span>`).join('');
+      `<span class="sa-chip sa-chip-you">${I.user} ${esc(activePersona()?.name || 'You')}</span>` +
+      chars.map((ch) => `<span class="sa-chip">${esc(ch.emoji || '')} ${esc(ch.name)}</span>`).join('');
     $('#sa-idea-input').value = '';
     $('#sa-refine-input').value = '';
     $('#sa-draft-container').classList.add('hidden');
