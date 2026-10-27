@@ -6,7 +6,7 @@ Instructions, architecture guide, and operational conventions for AI agents and 
 
 ## 1. Project Overview & Philosophy
 
-`ZeroChat` is a lightweight, zero-dependency, self-hosted web application for roleplaying with AI characters. It provides multi-character chat threads, persona switching, branching conversation trees, an AI-driven dynamic visual pose/expression director, and common JSON backup/export/import.
+`ZeroChat` is a lightweight, zero-dependency, self-hosted web application for roleplaying with AI characters. It provides multi-character chat threads, persona switching, branching conversation trees, an AI-driven dynamic visual pose/expression director, signature scenarios, and universal JSON backup/export/import.
 
 ### Core Architectural Principles
 1. **Zero External Dependencies**:
@@ -20,6 +20,8 @@ Instructions, architecture guide, and operational conventions for AI agents and 
 3. **Local-First & Data Durability**:
    - Conversations, characters, presets, settings, and image assets are stored locally in an embedded SQLite database (`aichat.db`).
    - WAL (Write-Ahead Logging) mode and automatic snapshot backups protect user data against corruption and accidental deletion.
+4. **Monochrome Design System**:
+   - UI navigation, tabs, action buttons, and modal dialogs use clean, monochrome SVG icons matching the design aesthetic rather than colored emoji glyphs.
 
 ---
 
@@ -60,7 +62,7 @@ Instructions, architecture guide, and operational conventions for AI agents and 
   - Server-Sent Events (SSE) streaming endpoints (`/api/chats/:id/messages`, `/api/chats/:id/generate`, `/api/agent/chat`).
   - LLM client integrations for OpenAI-compatible APIs (`/v1/chat/completions`) and Anthropic (`/v1/messages`).
   - Dynamic Pose Director Agent (`runPoseAgent`) using Jev (a fast, low-cost decision model via OpenRouter Decisions API or custom OpenAI-compatible provider) to select matching character poses.
-  - Built-in AI Build Agent: `runAgentChat` tool-calling loop, `agentToolDefs`/`runAgentTool` tool set, `buildAgentSystem` live-context system prompt, and the `/api/agent/*` routes.
+  - Built-in AI Build Agent: `runAgentChat` tool-calling loop, `agentToolDefs`/`runAgentTool` tool set, `buildAgentSystem` live-context system prompt, and `/api/agent/*` routes.
 - **`db.js`**:
   - `DatabaseSync` initialization, WAL configuration, and graceful checkpointing on shutdown.
   - Database snapshot backup engine: automated backups to `backups/` on startup and prior to destructive actions.
@@ -70,15 +72,15 @@ Instructions, architecture guide, and operational conventions for AI agents and 
   - Idempotent database seeder (`seedIfEmpty`) providing demo characters and conversations without collision.
 - **`index.html`**:
   - Semantic SPA layout: `#sidebar` (Characters, Scenarios, Personas), `#welcome`, `#chat-view`, `#chat-header`, `#composer`.
-  - Consolidated header with character details, chats drawer pill, active persona badge, AI preset pill, and settings button; on small phones (≤560px) persona/preset/edit fold into a "⋯" overflow menu (`#more-wrap`) while the preset pill stays visible on desktop.
-  - Tabbed modal dialogs: `#modal-settings` (AI Connection, Visuals & Poses, Presets, Backup & Data), `#modal-persona`, `#modal-char`, `#modal-poses`, `#modal-crop`, `#modal-preset`, `#modal-scenario`, `#modal-pick-scenario`, `#modal-pick-char`.
+  - Consolidated header with character details, chats drawer pill, active persona badge, AI preset pill, and settings button.
+  - Tabbed modal dialogs: `#modal-settings` (AI Connection, Visuals & Poses, Presets, Backup & Data, Features), `#modal-persona`, `#modal-char`, `#modal-poses`, `#modal-crop`, `#modal-preset`, `#modal-scenario`, `#modal-pick-scenario`, `#modal-pick-char`.
 - **`app.js`**:
   - Client state store (`state = { characters, personalities, presets, settings, poses }`).
-  - Auto-growing textareas with mobile touch-friendly drag resize handles.
-  - Steer Scene (OOC) directive flow and waiting directive banner.
+  - Auto-growing textareas with touch-friendly drag resize handles.
+  - Steer Scene (OOC) directive flow, "Respond as me", and the interactive response banner.
   - Branch navigation controls (`< x / y >`) for editing and regenerating message trees.
   - Dynamic background pose renderer and canvas-based avatar/pose image cropper.
-  - AI Agent drawer (`#agent-drawer`): SSE tool-card feed, busy/status bar, clear-with-confirm, and site-state refresh after the agent acts.
+  - AI Agent drawer (`#agent-drawer`): SSE tool-card feed, busy/status bar, clear-with-confirm, and site-state refresh.
 - **`styles.css`**:
   - Modern dark aesthetic with CSS variables (`--bg`, `--accent`, `--act-dim`, etc.).
   - Responsive layout for desktop and mobile with non-overflowing tab bars.
@@ -109,94 +111,97 @@ Chats are not flat message lists; each chat contains a tree represented as JSON 
 - **Branch Operations**:
   - **Edit**: Creates a new sibling node, re-parents downstream subtree to the new variant, and updates `parent.active`.
   - **Regenerate**: Attaches a new child variant to the parent prompt and sets it as active.
-  - **Delete**: Prunes the target node and its entire subtree, re-adjusting parent active bounds. Exception: **directives** (`injection` nodes) are spliced out instead — their children (the conversation that came after) re-attach to the parent, since a directive is a one-off steering note, not a conversation turn. Sibling directive variants are removed with it; normal message deletion still prunes everything after.
+  - **Delete**: Prunes the target node and its entire subtree, re-adjusting parent active bounds.
+  - **Directives Exception**: Directives (`injection` nodes) are spliced out instead of pruning downstream nodes; their children re-attach to the parent, preserving the subsequent conversation.
   - **Switch**: Changes `parent.active` index between alternative variants.
 
-### 4.2 Dynamic Pose Director Agent (Jev Decision Model)
-Characters have multiple poses (`poses` table) containing an image and descriptive guidance (e.g., *Sitting*, *Close-up*, *Leaning in*).
-- **Trigger**: During reply streaming, `runPoseAgent(...)` runs asynchronously to select the matching shot.
-- **Decision Engine**: Instead of an expensive, slow full-blown LLM with tool calling, the agent uses **Jev**, a fast, low-cost System One decision model specializing in choosing an option based on text input.
-- **Pose Stamps on Nodes**: When a pose changes, `node.poseId` is saved on the character's reply node.
-- **Branch-Accurate Reverts**: Visual poses revert accurately when navigating branches or deleting messages.
-- **Chat Background Modes** (`bgMode`, `bgFit`, `bgSingleCharId` settings, rewritten `applyChatBg` / new `bgImageForChar` in `app.js`): group chats can split the backdrop between the first two characters (`split-tb` = top/bottom halves, `split-lr` = left/right halves, positioned by `#chat-bg.split-tb`/`#chat-bg.split-lr` CSS rules) with `bgFit` choosing `cover` (crop to screen) vs `contain` (original aspect) **only for splits**; one-character views — 1-on-1 chats and manually pinned characters (`bgSingleCharId`) — always render the whole image un-cropped. These controls live in a header quick-menu (`#bg-wrap`/`#bg-menu`, image icon shown only in group chats; `renderBgMenu` saves each change immediately via `PUT /api/settings`), not in the Settings dialog. Per-character lookups prefer that character's stamped pose on the active path (group chats), then the chat-level pose, then the character's own image.
+### 4.2 Dynamic Pose Director & Background Display
+Characters support multiple poses (`poses` table) containing an image and descriptive guidance (e.g., *Sitting*, *Close-up*, *Leaning in*).
+- **Trigger**: During reply streaming, `runPoseAgent(...)` runs asynchronously to select the matching pose.
+- **Decision Engine**: Uses **Jev**, a fast, low-cost System One decision model specializing in selecting options based on text input.
+- **Pose Stamps on Nodes**: When a pose changes, `node.poseId` is saved on the character's reply node for branch-accurate visual reverts.
+- **Background Modes**: Group chats can split the backdrop between characters (`split-tb` = top/bottom, `split-lr` = left/right) with `bgFit` controlling `cover` vs `contain`. One-character views render un-cropped. Controls live in the header quick-menu (`#bg-wrap`/`#bg-menu`).
 
-### 4.3 Clean Composer & Steer Scene (OOC)
-- Normal chat input sends messages directly to the character (`sendUser`).
-- The composer's single ⚡ button (`#composer-actions-btn`) opens a small popover (`renderComposerActionsMenu`) above it with the two special send actions: **Steer scene (OOC)** (toggles `setSteerMode` — tinted input, `sendInjection`) and **Respond as me** (`respondAsMe`, placeholder text acts as guidance). The menu pops upward with a springy animation and staggered items; when steer mode is armed the ⚡ button itself lights amber.
-- "Respond as me" prompts (`asUser` in `buildSystemText`) explicitly require FIRST-person writing ("I", "me", "my") for both actions `*…*` and dialogue — the reply must read as if the user typed it personally, never third-person narration ("*{{user}} smiles*") or second person. The no-API-key simulated fallback line is first-person too.
-- **Sidebar resize**: the left bar is resizable on desktop via a drag pill on its right edge (`#sidebar-resize-handle`, >=940px only) — `initSidebarResize` drives the `--sidebar-w` grid variable of `#app`, persists the width in `localStorage` (`zerochat_sidebar_width`), and double-click reverts to 300px; phones keep the fixed slide-over (handle hidden). Mirrors the agent drawer's resize handle.
-- When a directive is pending, a clear banner alerts the user with a direct button to trigger the reply (`generateReplyAt`).
-- Textareas automatically grow to fit text up to a threshold, and provide a dedicated touch-drag handle for effortless resizing on mobile touchscreens.
+### 4.3 Composer, Steer Scene (OOC), & "Respond as Me"
+- **Normal Input**: Typing sends messages directly to the character (`sendUser`).
+- **Composer Actions Menu (⚡)**: Opens a popover (`renderComposerActionsMenu`) with:
+  - **Steer scene (OOC)**: Arms directive mode (`setSteerMode`, tinted input, `sendInjection`).
+  - **Respond as me**: Generates a first-person user response (`respondAsMe`, input text serves as guidance). Prompts strictly enforce first-person narration ("I", "me", "my"), never third-person narration ("*{{user}} smiles*").
+- **Interactive Response Banner (`#composer-directive-bar`)**:
+  - Appears whenever the active conversation branch ends with an unreplied node:
+    - **Directive waiting** (amber bar): Shows `I.zap` icon, directive status, and `Generate reply now ➔`.
+    - **Response ready** (blue bar): Shows `I.user` icon, response readiness, a **Regenerate** button to regenerate an alternative user message variant, and `Generate reply now ➔` to prompt the character (or group) response.
+  - Automatically hides once generation starts or a character reply is added.
+- **Sidebar & Textarea Resizing**:
+  - Left sidebar resizes on desktop via drag handle (`#sidebar-resize-handle`, width persisted in `localStorage`).
+  - Textareas auto-grow and provide touch-drag handles (`.touch-resize-handle`).
 
-### 4.4 Universal JSON Export & Import
-- Endpoints: `GET /api/export` and `POST /api/import`.
-- Exports characters, poses (with images), scenarios, and scenario variable configurations.
-- Compatible with single character cards and full backups.
-- Imports execute inside SQLite database transactions with automatic snapshot protection.
+### 4.4 Signature Scenarios & Scenario Management
+- **Signature Scenarios**:
+  - Configurable directly within Character Edit (`#modal-char`) with Edit and Preview tabs and touch-resize handles.
+  - Bound exclusively to that specific character (`characters.scenario`).
+  - Does **not** appear in the global Scenarios tab (`#panel-scenarios`), keeping it private to the character.
+  - Strictly limited to `{{char}}` and `{{user}}` variables; custom variables are ignored and not evaluated.
+  - Selected by default in the scenario picker modal (`#modal-pick-scenario`).
+- **Global Scenarios**:
+  - Shared across characters, supporting custom `{{tag}}` variable substitution matrices and special notes.
+- **Variable Expansion**:
+  - Handled via `expandPromptMacros` across all generation routes (`/messages`, `/generate`, `/generate-scenario`, `/generate-group-scenario`, `/assist-scenario`, `/ai-edit`).
+  - Supports common aliases: `{{char}}`, `{{character}}`, `{{bot}}`, `{{char_name}}`, `{{user}}`, `{{persona}}`, `{{user_name}}`.
 
 ### 4.5 Built-in AI Build Agent
-The Agent is a long-running assistant conversation stored in `agent_messages` (one global thread; clearing it snapshots the DB first).
-- **Endpoint**: `POST /api/agent/chat` (SSE). Events: `{type:'delta', text}` (live streaming text), `{type:'status'}` (thinking/tool running), `{type:'tool_call', id, name, args}`, `{type:'tool_result', id, name, ok, error, result}`, `{type:'done', text}`, `{type:'error', error}`. Also `GET /api/agent/messages` (full log) and `POST /api/agent/clear`.
-- **Context injection**: every turn rebuilds `buildAgentSystem(settings)` — persona, active preset (name/provider/model + full writing style & formatting instructions from its system prompt), full library overview of all presets, and brief lists of all characters and scenarios — so the agent always reasons over live site state and knows how the user expects characters and stories to be written.
-- **Tool loop**: tool-calling LLM calls (up to 8 iterations) with **live streaming** — `agentCallOpenAI` / `agentCallAnthropic` parse provider SSE (`postAgentSSE`: OpenAI delta chunks incl. incremental tool_call arguments; Anthropic `content_block_delta` events) and forward text deltas as `{type:'delta'}` for the drawer. When a provider can't stream (non-SSE answer) or streams nothing usable, the plain non-streaming call (`agentCallOpenAIPlain` / `agentCallAnthropicPlain`, 180s timeout) retries with the same prompts and shapes reasoning-only / array-content answers. Both adapters guarantee a turn yields either tool calls or non-empty text; a truly empty response raises a descriptive error (model + finish_reason) so the drawer shows an error card instead of a silent "…" placeholder. The client appends deltas into a `streaming` assistant row (blinking caret via CSS), keeps it when tool calls follow, and snaps it to the persisted final text on `done`. Tool results are sanitized (`sanitizeForModel`) and stored via `capToolResultJson` — a JSON-aware cap that degrades oversized payloads gracefully (trim long strings → shave all strings → preview stub with a note) instead of slicing the JSON, which used to corrupt it and leave the model with an empty tool result on the next turn. Replay is resilient: `agentToolResultText` uses the parsed object, the raw stored string (`toolResultRaw`) when parsing failed, or `""` only as a last resort.
-- **Separate Agent connection**: `resolveAgentConfig(settings)` resolves the Agent's runtime connection — by default it follows the active preset (`resolveAiConfig`), but with `agentOverride` on it uses the dedicated `agentProvider`/`agentBaseUrl`/`agentApiKey`/`agentModel` settings (UI: Settings → AI Connection → AI Agent), falling back per-field to the main connection. Used by `runAgentChat`, `agentToolDefs` (image tool gating), `generate_image` and `edit_image`; the drawer header label mirrors it. The Agent model field uses the same searchable combo (`#agent-model` + "Fetch list" `#agent-fetch-models`) as normal presets; `fetchModelList` resolves an empty Base URL from the selected provider's default and `/api/provider/models` normalizes missing `/v1` suffixes like `agentNormBase`.
-- **Tools**: site overview, character CRUD (`create_character` etc.), character variables (merge/replace), scenario CRUD (with `special_notes`), per-scenario `set_scenario_character_variables`, personas (create/update/activate), presets (`list_presets`, `get_preset`), `read_chat` (reads one conversation — without `chat_id` it reads the chat the user currently has open, which the client sends as `activeChatId` on every `/api/agent/chat` turn and `buildAgentSystem` lists in the live context; `mode="linear"` = active-branch transcript, `mode="tree"` = every node with all alternative versions/branches, active child marked with `*`; paged via `start`/`limit` — each result reports its range and `next_start` so the agent keeps reading older/newer content, and per-message content length scales down as the page size grows to stay under the 8000-char tool cap), and image tools — `generate_image` (OpenAI-compatible `/images/generations`; applies to a character portrait or a pose: `target="portrait"|"pose"`, pose matching by name against the seeded default pose set), `edit_image` (`/images/edits` multipart via `multipartBody`, source = last generated / character portrait / pose / attachment), and provider-independent `apply_image` (places a user-attached or last-generated image on portrait/pose). Anthropic presets gate `generate_image`/`edit_image` out. Image model defaults: `agentImageModel` ('dall-e-3') and `agentImageEditModel` ('gpt-image-1'); applying a pose auto-enables `posesEnabled`. Every produced image is persisted before the sanitized result is stored: `agentPersistResultImages` saves it as an agent attachment tagged with the turn's user message id (`agent_attachments.message_id`, 0 for user uploads) and references it via `imageId`/`imageUrl` in the tool result, with per-turn dedupe so applying an image this turn already made reuses the same attachment. The drawer shows each turn's images as a clickable thumbnail gallery under the assistant reply (tool cards no longer embed images); deleting or regenerating a turn deletes the images it generated.
-- **Character Signature Scenarios & AI Opening Generation**: Characters feature an editable "Signature scenario" field (`scenario` column in `characters`), exposed directly in the character modal with Edit/Preview tabs and resizable textarea + preview handles. The signature scenario is exclusive to that specific character, does not appear in the Scenarios tab, and only supports `{{char}}` and `{{user}}` variables (no custom variables). When launching a conversation without choosing a shared scenario, starting with the Signature scenario uses this text as the opening scene. Below the Signature scenario option in the scenario picker modal, an "AI Generated Opening" option leverages the Agent connection to dynamically craft an opening scene tailored to the character, user persona, and active preset guidelines before initializing the chat.
-- **Session Tracking & Checkpoint Revert**: every agent session automatically tracks all entities mutated by the agent (`agent_session_changes` table) and takes an atomic database checkpoint (`agent-session-checkpoint.db` via `VACUUM INTO`) **before the first mutation** — `runAgentTool` calls `db.ensureAgentSessionCheckpoint()` at dispatcher entry, because tool handlers only record changes after they run (a created entity's id/name exists only post-creation), so a lazy snapshot at track time would capture the change and make "Revert" a no-op for it. In addition, each turn takes an isolated turn checkpoint (`agent-turn-${msgId}.db`) and tracks changes by `message_id`. If the agent makes mistakes, the user can click the "Revert" button in the drawer header (`POST /api/agent/revert`) to restore the entire website state back to before the agent session.
-- **Message Controls & Turn Rollbacks**: Agent chat messages include turn-level action controls: Copy (both user & assistant), Delete (both user & assistant, prunes messages and rolls back any mutations made in that turn and downstream turns to the turn checkpoint), and Regenerate (assistant reply, rolls back mutations made in that reply's turn and re-runs generation from the user prompt).
-- **Mobile Background & Stream Disconnection Recovery**: Mobile browsers frequently suspend or close active SSE connections when switching apps or locking the screen. The server does not abort in-flight LLM generations on client disconnect (`startEventStream` keeps running without aborting); instead, generation state and results are tracked in-memory (`activeChatGens`, `activeAgentGen`) and persisted to SQLite upon completion. When the mobile client unfreezes or reconnects, `streamGenerate` and `streamAgent` recover the completed response via status polling (`/api/chats/:id/generation` and `/api/agent/generation`), and the `visibilitychange` listener immediately re-syncs state without showing "Error in input stream" errors or losing messages.
-- **Sticky Scroll with Free Scroll**: Both chat mode and agent mode employ intelligent stick-to-bottom scrolling (`chatStickToBottom`, `agentStickToBottom`). When the user is at the bottom, incoming streaming text sticks to the bottom; if the user scrolls up to read earlier messages during generation, auto-scrolling decouples and allows free scrolling without jumping. Scrolling back to within 40px of the bottom re-engages sticky auto-scroll, and completing generation preserves the user's scroll position if they were scrolled up.
-- **Attachments & Vision**: the drawer paperclip (or drag-drop picker / clipboard paste) posts to `POST /api/agent/attach` (≤12 MB body); any browser image type is accepted (`image/*`) and **normalized client-side** (`normalizeImageDataUrl`): sources are decoded (with a `createImageBitmap` fallback for avif/heic), oversized dimensions scale to ≤1536 px, and results re-encode to WebP (opaque) or PNG (transparency preserved) — small PNG/JPEG pass through untouched — so uploads stay far under the payload cap. The server whitelist accepts png/jpeg/webp/gif/avif. Rows live in the `agent_attachments` table and are wiped with `clearAgentMessages`. `runAgentChat` replaces ids with `[attached image: <id> — <name>]` markers inside the stored user message; when building history for the LLM (`mapAgentHistoryOpenAI` / `mapAgentHistoryAnthropic`), attached images are resolved from the DB and injected as native multimodal vision blocks (`image_url` for OpenAI-compatible providers, `image` base64 for Anthropic) so vision-capable models can actually see and inspect the uploaded images, while retaining the text marker for tool actions (`apply_image` / `edit_image`). The client renders markers as chips via `GET /api/agent/:id/file` (raw bytes). `agentToolResultText` replays sanitized results, where image bytes are the placeholder string — tool cards must not render that as `<img>`.
-- **Workflow protocol**: the system prompt encodes the full-set pipeline — (1) propose character → user approves in chat (typed reply) → create, (2) revision/image round, (3) full scenario draft in plain prose, (4) split into scaffold + {{tag}} table and show the variable values, (5) create the scenario and wire character variables. The agent must never create, update, or delete without explicit user approval typed in the chat and must never invent ids. There is no `ask_user` tool on purpose — the agent asks questions in plain text and the user answers by typing in the drawer.
-- **Client**: an off-canvas right drawer (`body.agent-open`, z-index 90, same scrim pattern as `#sidebar`). Now ~1.5x as wide by default (645px) and resizable via a drag handle on its left edge (`#agent-resize-handle`), with the user's preferred width saved in `localStorage`. Tool calls render as expandable cards with "Open chat / Edit / Open preset" shortcuts; after each agent turn the client re-bootstraps so sidebars stay in sync. The composer has a paperclip (`agentAttachFiles`) with attachment chips, drag-and-drop, and clipboard paste; user rows carry `[attached image: …]` markers rendered as chips by `agentUserHtml`. Any thumbnail (tool result images, attachment chips) opens the shared `#img-viewer` lightbox: wheel/pinch zoom toward the pointer, drag pan when zoomed, double-click reset, Escape/✕/backdrop click closes (`openViewer` / `viewerWire`).
+Long-running assistant conversation stored in `agent_messages` (persisted thread; clearing snapshots the DB first).
+- **Endpoint**: `POST /api/agent/chat` (SSE). Delivers events: `delta`, `status`, `tool_call`, `tool_result`, `done`, `error`.
+- **Live Context Injection**: Every turn calls `buildAgentSystem(settings)`, injecting persona, active preset writing rules, presets library overview, and characters/scenarios rosters.
+- **Tool-Calling Loop**: Supports up to 8 iterations with live delta streaming (`agentCallOpenAI` / `agentCallAnthropic`), graceful fallback to non-streaming retries, and JSON-aware result capping (`capToolResultJson`).
+- **Tools**:
+  - `site_overview`, `list_characters`, `get_character`, `create_character`, `update_character`, `set_character_variables`, `delete_character`.
+  - `set_signature_scenario`: Dedicated tool for managing character signature opening scenes.
+  - `list_scenarios`, `get_scenario`, `create_scenario`, `update_scenario`, `set_scenario_character_variables`, `delete_scenario`.
+  - `list_personas`, `create_persona`, `update_persona`, `set_active_persona`.
+  - `list_presets`, `get_preset`.
+  - `read_chat`: Reads open chat or specified `chat_id` in `linear` (transcript) or `tree` (branches) modes with pagination (`start`/`limit`).
+  - `generate_image`, `edit_image`, `apply_image`: Image generation, editing, and portrait/pose application.
+- **Session Checkpoints & Rollbacks**:
+  - Atomic database checkpoint (`agent-session-checkpoint.db`) taken before the first mutation.
+  - Turn checkpoints (`agent-turn-${msgId}.db`) track per-turn mutations for granular rollback on delete or regenerate.
+- **Multimodal Attachments & Vision**:
+  - Supports image uploads via drawer paperclip, drag-and-drop, and clipboard paste (`POST /api/agent/attach`).
+  - Normalized client-side (scaled to ≤1536px, WebP/PNG) and passed to vision-capable models as native vision blocks.
 
+### 4.6 Multi-Character Group Chats & Turn Orchestration
+- **Creation (`POST /api/chats`)**:
+  - Supports 2 or more characters (`chats.character_ids`).
+  - Supports open scenes and AI-generated multi-character opening scenes featuring all participants.
+  - AI-generated openings return `{ scenario, messages }` splicing individual character opening turns into the tree.
+  - **AI Assisted Scenario Generator** (`🪄` card in scenario picker) provides collaborative draft generation and refinement.
+- **Single-Request Whole-Turn Generation (`runGroupTurn`)**:
+  - Generates the entire character turn in one LLM request as tagged beats (e.g. `[Luna] *smiles* "Hello"`, `**Rex:** *nods* "Hey"`).
+  - Streamed live through `createGroupTurnParser`, which tokenizes character names and respects line boundaries to prevent mid-dialogue splits.
+  - Emits `next_char`, `delta`, and `reply_saved` events, persisting each beat as an independent tree node.
+  - First beat belongs to the chat's primary character; subsequent speakers dynamically update avatars and badges.
+- **Narration Person Convention**:
+  - Action/narration between asterisks is written from outside the character (character is "she"/"he"/name, user is "you").
+  - Spoken dialogue inside double quotes uses first person "I".
+- **Regeneration**:
+  - Regenerating rewinds to the turn start (`groupAnchorId`) and re-runs the whole group turn in one call.
+  - Manual "Let [Name] speak" retains the single-reply path (`generateReplyStream`).
 
-### 4.6 On-the-Fly AI Response Editing
-- **Trigger**: Every character message features a ✨ rewrite button (`[data-act="ai-edit"]`, toggleable in Settings).
-- **Inline Box**: Clicking opens an inline prompt box (`aiEditBoxHtml`) asking what should be changed about this reply.
-- **Backend Flow (`POST /api/chats/:id/nodes/:nodeId/ai-edit`)**:
-  - Extracts conversational context up to that node and passes the original character message and user instruction to the Agent AI connection (`resolveAgentConfig`).
-  - The model rewrites the response in character, incorporating the user's requested adjustments.
-  - The rewritten text is attached as a new variant node via `db.editNode(chatId, nodeId, newText)` and set as the active child.
-  - Full branch navigation (`< x / y >`) is preserved, allowing the user to seamlessly switch between the original and edited versions.
+### 4.7 Long Chat Compaction & Auto-Titling
+- **Long Chat Context Limits (`longChatStrategy`)**:
+  - `nothing`: Retains full history.
+  - `compact`: Summarizes earlier messages into a `summary` node after the opening scene once token threshold is reached.
+  - `delete`: Prunes oldest messages following the opening scene node.
+- **Auto Title Generation**: Automatically triggers concise title generation after `autoTitleInterval` turns or `autoTitleIdleMinutes` idle period.
+- **On-the-Fly AI Editing**: Rewrite character messages with instructions via inline prompt box (`POST /api/chats/:id/nodes/:nodeId/ai-edit`).
 
-### 4.7 Long Chat Context Window Limits & Compaction
-- **Strategies (`longChatStrategy` setting)**:
-  - `nothing`: Retains full history without modification; exceeding provider context limits produces a provider token limit error.
-  - `compact`: When estimated tokens exceed `compactThreshold` % of `maxContextTokens`, the Agent AI generates a narrative summary of earlier messages, splices a `summary` node into the chat tree after the opening scenario, and preserves the most recent `compactKeepRatio` % of messages.
-  - `delete`: Prunes the oldest messages directly after the opening scenario node, splicing the first retained message directly to the scenario node (the opening scene is always preserved).
-- **Manual Actions**: The chats menu provides a "Compact conversation" button (`POST /api/chats/:id/compact`) to trigger compaction on demand.
-
-### 4.8 Auto Chat Title Generation
-- **Interval and Idle Triggers**: Every `autoTitleInterval` messages (default: 6), or when untitled chats have been idle for `autoTitleIdleMinutes` (default: 60 mins), the Agent AI reads the active conversation branch and generates a concise, evocative title under 40 characters (`POST /api/chats/:id/generate-title`).
-- **Database Tracking**: Saved via `db.renameChat(id, title, true)` with `chats.auto_titled = 1`.
-
-### 4.9 Multi-Character Group Chats & Turn Orchestration
-- **Creation (`POST /api/agent/generate-group-scenario`, `POST /api/agent/assist-scenario` & `POST /api/chats`)**:
-  - Supports selecting 2 or more characters (`chats.character_ids`).
-  - Supports open scenes and AI-generated multi-character opening scenes featuring all participants and the user persona. Static scenarios and variable matrices are restricted from multi-character chats.
-  - AI-generated openings return `{ scenario, messages }`: an atmosphere-only scene setting plus one opening message **per character**. `createChat` (`db.js`) accepts `initialScenarioContent` as an object with a `messages` array and splices each one into the tree as a separate character node (`node.characterId` + default pose) after the scenario node — so singles and groups both render per-character opening windows instead of `<char>: <dialogue>` clumps.
-  - The **AI Assisted Scenario Generator** (`🪄` card in the scenario picker / group modal, `#modal-scenario-assistant`) lets the user give an idea (or none), generate a draft, edit the scene text and each character's opening lines inline, request changes ("make the rain heavier"), rewrite individual openings (↻), and press "Start chat" (`aiDraft` / `renderAssistantDraft` / `syncAssistantDraft` in app.js; same flow for single and multi chats).
-  - `parseOpeningGeneration` in server.js parses model output: prefers a JSON `{ scenario, messages[] }` object (name-based character matching), falls back to `Name: dialogue` / `<Name>: …` line formats.
-- **Turn System (single-request whole-turn generation)**:
-  - Each character is represented by their own persona and prompt context in the room.
-  - After a user message, the entire character talk is written by **one LLM request** (`runGroupTurn` in `server.js`): the model outputs the whole conversation beat as tagged lines `[Name] *narration* "dialogue"` (or `Name: …`), one per line, stopping where the user would act. `runGroupTurn` streams that answer through `createGroupTurnParser`, which splits it back into per-character beats live, and each beat is persisted as its own tree node (`db.addReply`, still individually editable or re-branchable). Beat count is bounded by `Math.min(rosterSize, multiCharMaxRounds)`; the first beat is always the chat's primary character; without a live API key the turn streams canned beats in roster order.
-  - **Beat streaming/parsing** (`createGroupTurnParser`): roster names are matched fuzzily (`normName` + prefix/substring rules — handles honorifics like roster "Captain Rex Calder" vs output "Rex Calder", and best-longest-match wins). A line is a beat header when its head matches a roster name in brackets or `Name:` form; partial fragments that still could grow into a header (`[Lu…`, `Rex Cav…`) are held back, and a header start is announced live (`next_char`) as soon as it is recognizable — so the rest of each beat streams into the client in real time instead of popping in at the newline. Header lines may carry inline text after the tag (`[Luna] *waves* — "Hi."`).
-  - **SSE event flow** (unchanged client contract): every beat save ends the current streaming row with `reply_saved` (chat tree + node id; the client adopts the fresh tree and advances `typingAt`); every beat switch after the first emits `next_char` (`characterId`/`charName`) so `renderChat` re-labels the streaming row with the speaker's own avatar + badge — including switching back to the primary character on later beats. Saves run strictly in beat order (`beatQueue`) so a slow pose agent cannot reorder `reply_saved` events. The old per-decision `directing` event is no longer emitted (the client's "scene continues" pill handling stays dormant).
-  - Multi-character beats are deliberately kept short: `buildGroupTurnSystem` injects a length/pacing rule ("one or two short sentences of action and 1-2 lines of dialogue — roughly two-thirds of a typical 1-on-1 response") and a **WHOLE-TURN OUTPUT FORMAT** block (first beat is the primary character, one speaker per beat, stop at the natural pause where the user would act); the one-request flow uses the same Anthropic/OpenAI streaming plumbing and `retryOnce` as single replies (`max_tokens` ≥1024 Anthropic / ≥900 OpenAI, no per-group token reduction since the whole turn ships in one call).
-  - **Narration person convention** (`styleLine(char, userName)` in `server.js`, appended to `buildGroupTurnSystem` and every character reply via `buildSystemText`): *asterisk* descriptions are written from outside the character — the speaking character is "she"/"he"/their name and the user persona is always "you" (`*She steps closer to you…*`, never `*I step closer*`); in "double quotes" dialogue the character speaks as "I" and may address the user by name. The same rule is injected into the opening-scene generators (`/api/agent/generate-group-scenario`, `/api/agent/assist-scenario`, the single-character opening) and the ✨ ai-edit rewrite prompt, so openings and rewrites keep the same convention. "Respond as me" (`asUser`) stays fully first-person as before.
-  - **Regenerate redoes the whole turn**: `POST /api/chats/:id/generate` on a group chat with an existing child under the target (`isGroupRegen`) rewinds to the turn start (`groupAnchorId`, the node the last user message spawned — walked the same way on the client in `regenMsg`) and re-runs `runGroupTurn` from there in one new request, anchored at the user message — old turn branches stay as switchable siblings. A manual "Let X speak" (no existing child under the current tip) keeps the single-reply path (`generateReplyStream`) and appends one reply.
-  - **One speaker per beat (anti-mixing)**: `buildGroupTurnSystem` forbids writing a beat, quoted line, or action for another character or for the user persona, and forbids imitating another character's voice; beats stop at the scene beat where the user would reply next.
-  - Messages display speaker name badges (`.msg-speaker-badge`) and character-specific avatars/poses; clicking a message's avatar opens the image viewer for the speaker who wrote that message (`node.characterId`), not the chat's primary character.
-  - The composer's ⚡ popover provides "Let [Character] speak" actions for manual single replies.
-
-### 4.10 Feature Toggles in Settings
-- Settings include a dedicated "Features" tab (`#set-pane-features`) with toggles for:
-  - AI Build Agent drawer (`agentSidebarEnabled`)
-  - On-the-fly AI response editing (`aiEditEnabled`)
-  - Auto chat title generation & interval/idle sliders (`autoTitleEnabled`, `autoTitleInterval`, `autoTitleIdleMinutes`)
-  - Long chat context limits dropdown, token limit input with auto-detect, and threshold sliders (`longChatStrategy`, `maxContextTokens`, `compactThreshold`, `compactKeepRatio`)
-  - Multi-character group chats & max rounds (`multiCharEnabled`, `multiCharMaxRounds`)
+### 4.8 Feature Toggles & Settings
+Settings include dedicated tabs for:
+- **AI Connection**: Provider credentials, model selection, reasoning effort, and Agent connection overrides.
+- **Visuals & Poses**: Pose director settings, likelihood, and recheck intervals.
+- **AI Presets**: Writing style instructions, temperature, and provider configurations.
+- **Backup & Data**: Full JSON export and transaction-protected import with automatic database snapshots.
+- **Features**: Individual feature toggles for AI Agent, AI response editing, auto-titling, long chat compaction, and multi-character group turns.
 
 ---
 
@@ -219,6 +224,7 @@ When contributing to this codebase, adhere to the following rules:
    - `parent.active` must stay within `0 <= active < parent.children.length`.
 5. **Code Style**:
    - JavaScript: Modern ES6+ standard syntax.
+   - Keep icons monochrome SVG conforming to the existing UI icon set.
    - Avoid build steps; all files must run directly in Node or evergreen browsers.
 6. **Verification Checklist**:
    - Check JavaScript syntax: `node -c server.js db.js app.js`.
