@@ -781,7 +781,7 @@
 
             <div class="field">
               <div class="field-tab-header">
-                <label>Freeform scenario</label>
+                <label>Signature scenario</label>
                 <div class="field-actions-row">
                   <div class="field-tabs">
                     <button type="button" class="field-tab-btn active" id="ce-scen-tab-edit">Edit</button>
@@ -790,10 +790,10 @@
                 </div>
               </div>
               <div id="ce-scen-edit-wrap">
-                <textarea id="ce-scenario" rows="3" placeholder="Default opening scene when chatting without a scenario... (leave empty for default)"></textarea>
+                <textarea id="ce-scenario" rows="3" placeholder="Write this character's exclusive signature opening scene... (supports {{char}} and {{user}})"></textarea>
               </div>
               <div id="ce-scen-prev-wrap" class="field-preview-box hidden"></div>
-              <p class="m-note">Opening scene used when chatting freeform without a scenario. Supports {{char}} and {{user}}.</p>
+              <p class="m-note">Exclusive scenario for this character only. Supports {{char}} and {{user}} variables (no custom variables). Does not appear in the Scenarios tab.</p>
             </div>
 
             <div class="field">
@@ -1141,12 +1141,12 @@
         <div id="mc-char-grid" class="mc-char-grid"></div>
 
         <div class="sidebar-label" style="padding-left:0;margin:18px 0 8px">Opening scene</div>
-        <p class="m-note" style="margin-bottom:12px">Static scenarios and variables are not supported in multi-character chats. Start freeform or let the AI craft a custom opening scene bringing everyone together.</p>
+        <p class="m-note" style="margin-bottom:12px">Static scenarios and variables are not supported in multi-character chats. Start an open scene or let the AI craft a custom opening scene bringing everyone together.</p>
 
         <div class="ps-quick-card" id="mc-freeform-btn">
           <div class="ps-card-icon">✨</div>
           <div class="ps-card-info">
-            <div class="ps-card-title">Freeform / Open scene</div>
+            <div class="ps-card-title">Open scene</div>
             <div class="ps-card-desc">Start an open group conversation without any pre-set script.</div>
           </div>
           <span class="btn btn-ghost sm">Start</span>
@@ -1189,13 +1189,13 @@
         </button>
       </div>
       <div class="m-body">
-        <div class="ps-quick-card" id="ps-freeform-btn">
-          <div class="ps-card-icon">✨</div>
+        <div class="ps-quick-card" id="ps-signature-btn">
+          <div class="ps-card-icon">📜</div>
           <div class="ps-card-info">
-            <div class="ps-card-title">Freeform / No scenario</div>
-            <div class="ps-card-desc">Start an open chat without any pre-set opening scene or instructions.</div>
+            <div class="ps-card-title" id="ps-signature-title">Signature scenario</div>
+            <div class="ps-card-desc" id="ps-signature-desc">Start this character's exclusive signature opening scene.</div>
           </div>
-          <span class="btn btn-ghost sm">Start</span>
+          <span class="btn btn-ghost sm" id="ps-signature-action">Start</span>
         </div>
         <div class="ps-quick-card" id="ps-agent-gen-btn">
           <div class="ps-card-icon">⚡</div>

@@ -798,7 +798,7 @@ function expandTags(s, characterId, customVarsOrScenario = null, customCharName 
   });
 }
 
-function renderPreviewMarkdown(raw, characterId, customVars = null, customCharName = null, scenarioOrId = null) {
+function renderPreviewMarkdown(raw, characterId, customVars = null, customCharName = null, scenarioOrId = null, isSignature = false) {
   if (!raw || !raw.trim()) {
     return `<div class="prow-desc" style="padding:16px;text-align:center">Nothing to preview. Switch to Edit to write.</div>`;
   }
@@ -807,17 +807,22 @@ function renderPreviewMarkdown(raw, characterId, customVars = null, customCharNa
   const charName = customCharName || (c && c.name) || 'the character';
   const userName = (persona && persona.name) || 'the user';
 
-  let vars = customVars;
-  if (!vars && scenarioOrId) {
-    vars = resolveScenarioCharacterVariables(characterId, scenarioOrId);
-  }
-  if (!vars) {
-    vars = (c && c.variables && typeof c.variables === 'object') ? c.variables : {};
+  let vars = null;
+  if (!isSignature) {
+    vars = customVars;
+    if (!vars && scenarioOrId) {
+      vars = resolveScenarioCharacterVariables(characterId, scenarioOrId);
+    }
+    if (!vars) {
+      vars = (c && c.variables && typeof c.variables === 'object') ? c.variables : {};
+    }
   }
 
   const varMap = new Map();
-  for (const [k, v] of Object.entries(vars || {})) {
-    if (k) varMap.set(k.trim().toLowerCase(), String(v == null ? '' : v));
+  if (vars) {
+    for (const [k, v] of Object.entries(vars || {})) {
+      if (k) varMap.set(k.trim().toLowerCase(), String(v == null ? '' : v));
+    }
   }
 
   // 1. Convert markdown to HTML (safely escaping raw user text)
@@ -831,6 +836,9 @@ function renderPreviewMarkdown(raw, characterId, customVars = null, customCharNa
     }
     if (lower === 'user') {
       return `<mark class="var-hl user" title="{{user}}">${esc(userName)}</mark>`;
+    }
+    if (isSignature) {
+      return `<span class="var-unset" title="Signature scenarios only support {{char}} and {{user}}">[unsupported: {{${esc(lower)}}}]</span>`;
     }
     if (varMap.has(lower)) {
       const val = varMap.get(lower);
@@ -2079,7 +2087,7 @@ function renderCeScenarioPreview() {
   const raw = $('#ce-scenario')?.value || '';
   const charName = $('#ce-name').value.trim() || 'Character';
   const el = $('#ce-scen-prev-wrap');
-  if (el) el.innerHTML = renderPreviewMarkdown(raw, ceId, null, charName);
+  if (el) el.innerHTML = renderPreviewMarkdown(raw, ceId, null, charName, null, true);
 }
 
 let ceScenSelectedId = null;
@@ -4181,7 +4189,7 @@ function renderPsGrid(query = '') {
   if (allowed.length === 0) {
     grid.innerHTML = q
       ? `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No scenarios matching "${esc(query)}".</div>`
-      : `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No accessible scenarios for ${esc(pickScenarioChar.name)}. Create one or start freeform.</div>`;
+      : `<div class="prow-desc" style="grid-column:1/-1;padding:16px 0;text-align:center">No accessible scenarios for ${esc(pickScenarioChar.name)}. Create one or start with their Signature scenario above.</div>`;
   } else {
     grid.innerHTML = allowed.map((s) => {
       const reqVars = getScenarioRequiredVariables(s.content);
@@ -4219,6 +4227,22 @@ function openScenarioPicker(c) {
   const sInp = $('#ps-search');
   if (sInp) sInp.value = '';
   renderPsGrid('');
+
+  const sigTitle = $('#ps-signature-title');
+  const sigDesc = $('#ps-signature-desc');
+  const sigAction = $('#ps-signature-action');
+  if (sigTitle && sigDesc) {
+    if (c.scenario && c.scenario.trim()) {
+      sigTitle.textContent = 'Signature scenario';
+      sigDesc.textContent = c.scenario.length > 130 ? c.scenario.slice(0, 130).trim() + '…' : c.scenario;
+      if (sigAction) sigAction.textContent = 'Start';
+    } else {
+      sigTitle.textContent = 'Signature scenario (not set)';
+      sigDesc.textContent = `No signature scenario written for ${c.name} yet. Click to create one in character edit.`;
+      if (sigAction) sigAction.textContent = 'Create';
+    }
+  }
+
   openModal('modal-pick-scenario');
   setTimeout(() => { if (sInp) sInp.focus(); }, 60);
 }
@@ -4905,13 +4929,22 @@ function wireEvents() {
   $('#ps-search').addEventListener('input', (e) => {
     renderPsGrid(e.target.value);
   });
-  $('#ps-freeform-btn').addEventListener('click', async () => {
+  const sigBtn = $('#ps-signature-btn') || $('#ps-freeform-btn');
+  sigBtn?.addEventListener('click', async () => {
     if (!pickScenarioChar) return;
     const char = pickScenarioChar;
     closeModal('modal-pick-scenario');
+    if (!char.scenario || !char.scenario.trim()) {
+      openCharModal(char);
+      setTimeout(() => {
+        $('#ce-scenario')?.focus();
+        toast('Write a signature scenario for ' + char.name);
+      }, 100);
+      return;
+    }
     try {
       ui.activeCharacterId = char.id;
-      await createChatFor(char, null);
+      await createChatFor(char, 'signature');
       saveUi();
       closeSidebar();
       renderSidebar();

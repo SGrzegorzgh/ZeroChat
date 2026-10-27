@@ -237,24 +237,22 @@ function expandPromptMacros(s, char, persona, chatOrScenario = null) {
     }
   }
 
-  if (!scenarioObj && scenarioId) {
-    try {
-      scenarioObj = db.getScenario(scenarioId);
-    } catch {}
-  }
+  const isSignature = scenarioId === 'signature' || (chatOrScenario && (chatOrScenario.scenarioId === 'signature' || chatOrScenario.scenario_id === 'signature'));
 
   let vars = {};
-  if (scenarioObj && charId) {
-    const rawCv = scenarioObj.characterVariables || scenarioObj.character_variables;
-    const cvars = typeof rawCv === 'string' ? JSON.parse(rawCv) : rawCv;
-    if (cvars && typeof cvars === 'object' && cvars[charId]) {
-      vars = cvars[charId];
+  if (!isSignature) {
+    if (scenarioObj && charId) {
+      const rawCv = scenarioObj.characterVariables || scenarioObj.character_variables;
+      const cvars = typeof rawCv === 'string' ? JSON.parse(rawCv) : rawCv;
+      if (cvars && typeof cvars === 'object' && cvars[charId]) {
+        vars = cvars[charId];
+      }
     }
-  }
 
-  // Fallback to char.variables if scenario doesn't provide them
-  if ((!vars || Object.keys(vars).length === 0) && char && char.variables && typeof char.variables === 'object') {
-    vars = char.variables;
+    // Fallback to char.variables if scenario doesn't provide them
+    if ((!vars || Object.keys(vars).length === 0) && char && char.variables && typeof char.variables === 'object') {
+      vars = char.variables;
+    }
   }
 
   const varMap = new Map();
@@ -266,7 +264,7 @@ function expandPromptMacros(s, char, persona, chatOrScenario = null) {
     const lower = key.toLowerCase();
     if (lower === 'char') return charName;
     if (lower === 'user') return userName;
-    if (varMap.has(lower)) return varMap.get(lower);
+    if (!isSignature && varMap.has(lower)) return varMap.get(lower);
     return match;
   });
 }
@@ -1566,10 +1564,10 @@ You are NOT a roleplay character here. You are a competent, warm, no-nonsense pr
 const AGENT_ENTITY_GUIDE = `## Data model cheat sheet
 Everything below is reachable through your tools.
 
-CHARACTERS (create_character / update_character):
+CHARACTERS (create_character / update_character / set_signature_scenario):
 - description — the persona the roleplay model sees: who they are, background, personality, how they treat the user. Prose, no hashtags. May reference {{tags}}.
 - note — a short private reminder shown under their name. The roleplay model never sees it (not for persona text).
-- scenario — opening scene text used as chat background when no scenario is chosen. Optional.
+- signature_scenario — the character's exclusive signature opening scenario (scene text). Specific to this character only, never appears in the scenarios tab, and only supports {{char}} and {{user}} (no custom variables).
 - emoji — small avatar fallback (default "{{charEmoji}}").
 - variables — a map of custom {{tag}} -> value. Values must be SHORT (a word, a number, a color), because they are substituted into scenario text. e.g. { "mood": "curious", "hair": "silver" }.
 
@@ -1658,6 +1656,7 @@ function agentCharBrief(c) {
     name: c.name,
     emoji: c.emoji,
     description: agentTrim(c.description, 300),
+    signature_scenario: c.scenario ? agentTrim(c.scenario, 150) : null,
     variable_keys: Object.keys(c.variables || {}),
     poses: (c.poses || []).length,
     open_chats: (c.chats || []).length,
@@ -1786,18 +1785,28 @@ function agentReadChat(chatId, mode, opts = {}) {
 function agentToolDefs(cfg, settings = null) {
   const defs = [
     { name: 'site_overview', description: 'Snapshot of the site: counts, ids of every entity, who the user plays as, which AI preset is active and whether image generation is available. Call this first whenever you are unsure about ids or the current state.', props: {} },
-    { name: 'list_characters', description: 'List every character with id, name, a trimmed persona and variable keys. Full details need get_character.', props: {} },
-    { name: 'get_character', description: 'Full record of one character: description (persona), note, scenario text, variables with values, and pose list.', props: { id: { type: 'string', description: 'Character id' } }, req: ['id'] },
+    { name: 'list_characters', description: 'List every character with id, name, a trimmed persona, signature scenario status, and variable keys. Full details need get_character.', props: {} },
+    { name: 'get_character', description: 'Full record of one character: description (persona), note, signature scenario text, variables with values, and pose list.', props: { id: { type: 'string', description: 'Character id' } }, req: ['id'] },
     {
-      name: 'create_character', description: `Create a character and its first open chat. REQUIRED: name, description (the persona the roleplay model sees). OPTIONAL: note (private reminder, model never sees it), scenario (opening scene text used when no scenario is chosen), emoji, variables ({{tag}} -> short value map), posesEnabled.`,
+      name: 'create_character', description: `Create a character and its first open chat. REQUIRED: name, description (the persona the roleplay model sees). OPTIONAL: note (private reminder, model never sees it), signature_scenario (character's exclusive signature opening scenario; only {{char}} and {{user}} supported), emoji, variables ({{tag}} -> short value map), posesEnabled.`,
       props: {
         name: { type: 'string' }, description: { type: 'string' }, note: { type: 'string' },
-        scenario: { type: 'string' }, emoji: { type: 'string' },
+        signature_scenario: { type: 'string', description: "Exclusive signature opening scenario for this character only. Supports {{char}} and {{user}} only (no custom variables)." },
+        scenario: { type: 'string', description: 'Alias for signature_scenario' }, emoji: { type: 'string' },
         variables: { type: 'object', description: 'Map of {{tag}} -> short value' },
         posesEnabled: { type: 'boolean' },
       }, req: ['name', 'description'],
     },
-    { name: 'update_character', description: 'Update one or more fields of an existing character. Only send the fields you want to change.', props: { id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, note: { type: 'string' }, scenario: { type: 'string' }, emoji: { type: 'string' } }, req: ['id'] },
+    { name: 'update_character', description: 'Update one or more fields of an existing character. Only send the fields you want to change.', props: { id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, note: { type: 'string' }, signature_scenario: { type: 'string' }, scenario: { type: 'string' }, emoji: { type: 'string' } }, req: ['id'] },
+    {
+      name: 'set_signature_scenario',
+      description: "Set or update a character's exclusive signature scenario. Signature scenarios are specific to one character, do not appear in the scenarios tab, and only support {{char}} and {{user}} (no custom variables).",
+      props: {
+        character_id: { type: 'string', description: 'Character id' },
+        scenario: { type: 'string', description: 'Opening scene content for the signature scenario' },
+      },
+      req: ['character_id', 'scenario'],
+    },
     { name: 'set_character_variables', description: `Set the character's {{tag}} values. By default MERGES the given map into the existing variables; set replace=true to wipe and replace. Values must be short (a word or number).`, props: { id: { type: 'string' }, variables: { type: 'object' }, replace: { type: 'boolean' } }, req: ['id', 'variables'] },
     { name: 'delete_character', description: 'Permanently delete a character, its chats and its poses. Only after the user explicitly asked for exactly this.', props: { id: { type: 'string' } }, req: ['id'] },
     { name: 'list_scenarios', description: 'List every scenario with id, title, required {{tags}} and which characters have values configured.', props: {} },
@@ -2081,6 +2090,7 @@ async function runAgentTool(name, args, settings, cfg) {
       if (!c) throw new Error('Character not found: ' + args.id);
       return {
         ...c,
+        signature_scenario: c.scenario || '',
         avatar: undefined, image: undefined,
         /* open_chats below already summarizes them — raw chats would drag
            full conversation trees into the payload for no benefit. */
@@ -2093,11 +2103,12 @@ async function runAgentTool(name, args, settings, cfg) {
 
     case 'create_character': {
       agentNeed(args, ['name', 'description'], name);
+      const sigScen = args.signature_scenario !== undefined ? args.signature_scenario : (args.scenario || '');
       const c = db.createCharacter({
         name: args.name,
         description: args.description,
         note: args.note || '',
-        scenario: args.scenario || '',
+        scenario: sigScen || '',
         emoji: args.emoji || undefined,
         variables: args.variables || {},
         posesEnabled: !!args.posesEnabled,
@@ -2112,10 +2123,22 @@ async function runAgentTool(name, args, settings, cfg) {
       for (const k of ['name', 'description', 'note', 'scenario', 'emoji']) {
         if (args[k] !== undefined && args[k] !== null) fields[k] = String(args[k]);
       }
+      if (args.signature_scenario !== undefined && args.signature_scenario !== null) {
+        fields.scenario = String(args.signature_scenario);
+      }
       const c = db.updateCharacter(args.id, fields);
       if (!c) throw new Error('Character not found: ' + args.id);
       db.addAgentChange({ action: `Updated character "${c.name}"`, entityType: 'character', entityId: c.id });
       return { updated: agentCharBrief(c), changed: Object.keys(fields) };
+    }
+
+    case 'set_signature_scenario': {
+      agentNeed(args, ['character_id', 'scenario'], name);
+      const c = db.getCharacter(args.character_id);
+      if (!c) throw new Error('Character not found: ' + args.character_id);
+      const updated = db.updateCharacter(args.character_id, { scenario: String(args.scenario || '').trim() });
+      db.addAgentChange({ action: `Updated signature scenario for "${c.name}"`, entityType: 'character', entityId: c.id });
+      return { character_id: c.id, name: c.name, signature_scenario: updated.scenario };
     }
 
     case 'set_character_variables': {
@@ -2762,7 +2785,7 @@ function buildAgentSystem(settings, activeChatId) {
   ctx.push(`- Characters (${chars.length}):`);
   for (const c of chars) {
     const brief = agentCharBrief(c);
-    ctx.push(`  - ${brief.id} | ${brief.name} ${brief.emoji} | vars: ${brief.variable_keys.join(', ') || '—'} | ${brief.open_chats} open chat(s)`);
+    ctx.push(`  - ${brief.id} | ${brief.name} ${brief.emoji} | signature scenario: ${brief.signature_scenario ? 'yes' : 'none'} | vars: ${brief.variable_keys.join(', ') || '—'} | ${brief.open_chats} open chat(s)`);
   }
   ctx.push(`- Scenarios (${scenes.length}):`);
   for (const s of scenes) {

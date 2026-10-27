@@ -745,8 +745,12 @@ function shapeCharacter(row, withChats) {
 function shapeChat(ch) {
   let scTitle = null;
   if (ch.scenario_id) {
-    const sc = db.prepare('SELECT title FROM scenarios WHERE id = ?').get(ch.scenario_id);
-    if (sc) scTitle = sc.title;
+    if (ch.scenario_id === 'signature') {
+      scTitle = 'Signature Scenario';
+    } else {
+      const sc = db.prepare('SELECT title FROM scenarios WHERE id = ?').get(ch.scenario_id);
+      if (sc) scTitle = sc.title;
+    }
   }
   return {
     id: ch.id,
@@ -928,7 +932,10 @@ function createChatInternal(characterId, scenarioId = null, initialScenarioConte
     });
     initialTitle = names.join(' & ');
   }
-  if (scenarioId && !scenarioContent) {
+  if (scenarioId === 'signature') {
+    scenarioContent = c.scenario || '*They look at you, waiting for you to speak first.*';
+    initialTitle = `${c.name} — Signature`;
+  } else if (scenarioId && !scenarioContent) {
     sc = getScenario(scenarioId);
     if (sc) {
       if (!isCharacterAllowedForScenario(sc, characterId)) {
