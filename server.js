@@ -218,7 +218,7 @@ function poseCfg(settings) {
 /* Template tags usable in anything the user writes for the model. Expanded when
    the prompt is built, never stored expanded, so renaming the character or the
    persona updates every field at once. Unrecognised tags are left as typed. */
-function expandPromptMacros(s, char, persona, chatOrScenario = null) {
+function expandPromptMacros(s, char, persona, chatOrScenario = null, isSignature = false) {
   if (s == null) return '';
   const userName = persona ? persona.name : 'the user';
   const charName = (char && char.name) || 'the character';
@@ -237,22 +237,26 @@ function expandPromptMacros(s, char, persona, chatOrScenario = null) {
     }
   }
 
-  const isSignature = scenarioId === 'signature' || (chatOrScenario && (chatOrScenario.scenarioId === 'signature' || chatOrScenario.scenario_id === 'signature'));
+  if (!scenarioObj && scenarioId && scenarioId !== 'signature') {
+    try {
+      scenarioObj = db.getScenario(scenarioId);
+    } catch {}
+  }
+
+  const signatureContent = isSignature || (scenarioId === 'signature' && s === (char && char.scenario));
 
   let vars = {};
-  if (!isSignature) {
-    if (scenarioObj && charId) {
-      const rawCv = scenarioObj.characterVariables || scenarioObj.character_variables;
-      const cvars = typeof rawCv === 'string' ? JSON.parse(rawCv) : rawCv;
-      if (cvars && typeof cvars === 'object' && cvars[charId]) {
-        vars = cvars[charId];
-      }
+  if (scenarioObj && charId) {
+    const rawCv = scenarioObj.characterVariables || scenarioObj.character_variables;
+    const cvars = typeof rawCv === 'string' ? JSON.parse(rawCv) : rawCv;
+    if (cvars && typeof cvars === 'object' && cvars[charId]) {
+      vars = cvars[charId];
     }
+  }
 
-    // Fallback to char.variables if scenario doesn't provide them
-    if ((!vars || Object.keys(vars).length === 0) && char && char.variables && typeof char.variables === 'object') {
-      vars = char.variables;
-    }
+  // Fallback to char.variables if scenario doesn't provide them
+  if ((!vars || Object.keys(vars).length === 0) && char && char.variables && typeof char.variables === 'object') {
+    vars = char.variables;
   }
 
   const varMap = new Map();
@@ -262,9 +266,15 @@ function expandPromptMacros(s, char, persona, chatOrScenario = null) {
 
   return String(s).replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
     const lower = key.toLowerCase();
-    if (lower === 'char') return charName;
-    if (lower === 'user') return userName;
-    if (!isSignature && varMap.has(lower)) return varMap.get(lower);
+    if (lower === 'char' || lower === 'character' || lower === 'bot' || lower === 'char_name' || lower === 'character_name') {
+      return charName;
+    }
+    if (lower === 'user' || lower === 'user_name' || lower === 'persona') {
+      return userName;
+    }
+    if (!signatureContent && varMap.has(lower)) {
+      return varMap.get(lower);
+    }
     return match;
   });
 }
@@ -332,7 +342,7 @@ const SIMULATED_FALLBACKS = [
    can steer the format without stripping the model of who it is writing about. */
 function buildSystemText(char, persona, hasInjection, cfg, scenarioText, chatOrScenario = null, asUser = false, guidance = '') {
   const userName = persona ? persona.name : 'the user';
-  const ex = (s) => expandPromptMacros(s, char, persona, chatOrScenario);
+  const ex = (s, isSig = false) => expandPromptMacros(s, char, persona, chatOrScenario, isSig);
   const custom = cfg.systemPrompt.trim();
   const parts = [];
 
@@ -351,7 +361,8 @@ function buildSystemText(char, persona, hasInjection, cfg, scenarioText, chatOrS
   }
 
   const sc = scenarioText !== undefined ? scenarioText : (char.scenario || '');
-  if (sc) parts.push(`The scenario of the conversation:\n${ex(sc)}`);
+  const isSig = (chatOrScenario && (chatOrScenario.scenarioId === 'signature' || chatOrScenario.scenario_id === 'signature'));
+  if (sc) parts.push(`The scenario of the conversation:\n${ex(sc, isSig)}`);
 
   // Special scenario notes (newline separated important details)
   const scObj = (chatOrScenario && chatOrScenario.scenarioId)
@@ -716,7 +727,7 @@ const normName = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
 function buildGroupTurnSystem({ char, persona, chat, cfg, maxBeats }) {
   const userName = persona ? persona.name : 'the user';
-  const ex = (s) => expandPromptMacros(s, char, persona, chat);
+  const ex = (s, c = char) => expandPromptMacros(s, c, persona, chat);
   const custom = cfg.systemPrompt.trim();
   const parts = [];
   parts.push(custom ? ex(custom) : `Write "${char.name}'s" next reply in a fictional roleplay chat between "${userName}" and "${char.name}".`);
@@ -728,7 +739,7 @@ function buildGroupTurnSystem({ char, persona, chat, cfg, maxBeats }) {
   if (sc) parts.push(`The scenario of the conversation:\n${ex(sc)}`);
   const roster = (chat.characterIds || []).map((id) => db.getCharacter(id)).filter(Boolean);
   if (roster.length) {
-    parts.push(`Characters in this shared scene:\n` + roster.map((c) => `- "${c.name}": ${ex(c.description) || 'Present in scene.'}`).join('\n'));
+    parts.push(`Characters in this shared scene:\n` + roster.map((c) => `- "${c.name}": ${ex(c.description, c) || 'Present in scene.'}`).join('\n'));
   }
   const otherChars = roster.filter((c) => c.id !== char.id);
   const secondExample = otherChars[0] ? otherChars[0].name : 'Second Character';
@@ -3179,14 +3190,15 @@ function parseOpeningGeneration(text, characters) {
       'The output must pass JSON.parse: escape every double quote inside a string value as \\" (or use single quotes inside dialogue).',
     ].join('\n');
 
+    const ex = (s, c = chars[0]) => expandPromptMacros(s, c, persona);
     const userPromptParts = [
       `Generate an immersive opening scene bringing these characters and the user together:`,
-      `User Persona (${userName}): ${persona ? persona.description : 'A participant.'}`,
+      `User Persona (${userName}): ${persona ? ex(persona.description) : 'A participant.'}`,
       `Characters present:`,
-      ...chars.map((c) => `- ${c.name}: ${c.description || 'A character.'}`),
+      ...chars.map((c) => `- ${c.name}: ${ex(c.description, c) || 'A character.'}`),
     ];
     if (activePreset && activePreset.systemPrompt) {
-      userPromptParts.push(`\nActive Roleplay Preset / Style (${activePreset.name}):\n${activePreset.systemPrompt.trim()}`);
+      userPromptParts.push(`\nActive Roleplay Preset / Style (${activePreset.name}):\n${ex(activePreset.systemPrompt.trim())}`);
     }
 
     const messages = [{ role: 'user', content: userPromptParts.join('\n\n') }];
@@ -3256,16 +3268,17 @@ function parseOpeningGeneration(text, characters) {
       'The output must pass JSON.parse: escape every double quote inside a string value as \\" (or use single quotes inside dialogue).',
     ].join('\n');
 
+    const ex = (s, isSig = false) => expandPromptMacros(s, char, persona, null, isSig);
     const userPromptParts = [
       `Generate an immersive opening scene between "${char.name}" and "${userName}":`,
-      `User Persona (${userName}): ${persona ? persona.description : 'A participant.'}`,
-      `Character (${char.name}): ${char.description || 'A character.'}`,
+      `User Persona (${userName}): ${persona ? ex(persona.description) : 'A participant.'}`,
+      `Character (${char.name}): ${ex(char.description) || 'A character.'}`,
     ];
     if (char.scenario) {
-      userPromptParts.push(`Character background / default context:\n${char.scenario}`);
+      userPromptParts.push(`Character background / default context:\n${ex(char.scenario, true)}`);
     }
     if (activePreset && activePreset.systemPrompt) {
-      userPromptParts.push(`\nActive Roleplay Preset / Style (${activePreset.name}):\n${activePreset.systemPrompt.trim()}`);
+      userPromptParts.push(`\nActive Roleplay Preset / Style (${activePreset.name}):\n${ex(activePreset.systemPrompt.trim())}`);
     }
 
     const messages = [{ role: 'user', content: userPromptParts.join('\n\n') }];
@@ -3330,11 +3343,12 @@ function parseOpeningGeneration(text, characters) {
       `- Do NOT generate lines or actions for "${userName}".`,
     ].join('\n');
 
+    const ex = (s, c = chars[0]) => expandPromptMacros(s, c, persona);
     const userPromptParts = [];
-    userPromptParts.push(`User Persona (${userName}): ${persona ? persona.description : 'A participant.'}`);
-    userPromptParts.push(`Characters present:\n` + chars.map((c) => `- ${c.name}: ${c.description || 'A character.'}`).join('\n'));
+    userPromptParts.push(`User Persona (${userName}): ${persona ? ex(persona.description) : 'A participant.'}`);
+    userPromptParts.push(`Characters present:\n` + chars.map((c) => `- ${c.name}: ${ex(c.description, c) || 'A character.'}`).join('\n'));
     if (activePreset && activePreset.systemPrompt) {
-      userPromptParts.push(`Active Preset Style (${activePreset.name}):\n${activePreset.systemPrompt.trim()}`);
+      userPromptParts.push(`Active Preset Style (${activePreset.name}):\n${ex(activePreset.systemPrompt.trim())}`);
     }
 
     if (currentDraft && feedback) {
@@ -3935,6 +3949,7 @@ function parseOpeningGeneration(text, characters) {
     const cfg = resolveAgentConfig(settings);
 
     const path = db.pathNodes(chat.tree, nodeId);
+    const ex = (s, c = character) => expandPromptMacros(s, c, persona, chat);
     const preceding = path.slice(0, -1).slice(-5).map((n) => {
       let sender = 'User';
       if (n.role === 'scenario') sender = 'Scene setting';
@@ -3943,7 +3958,7 @@ function parseOpeningGeneration(text, characters) {
         sender = cRow ? cRow.name : character.name;
       } else if (n.role === 'injection') sender = 'Directive (OOC)';
       else if (persona) sender = persona.name;
-      return `${sender}: ${n.content}`;
+      return `${sender}: ${ex(n.content, (n.role === 'char' && n.characterId ? db.getCharacter(n.characterId) : character))}`;
     }).join('\n\n');
 
     const sysPrompt = [
@@ -3951,7 +3966,7 @@ function parseOpeningGeneration(text, characters) {
       `Your role is to edit and rewrite a character's response in an ongoing roleplay conversation based on the user's instructions.`,
       `Character profile:`,
       `- Name: "${character.name}"`,
-      `- Description / Persona: ${character.description || 'In character'}`,
+      `- Description / Persona: ${ex(character.description) || 'In character'}`,
       `Writing guidelines:`,
       `- Stay strictly in character as "${character.name}".`,
       `- Maintain the roleplay convention: actions and scene beats in *asterisks*, spoken dialogue in "double quotes".`,
@@ -3962,7 +3977,7 @@ function parseOpeningGeneration(text, characters) {
 
     const userPrompt = [
       preceding ? `Prior scene context:\n${preceding}\n` : '',
-      `Current response from "${character.name}":\n${origNode.content}\n`,
+      `Current response from "${character.name}":\n${ex(origNode.content)}\n`,
       `User's modification request:\n"${instruction}"\n`,
       `Please provide the rewritten response now:`
     ].filter(Boolean).join('\n');

@@ -788,8 +788,8 @@ function expandTags(s, characterId, customVarsOrScenario = null, customCharName 
 
   return str.replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
     const lower = key.toLowerCase();
-    if (lower === 'char') return charName;
-    if (lower === 'user') return userName;
+    if (lower === 'char' || lower === 'character' || lower === 'bot' || lower === 'char_name' || lower === 'character_name') return charName;
+    if (lower === 'user' || lower === 'user_name' || lower === 'persona') return userName;
     if (varMap.has(lower)) {
       const val = varMap.get(lower);
       return val != null ? String(val) : '';
@@ -831,10 +831,10 @@ function renderPreviewMarkdown(raw, characterId, customVars = null, customCharNa
   // 2. Substitute {{...}} tokens into rendered HTML badges (NOT re-escaped)
   html = html.replace(/\{\{\s*([\w.-]+)\s*\}\}/gi, (match, key) => {
     const lower = key.toLowerCase();
-    if (lower === 'char') {
+    if (lower === 'char' || lower === 'character' || lower === 'bot' || lower === 'char_name' || lower === 'character_name') {
       return `<mark class="var-hl char" title="{{char}}">${esc(charName)}</mark>`;
     }
-    if (lower === 'user') {
+    if (lower === 'user' || lower === 'user_name' || lower === 'persona') {
       return `<mark class="var-hl user" title="{{user}}">${esc(userName)}</mark>`;
     }
     if (isSignature) {
